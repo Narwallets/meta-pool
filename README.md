@@ -9,7 +9,7 @@ This contract acts as an staking-pool but distributes it's delegated funds in se
 ### Internal Clearing, inmmediate unstakings, ultra-low gas staking
 
 By managing multiple users and staking pools, this contracts also gives the users the chance to **inmmediate unstakings** and **ultra-low gas stakings**. 
-By acting as a clearing house, users intending to stake are matched with users inteding to unstake; when matches are made, both users can complete their transacionts with ultra-low-fees in the stake case and **immediate availability in the unstake** case.
+By acting as a clearing house, users intending to stake are matched with users inteding to unstake; when matches are made, both users can complete their transactions with ultra-low-fees in the stake case and **immediate availability in the unstake** case.
 
 ### SKASH NEP-Tokens
 
@@ -31,9 +31,9 @@ This contract also helps the community by increasing decentralization, spliting 
 
 ## Technical details
 
-The contract pools all users' funds, and after an internal clearing, mantains a balanced ditribution of those funds in a list of whitelisted, low-fee, high-uptime validators.
+The contract pools all users' funds, and after an internal clearing, mantains a balanced distribution of those funds in a list of whitelisted, low-fee, high-uptime validators.
 
-Staking adn unstaking distribution is made during calls to `heartbeat()` so actual staking adn unstaking is delayed. This delay allows the internal clearing and the benfits of *ultra-low-gas-staking and immediate unstaking*.
+Staking and unstaking distribution is made during calls to `heartbeat()` so actual staking and unstaking is delayed. This delay allows the internal clearing and the benfits of *ultra-low-gas-staking and immediate unstaking*.
 
 To avoid impacting staking-pools with large unstakes, this contract has a maximum movement amount during heartbeat (this is transparent to users):
 
@@ -46,7 +46,7 @@ const MAX_NEARS_SINGLE_MOVEMENT: u128 = NEARS_PER_BATCH + NEARS_PER_BATCH/2;
 
 ```
 
-This ensures a good distribution of large sums between the pools and that no pool is adversely affected by a large unstake.
+This maximum ensures a good distribution of large sums between the pools and that no pool is adversely affected by a large unstake.
 
 ## Operational costs
 
