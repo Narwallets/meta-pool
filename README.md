@@ -4,7 +4,7 @@
 
 ### Diversification
 
-This contract acts as an staking-pool but distributes it's delegated funds in several staking pools. By delegating to this contract, users greatly reduce the risk of getting no-benefits baecause validators' outage events and also get averaged validators fees. 
+This contract acts as an staking-pool but distributes it's delegated funds in several staking pools. By delegating to this contract, users greatly reduce the risk of getting no-benefits because validators' outage events and also get averaged validators' fees. 
 
 ### Internal Clearing, inmmediate unstakings, ultra-low gas staking
 
