@@ -92,7 +92,7 @@ pub struct Account {
     /// shares * share_price - total = benefits
     pub stake_shares: u128,
 
-    /// The amount of staked near. 
+    /// The amount of staked nears or SKASHs
     /// Staked correspond to near in the staking-pool but does not include benefits 
     /// staked is always <= shares*share_price because share_price=staked+benefits/total_shares
     /// When the user asks for unstaking the amount is moved to unstaked
@@ -106,18 +106,12 @@ pub struct Account {
     /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK 
     pub unstaked_requested_epoch_height: EpochHeight,
 
-    /// Accumulated benefits. This is incremented for statistical pourposes when a user asks to "unstake_all"
-    /// When a user does that, also the amount of benefits are unstaked and increments "total"
-    /// When shown in the UI, historic_benefits = contract.get_current_benefits + contract.retired_benefits
-    pub retired_benefits: u128,
+    /// Accumulated rewards. This is incremented for statistical purposes when a user asks to "unstake_all"
+    /// When a user unstakes_all, the rewards are unstaked too, so this field is incremented 
+    /// When shown in the UI, historic_rewards = current_rewards + wtihdrew_rewards
+    pub accumulated_withdrew_rewards: u128,
 
 }
-
-// impl Account {
-//     fn get_total(&self) -> u128 {
-//         return self.available + self.staked + self.unstaked;
-//     }
-// }
 
 impl Default for Account {
     fn default() -> Self {
@@ -127,7 +121,7 @@ impl Default for Account {
             staked: 0,
             unstaked: 0,
             unstaked_requested_epoch_height: 0,
-            retired_benefits: 0
+            accumulated_withdrew_rewards: 0
         }
     }
 }
@@ -397,6 +391,8 @@ impl DiversifiedPool {
         return self.staking_paused;
     }
 
+    /// to implement the Staking-pool inteface, get_account returns the same as the staking-pool returns
+    /// full account info can be obtained by calling: pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult 
     /// Returns human readable representation of the account for the given account ID.
     pub fn get_account(&self, account_id: AccountId) -> HumanReadableAccount {
         let account = self.internal_get_account(&account_id);

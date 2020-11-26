@@ -44,41 +44,6 @@ pub type EpochHeight = u64;
 /// Hash of Vesting schedule.
 pub type Hash = Vec<u8>;
 
-
-
-/// Struct returned from get_account_info
-#[derive(Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct AccountInfoResult {
-
-    /// total acccount balance. It represents the amount the account has on this contract that
-    /// can either be available, staked or pledged. Does not include benefits
-    /// available = total - staked - pledged - unstaked
-    pub total: U128String,
-
-    /// The amount of staked near not-pledged. staked correspond to near in the staking-pool, so pledges+staked <= shares*share_price
-    /// When the user asks for unstaking the pledge is completed the amount is transferred to the issue owner
-    /// When a pledge is retired, the amount goes to staked
-    pub staked: U128String,
-
-    /// Incremented when the user asks for unstaking. The amount of unstaked near in the pool. 
-    /// the user can only unstake what's staked. To get the "benefits", he must perform another specific action
-    /// where he sell his remainig shares and unstakes benefits. This is the only moment where benefits are moved to total & unstaked
-    pub unstaked: U128String,
-
-    /// available = total - staked - unstaked
-    pub available: U128String,
-
-    /// Current benefits.
-    /// share_price = total_staked/total_stake_shares
-    /// shares * share_price - total = benefits
-    pub benefits: U128String,
-
-    /// historic_benefits = benefits + retired_benefits
-    pub historic_benefits: U128String,
-
-}
-
 /// Rewards fee fraction structure for the staking pool contract.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -87,6 +52,7 @@ pub struct RewardFeeFraction {
     pub denominator: u32,
 }
 
+/// staking-pool trait
 /// Represents an account structure readable by humans.
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
@@ -98,4 +64,31 @@ pub struct HumanReadableAccount {
     pub staked_balance: U128,
     /// Whether the unstaked balance is available for withdrawal now.
     pub can_withdraw: bool,
+}
+
+/// Struct returned from get_account_info
+/// div-pool full info
+/// Represents account data as as JSON compatible struct
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct GetAccountInfoResult {
+    pub account_id: AccountId,
+    /// The available balance that can be withdrawn
+    pub available: U128,
+    /// The amount of SKASH owned (computed from the shares owned)
+    pub skash: U128,
+    /// The amount of rewards (rewards = total_staked - skash_amount) and (total_owned = skash + rewards)
+    pub rewards: U128,
+    /// Accumulated rewards during the lifetime of this account. 
+    pub historic_rewards: U128,
+    /// The amount unstaked waiting for withdraw
+    pub unstaked: U128,
+    /// The epoch height when the unstaked was requested
+    /// The fund will be locked for NUM_EPOCHS_TO_UNLOCK epochs
+    /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK 
+    pub unstaked_requested_epoch_height: U64,
+    ///if env::epoch_height()>=account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
+    pub can_withdraw: bool,
+    /// total amount the user holds in this contract: account.availabe + account.staked + current_rewards + account.unstaked
+    pub total: U128,
 }

@@ -130,7 +130,7 @@ impl DiversifiedPool {
         acc.stake_shares -= num_shares;
         let really_unstaked = self.amount_from_shares(num_shares); // can be amount+benefits
         if really_unstaked>amount {
-            acc.retired_benefits += really_unstaked-amount; //historic benefits
+            acc.accumulated_withdrew_rewards += really_unstaked-amount; //historic benefits
         }
         acc.staked -= amount;
         acc.unstaked += really_unstaked;
