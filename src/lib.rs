@@ -8,9 +8,6 @@ Notes:
     The cross contract calls are complex and can consume all allowed gas,
     so tha operations will be completed by calling "ping" if total_to_stake < total_staked
 */
-pub type AccU32Id = u32;
-pub type IssueU32Id = u32;
-pub type PledgeU32Id = u32;
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
@@ -80,25 +77,19 @@ pub struct Account {
 
     /// This amount increments with deposits and decrements with for_staking
     /// increments with complete_unstake and decrements with user withdrawals from the contract
-    /// withdrawals from the pools can include benefits
+    /// withdrawals from the pools can include rewards
     /// since statking is delayed and in batches it only eventually matches env::balance()
     /// total = available + staked + unstaked 
     pub available: u128,
 
     /// The amount of shares of the total staked balance in the pool(s) this user owns.
-    /// Before someone stakes share-price is computed and shares are "sold" to the user so he only owns what he's staking and no benefits yet
+    /// Before someone stakes share-price is computed and shares are "sold" to the user so he only owns what he's staking and no rewards yet
     /// When a user reequest a transfer to other user, staked & shares from the origin are moved to staked & shares of the destination
     /// The share_price can be computed as total_staked/total_stake_shares
-    /// shares * share_price - total = benefits
+    /// shares * share_price = SKASHs
     pub stake_shares: u128,
 
-    /// The amount of staked nears or SKASHs
-    /// Staked correspond to near in the staking-pool but does not include benefits 
-    /// staked is always <= shares*share_price because share_price=staked+benefits/total_shares
-    /// When the user asks for unstaking the amount is moved to unstaked
-    pub staked: u128,
-
-    /// Incremented when the user asks for unstaking. The amount of unstaked near in the pool. 
+    /// Incremented when the user asks for unstaking. The amount of unstaked near in the pools 
     pub unstaked: u128,
 
     /// The epoch height when the unstaked was requested
@@ -106,10 +97,19 @@ pub struct Account {
     /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK 
     pub unstaked_requested_epoch_height: EpochHeight,
 
-    /// Accumulated rewards. This is incremented for statistical purposes when a user asks to "unstake_all"
-    /// When a user unstakes_all, the rewards are unstaked too, so this field is incremented 
-    /// When shown in the UI, historic_rewards = current_rewards + wtihdrew_rewards
-    pub accumulated_withdrew_rewards: u128,
+    //-- STATISTICAL DATA --
+    // User's statistical data
+    // These fields works as a car's "trip meter". The user can reset them to zero.
+    // to compute trip_rewards we start from current_skash, undo unstakes, undo stakes and finally subtract trip_start_skash
+    // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
+    /// trip_start: (timpestamp in nanoseconds) this field is set at account creation, so it will start metering rewards
+    pub trip_start: Timestamp,
+    /// How many skashs the user had at "trip_start". 
+    pub trip_start_skash: u128,
+    // how much the user staked since trip start. always incremented
+    pub trip_accum_stakes: u128,
+    // how much the user unstaked since trip start. always incremented
+    pub trip_accum_unstakes: u128,
 
 }
 
@@ -118,16 +118,18 @@ impl Default for Account {
         Self {
             available: 0,
             stake_shares: 0,
-            staked: 0,
             unstaked: 0,
             unstaked_requested_epoch_height: 0,
-            accumulated_withdrew_rewards: 0
+            //trip-meter
+            trip_start: env::block_timestamp(),
+            trip_start_skash:0,
+            trip_accum_stakes:0,
+            trip_accum_unstakes:0,
         }
     }
 }
 
-
-/// Vec of staking pools
+/// items in the Vec of staking pools
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
 pub struct StakingPoolInfo {
 
@@ -152,8 +154,8 @@ pub struct StakingPoolInfo {
     //We might have to block users from unstaking if all the pools are in a waiting period
     unstaked_requested_epoch_height: EpochHeight, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
 
-    //EpochHeight where we asked the sp what were our staking benefits
-    last_asked_benefits_epoch_height: EpochHeight,
+    //EpochHeight where we asked the sp what were our staking rewards
+    last_asked_rewards_epoch_height: EpochHeight,
     
 }
 
@@ -163,52 +165,48 @@ pub struct DiversifiedPool {
     
     /// The account ID of the owner.
     pub owner_account_id: AccountId,
+    /// owner_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
     pub owner_fee_basis_points: u16,
 
-    /// Contains whether there is a transaction in progress.
-    pub busy_lock: bool,
-
-    /// This amount increments with deposits and decrements with for_staking
+    /// This amount increments with deposits and decrements when users stake
     /// increments with complete_unstake and decrements with user withdrawals from the contract
-    /// withdrawals from the pools can include benefits
-    /// since statking is delayed and in batches it only eventually matches env::balance()
+    /// withdrawals from the pools can include rewards
+    /// since staking is delayed and in batches it only eventually matches env::balance()
     pub total_available: u128,
 
     /// The total amount of tokens selected for staking by the users 
-    /// not necessarily what's actually staked since staking can be done in batches
+    /// not necessarily what's actually staked since staking can is done in batches
+    /// Share price is computed using this number. share_price = total_for_staking/total_shares
     pub total_for_staking: u128,
+    /// The total amount of tokens actually staked (the tokens are in the staking pools)
+    /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets unstaked in 100kN batches
+    pub total_actually_staked: u128,
+    // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
+    // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
+    // staking produces rewards, so share_price = total_for_staking/total_shares
+    // when someone "unstakes" she "burns" X shares at current price to recoup Y near
+    pub total_stake_shares: u128,
 
     /// The total amount of tokens selected for unstaking by the users 
-    /// not necessarily what's actually unstaked since unstaking can be done in batches
+    /// not necessarily what's actually unstaked since unstaking is done in batches
+    /// If a user ask unstaking 100: total_for_unstaking+=100, total_for_staking-=100, total_stake_shares-=share_amount
     pub total_for_unstaking: u128,
-
-    /// we remember how much we sent to the pools, so it's easy to compute staking benefits
-    /// total_actually_staked: Amount actually sent to the staking pools and staked - NOT including benefits
-    /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
-    pub total_actually_staked: u128, 
-
-    /// the staking pools will add benefits to the staked amount on each epoch
-    /// here we store the total amount of benefits we know the pools have awarded us (the tokens are in the pools, staked)
-    pub total_staked_benefits: u128, 
-
     /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
     /// During heartbeat(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
     pub total_actually_unstaked: u128,
-
     /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
     /// During heartbeat(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
-    /// When the funds are actually retrieved, total_actually_unstaked is decremented
+    /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
     pub total_actually_unstaked_and_retrieved: u128,
+
+    /// the staking pools will add rewards to the staked amount on each epoch
+    /// here we store the accumulatred amount only for stats purposes. This amount can only grow
+    pub accumulated_staked_rewards: u128, 
 
     /// no auto-staking. true while changing staking pools
     pub staking_paused: bool, 
 
-    // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
-    // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
-    // staking produces benefits, so share_price = (total_for_staking+total_staked_benefits)/total_shares
-    // when someone "unstakes" she "burns" X shares at current price to reocup Y near
-    pub total_stake_shares: u128,
-
+    //user's accounts
     pub accounts: UnorderedMap<AccountId, Account>,
 
     //list of pools to diversify in
@@ -242,9 +240,7 @@ impl DiversifiedPool {
     /// Initializes DiversifiedPool contract.
     /// - `owner_account_id` - the account ID of the owner.  Only this account can call owner's methods on this contract.
     #[init]
-    pub fn new(
-        owner_account_id: AccountId
-    ) -> Self {
+    pub fn new( owner_account_id: AccountId ) -> Self {
         assert!(!env::state_exists(), "The contract is already initialized");
         assert!(
             env::is_valid_account_id(owner_account_id.as_bytes()),
@@ -253,8 +249,7 @@ impl DiversifiedPool {
 
         return Self {
             owner_account_id,
-            owner_fee_basis_points: DEFAULT_ONWER_FEE_BASIS_POINTS,
-            busy_lock: false,
+            owner_fee_basis_points: DEFAULT_OWNER_FEE_BASIS_POINTS,
             staking_paused: true, //no auto-staking. on while there's no staking pool defined
             total_available: 0,
             total_for_staking: 0,
@@ -262,7 +257,7 @@ impl DiversifiedPool {
             total_actually_staked: 0, //amount actually sent to the staking_pool and staked
             total_actually_unstaked: 0, // tracks unstaked amount from the staking_pool (toekns are in the pool)
             total_actually_unstaked_and_retrieved: 0, // tracks unstaked AND retrieved amount (tokens are here)
-            total_staked_benefits: 0,
+            accumulated_staked_rewards: 0,
             total_stake_shares: 0,
             accounts: UnorderedMap::new("A".into()),
             staking_pools: Vec::new(), 
@@ -684,6 +679,68 @@ impl DiversifiedPool {
         );
         return unstake_succeeded;
     }
+
+
+    //------------------------------------------
+    // GETTERS (moved from getters.rs)
+    //------------------------------------------
+    /// Returns the account ID of the owner.
+    pub fn get_owner_account_id(&self) -> AccountId {
+        self.owner_account_id.clone()
+    }
+
+    /// The amount of tokens that were deposited to the staking pool.
+    /// NOTE: The actual balance can be larger than this known deposit balance due to staking
+    /// rewards acquired on the staking pool.
+    /// To refresh the amount the owner can call `refresh_staking_pool_balance`.
+    pub fn get_known_deposited_balance(&self) -> U128String {
+        return self.total_actually_staked.into()
+    }
+
+    /// full account info
+    /// Returns JSON representation of the account for the given account ID.
+    pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult {
+        let account = self.internal_get_account(&account_id);
+        let skash = self.amount_from_shares(account.stake_shares);
+        // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
+        let trip_rewards = (skash + account.trip_accum_unstakes).saturating_sub(account.trip_accum_stakes+account.trip_start_skash);
+        return GetAccountInfoResult {
+            account_id,
+            available: account.available.into(),
+            skash: skash.into(),
+            unstaked: account.unstaked.into(),
+            unstaked_requested_epoch_height: account.unstaked_requested_epoch_height.into(),
+            can_withdraw: (env::epoch_height()>=account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK),
+            total: (account.available + skash + account.unstaked).into(),
+            //trip-meter
+            trip_start: account.trip_start.into(),
+            trip_start_skash: account.trip_start_skash.into(),
+            trip_accum_stakes: account.trip_accum_stakes.into(),
+            trip_accum_unstakes: account.trip_accum_unstakes.into(),
+            trip_rewards: trip_rewards.into()
+        }
+    }
+
+    /// gte contract totals info
+    /// Returns JSON representation of the totals
+    pub fn get_contract_info(&self) -> GetContractInfoResult {
+        return GetContractInfoResult {
+            owner_account_id: self.owner_account_id.clone(), 
+            owner_fee_basis_points: self.owner_fee_basis_points,
+            total_available: self.total_available.into(),
+            total_for_staking: self.total_for_staking.into(),
+            total_for_unstaking: self.total_for_unstaking.into(),
+            total_actually_staked: self.total_actually_staked.into(),
+            accumulated_staked_rewards: self.accumulated_staked_rewards.into(),
+            total_actually_unstaked: self.total_actually_unstaked.into(),
+            total_actually_unstaked_and_retrieved: self.total_actually_unstaked_and_retrieved.into(),
+            staking_paused: self.staking_paused,
+            total_stake_shares: self.total_stake_shares.into(),
+            accounts_count: self.accounts.len().into(),
+            staking_pools_count: (self.staking_pools.len() as u64).into(),
+        }
+    }
+
 
 }
 

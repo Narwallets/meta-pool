@@ -90,56 +90,66 @@ impl DiversifiedPool {
         assert!(num_shares>0);
 
         acc.stake_shares += num_shares;
-        acc.staked += amount;
         acc.available -= amount;
         self.internal_save_account(&account_id, &acc);
 
-        self.total_for_staking += amount;
         self.total_stake_shares += num_shares;
+        self.total_available -= amount;
+        self.total_for_staking += amount;
 
     }
 
     //------------------------------
-    pub(crate) fn inner_unstake(&mut self, amount: u128) {
-
-        assert_min_amount(amount);
+    pub(crate) fn inner_unstake(&mut self, amount_requested: u128) {
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
+        let skash = self.amount_from_shares(acc.stake_shares);
+
+        if skash>=TEN_NEAR {
+            assert_min_amount(amount_requested);
+        }
+
         assert!(
-            acc.staked >= amount,
-            "The staked amount is lower than the requested amount"
+            skash >= amount_requested,
+            "You have less skash than what you requested"
         );
+        let remains_staked = skash - amount_requested;
+        let amount_to_unstake = match remains_staked > ONE_NEAR { 
+                true => amount_requested,
+                false => skash, //unstake all 
+            };
 
         let num_shares:u128;
-        //if unstake all staked near, we use all shares, so we include benefits in the unstaking...
-        if acc.staked == amount {
+        //if unstake all staked near, we use all shares, so we include rewards in the unstaking...
+        //when "unstaking_all" the amount unstaked is the requested amount PLUS ALL ACCUMULATED REWARDS
+        if amount_to_unstake == skash {
             num_shares = acc.stake_shares;
         }
         else {
             // Calculate the number of shares required to unstake the given amount.
-            num_shares = self.num_shares_from_amount(amount);
+            num_shares = self.num_shares_from_amount(amount_to_unstake);
             assert!(num_shares>0);
             assert!(
                 acc.stake_shares >= num_shares,
-                "inconsistence Not enough shares to unstake"
+                "inconsistency. Not enough shares to unstake"
             );
         }
 
         acc.stake_shares -= num_shares;
-        let really_unstaked = self.amount_from_shares(num_shares); // can be amount+benefits
-        if really_unstaked>amount {
-            acc.accumulated_withdrew_rewards += really_unstaked-amount; //historic benefits
-        }
-        acc.staked -= amount;
-        acc.unstaked += really_unstaked;
+        acc.unstaked += amount_to_unstake;
         acc.unstaked_requested_epoch_height = env::epoch_height(); //when the unstake was requested
+
+        //trip-meter
+        acc.trip_accum_unstakes += amount_to_unstake;
+        //--SAVE ACCOUNT--
         self.internal_save_account(&account_id, &acc);
 
-        self.total_for_unstaking += really_unstaked;
-        self.total_for_staking -= amount;
+        //--contract totals
+        self.total_for_unstaking += amount_to_unstake;
         self.total_stake_shares -= num_shares;
+        self.total_for_staking -= amount_to_unstake;
 
         // env::log(
         //     format!(
@@ -160,7 +170,7 @@ impl DiversifiedPool {
 
 
     //--------------------------------
-    pub fn add_benefits_and_shares(&mut self, account_id: AccountId, amount:u128){
+    pub fn add_amount_and_shares_preserve_share_price(&mut self, account_id: AccountId, amount:u128){
         if amount>0 {
             let num_shares = self.num_shares_from_amount(amount);
             if num_shares > 0 {
@@ -169,11 +179,13 @@ impl DiversifiedPool {
                 &self.internal_save_account(&account_id, &account);
                 // Increasing the total amount of "stake" shares.
                 self.total_stake_shares += num_shares;
+                self.total_for_staking += amount;
             }
         }
     }
 
-    /// Returns the number of "stake" shares rounded down corresponding to the given  near amount.
+    /// Returns the number of "stake" shares corresponding to the given near amount at current share_price
+    /// if the amount & the shares are incorporated, price remains the same
     ///
     /// price = total_staked / total_shares
     /// Price is fixed
@@ -185,9 +197,10 @@ impl DiversifiedPool {
         &self,
         amount: Balance ) -> u128 
     {
-        let total_tokens = self.total_for_staking + self.total_staked_benefits;
-        assert!( total_tokens > 0, "total tokens can't be 0" );
-        return (U256::from(self.total_stake_shares) * U256::from(amount) / U256::from(total_tokens)).as_u128();
+        if amount==0||self.total_for_staking==0 {
+            return 0;
+        }
+        return (U256::from(self.total_stake_shares) * U256::from(amount) / U256::from(self.total_for_staking)).as_u128();
     }
 
     /// Returns the amount corresponding to the given number of "stake" shares.
@@ -195,9 +208,10 @@ impl DiversifiedPool {
         &self,
         num_shares: u128 ) -> Balance 
     {
-        assert!( self.total_stake_shares > 0, "The total number of stake shares can't be 0" );
-        let total_tokens = self.total_for_staking + self.total_staked_benefits;
-        return (U256::from(total_tokens) * U256::from(num_shares) / U256::from(self.total_stake_shares)).as_u128();
+        if self.total_stake_shares == 0 || num_shares==0 {
+            return 0;
+        };
+        return (U256::from(self.total_for_staking) * U256::from(num_shares) / U256::from(self.total_stake_shares)).as_u128();
     }
 
 
@@ -209,10 +223,10 @@ impl DiversifiedPool {
     /// Inner method to save the given account for a given account ID.
     /// If the account balances are 0, the account is deleted instead to release storage.
     pub(crate) fn internal_save_account(&mut self, account_id: &AccountId, account: &Account) {
-        if account.unstaked > 0 || account.stake_shares > 0 {
-            self.accounts.insert(account_id, &account);
-        } else {
+        if account.available==0 && account.unstaked==0 && account.stake_shares==0 {
             self.accounts.remove(account_id);
+        } else {
+            self.accounts.insert(account_id, &account);
         }
     }
 
@@ -318,7 +332,7 @@ impl DiversifiedPool {
 
     }
 
-        /// finds a staking pool requireing some stake to get balanced
+    /// finds a staking pool requireing some stake to get balanced
     /// WARN: returns usize::MAX if no pool requires staking/all are busy
     pub(crate) fn get_staking_pool_requiring_unstake(&self) -> usize {
 

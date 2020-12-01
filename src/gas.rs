@@ -95,7 +95,7 @@ pub mod owner_callbacks {
     pub const ON_VOTING_GET_RESULT: u64 = super::BASE_GAS;
 
     /// Gas attached to the inner callback for processing result of the call to get the current total balance from the staking pool.
-    pub const ON_GET_SP_TOTAL_BALANCE: u64 = super::BASE_GAS * 5; //because distributes realized benefits to author and owner
+    pub const ON_GET_SP_TOTAL_BALANCE: u64 = super::BASE_GAS * 5; //because distributes realized rewards to author and owner
 
     /// Gas attached to the inner callback for processing result of the call to get the current
     /// unstaked balance from the staking pool.

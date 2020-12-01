@@ -4,7 +4,7 @@
 
 ### Diversification
 
-This contract acts as an staking-pool but distributes it's delegated funds in several staking pools. By delegating to this contract, users greatly reduce the risk of getting no-benefits because validators' outage events and also get averaged validators' fees. 
+This contract acts as an staking-pool but distributes it's delegated funds in several staking pools. By delegating to this contract, users greatly reduce the risk of getting no-rewards because validators' outage events and also get averaged validators' fees. 
 
 ### Internal Clearing, inmmediate unstakings, ultra-low gas staking
 
@@ -57,7 +57,7 @@ Periodic calls to `heartbeat()` are required for this contract opertion. This co
 
 (To verify)
 - The users can not lose tokens or block contract operations by using methods under staking section.
-- Users owning SKASHs will accrue benefits on each epoch, except in the extreme unlikely case that all the selected validators go offline dureing that epoch.
+- Users owning SKASHs will accrue rewards on each epoch, except in the extreme unlikely case that all the selected validators go offline dureing that epoch.
 
 ## Change Log
 

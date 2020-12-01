@@ -9,9 +9,9 @@ impl DiversifiedPool {
     /// Requires 125 TGas (5 * BASE_GAS)
     ///
     /// Retrieves total balance from the staking pool and remembers it internally.
-    /// Also computes and distributes benefits to author, operator and delegators
+    /// Also computes and distributes rewards to author, operator and delegators
     /// this queries the staking pool.
-    pub fn refresh_staking_pool_benefits(&mut self, sp_inx_i32:i32) {
+    pub fn refresh_staking_pool_rewards(&mut self, sp_inx_i32:i32) {
 
         assert!(sp_inx_i32>0);
 
@@ -28,7 +28,7 @@ impl DiversifiedPool {
         }
 
         let epoch_height = env::epoch_height();
-        if sp.last_asked_benefits_epoch_height == epoch_height {
+        if sp.last_asked_rewards_epoch_height == epoch_height {
             return;
         }
 
@@ -96,10 +96,16 @@ impl DiversifiedPool {
     //------------------------------
     pub fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String) {
 
-        assert_self();
-        let benefits:u128;
+        //we enter here after asking the staking-pool how much do we have staked (plus rewards)
+        //total_balance: U128String contains the answer from the staking-pool
 
+        assert_self();
+
+        let rewards:u128;
+
+        //store the new staked amount for this pool
         {
+            let new_staked_amount:u128;
             let sp = &mut self.staking_pools[sp_inx];
 
             sp.busy_lock = false;
@@ -112,49 +118,57 @@ impl DiversifiedPool {
             //     .as_bytes(),
             // );
 
-            sp.last_asked_benefits_epoch_height = env::epoch_height();
+            sp.last_asked_rewards_epoch_height = env::epoch_height();
 
-            let sp_staked_plus_ben = total_balance.0;
+            new_staked_amount = total_balance.0;
 
-            if sp_staked_plus_ben >= sp.staked{
+            if new_staked_amount < sp.staked{
                 env::log("INCONSISTENCY sp says total_balance < sp.staked".as_bytes() );
             }
-
-            benefits = sp_staked_plus_ben.saturating_sub(sp.staked);
-        }
+            //compute rewards, as new balance minus old balance
+            rewards = new_staked_amount - sp.staked;
+            //updated new "staked" value for this pool
+            sp.staked = new_staked_amount; 
         
-        if benefits > 0 {
-            // The fee that the contract author takes.
-            let mut author_fee = apply_pct(AUTHOR_MIN_FEE_BASIS_POINTS,benefits);
+        }
+
+        if rewards > 0 {
+
+            //add to actually staked
+            self.total_actually_staked += rewards;
+
+            // The fee that the contract authors take.
+            let author_fee = apply_pct(AUTHOR_MIN_FEE_BASIS_POINTS,rewards);
             // The fee that the contract owner (operator) takes.
-            let mut owner_fee = apply_pct(self.owner_fee_basis_points, benefits);
-            // author fee comes from the operator/owner fee
-            if owner_fee>author_fee {
-                owner_fee-=author_fee
+            let mut owner_fee = apply_pct(self.owner_fee_basis_points, rewards);
+            
+            if owner_fee > author_fee {
+                owner_fee -= author_fee // author fee comes from the operator/owner fee
             }
             else {
-                author_fee = owner_fee;
+                //if owner_fee is less than author_fee
                 owner_fee=0;
             }
 
-            // Now add fees & shares to the pool not altering current share price
-            self.add_benefits_and_shares(AUTHOR_ACCOUNT_ID.into(), author_fee);
-            self.add_benefits_and_shares(self.owner_account_id.clone(), owner_fee);
+            // Now add fees & shares to the pool preserving current share value
+            // adds to self.total_actually_staked, self.total_for_staking & self.total_stake_shares;
+            &self.add_amount_and_shares_preserve_share_price(AUTHOR_ACCOUNT_ID.into(), author_fee);
+            &self.add_amount_and_shares_preserve_share_price(self.owner_account_id.clone(), owner_fee);
 
-            // rest of benefits go into the pool increasing share price
-            assert!(benefits > author_fee + owner_fee);
-            self.total_staked_benefits += benefits - author_fee - owner_fee;
+            // rest of rewards go into total_actually_staked increasing share value
+            assert!(rewards > author_fee + owner_fee);
+            //add rest of rewards
+            self.total_for_staking += rewards - author_fee - owner_fee; //increase share price
 
             let sp = &self.staking_pools[sp_inx];
             env::log(
                 format!(
-                    "Received total rewards of {} tokens from {}. Staked was = {}",
-                    benefits, sp.account_id, sp.staked,
+                    "Received total rewards of {} tokens from {}. Staked is now = {}",
+                    rewards, sp.account_id, sp.staked,
                 ).as_bytes(),
             );
-        }
 
-        self.total_staked_benefits+=benefits;
+        }
 
     }
 
@@ -166,12 +180,7 @@ impl DiversifiedPool {
     /// (has no accounts)
     pub fn add_full_access_key(&mut self, new_public_key: Base58PublicKey) -> Promise {
         self.assert_owner();
-        assert!(!self.busy_lock 
-            && self.total_for_staking==0 
-            && self.total_for_unstaking==0
-            && self.accounts.len()==0,
-            "contract still has accounts or work to do"
-        );
+        assert!(self.accounts.len()==0,"contract still has accounts");
 
         env::log(b"Adding a full access key");
 
