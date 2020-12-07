@@ -433,7 +433,8 @@ impl DiversifiedPool {
 //----------------------------
 //----------------------------
 
-    /// completes unstake by moving from retreieved_from_the_pools to availabe
+    /// user method
+    /// completes unstake action by moving from retreieved_from_the_pools to availabe
     pub fn complete_unstaking(&mut self) {
         
         let account_id = env::predecessor_account_id();
@@ -445,8 +446,8 @@ impl DiversifiedPool {
         );
         let epoch = env::epoch_height();
         if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
-            env::log(format!("you need to wait {} epochs", account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
-            panic!("The unstaked balance is not yet available due to unstaking delay");
+            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", 
+                            account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
         }
 
         //async: try to do one of the pending withdrawals
@@ -479,6 +480,60 @@ impl DiversifiedPool {
 
     }
 
+    /// user method
+    /// places a buy-skash order (stake)
+    pub fn place_buy_skash_order(&mut self, amount:U128String, discount:i32, duration:i32) {
+        
+        let account_id = env::predecessor_account_id();
+        let mut account = self.internal_get_account(&account_id);
+        let am:u128 = amount.0;
+        assert!(
+            account.availabe > 0,
+            "Not enough available balance"
+        );
+        let epoch = env::epoch_height();
+        if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
+            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", 
+                            account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
+        }
+
+        //async: try to do one of the pending withdrawals
+        self.internal_async_withdraw_from_a_pool();
+
+        if self.total_actually_unstaked_and_retrieved < amount {
+            panic!("Please wait one more hour until the funds are retrieved from the pools");
+        }
+
+        assert!(self.total_for_unstaking > amount);
+
+        //used retrieved funds
+        self.total_actually_unstaked_and_retrieved -= amount;
+        // moves from total_for_unstaking to total_available 
+        self.total_for_unstaking -= amount;
+        self.total_available += amount;
+        
+        // in the account, moves from unstaked to available
+        account.unstaked -= amount;
+        account.available += amount;
+        self.internal_save_account(&account_id, &account);
+
+        // env::log(
+        //     format!(
+        //         "@{} withdrawing {}. New unstaked balance is {}",
+        //         account_id, amount, account.unstaked
+        //     )
+        //     .as_bytes(),
+        // );
+
+    }
+
+
+
+//-----------------------------
+// HEARTBEAT
+//-----------------------------
+
+    /// operator method
     /// heartbeat. Do staking & unstaking in batches of at most 100Kn
     /// called externaly every 30 mins or less if: a) there's a large stake/unstake oper to perform or b) the epoch is about to finish and there are stakes to be made
     /// returns "true" if there's still more job to do
@@ -709,9 +764,9 @@ impl DiversifiedPool {
     }
 
 
-    //------------------------------------------
-    // GETTERS (moved from getters.rs)
-    //------------------------------------------
+//------------------------------------------
+// GETTERS (moved from getters.rs)
+//------------------------------------------
     /// Returns the account ID of the owner.
     pub fn get_owner_account_id(&self) -> AccountId {
         return self.owner_account_id.clone()
