@@ -1,5 +1,7 @@
 # Diversified Staking Contract
 
+This is the Smart Contract. The Web DApp UX is at https://github.com/Narwallets/dapp-diversifying-staking-pool.git
+
 ## Overview
 
 ### Diversification
@@ -70,6 +72,8 @@ Periodic calls to `heartbeat()` are required for this contract opertion. This co
 - Initial version by github.com/luciotato based on core-contracts/lockup and core-contracts/staking-pool
 
 ## TO DO
+
+TODO & Issues # 
 
 ### View methods
 

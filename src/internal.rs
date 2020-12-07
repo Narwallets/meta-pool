@@ -312,9 +312,9 @@ impl DiversifiedPool {
 
         for (sp_inx,sp) in self.staking_pools.iter().enumerate() {
             // if the pool is not busy, and this pool can stake
-            if !sp.busy_lock && sp.weigth_basis_points>0 {
+            if !sp.busy_lock && sp.weight_basis_points>0 {
                 // if this pool has an unbalance requiring staking
-                let should_have = apply_pct(sp.weigth_basis_points, self.total_for_staking);
+                let should_have = apply_pct(sp.weight_basis_points, self.total_for_staking);
                 // this pool requires staking?
                 if should_have > sp.staked {
                     // how much?
@@ -343,7 +343,7 @@ impl DiversifiedPool {
             // if the pool is not busy, has stake, and has not unstaked blanace waiting for withdrawal
             if !sp.busy_lock && sp.staked>0 && sp.unstaked==0 {
                 // if this pool has an unbalance requiring un-staking
-                let should_have = apply_pct(sp.weigth_basis_points, self.total_for_staking);
+                let should_have = apply_pct(sp.weight_basis_points, self.total_for_staking);
                 // does this pool requires un-staking? (has too much staked?)
                 if sp.staked > should_have  {
                     // how much?

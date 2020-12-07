@@ -72,6 +72,9 @@ pub trait ExtDivPoolContractOwner {
 
 }
 
+// ----------------- 
+// User Account Data
+// ----------------- 
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
 pub struct Account {
 
@@ -79,7 +82,7 @@ pub struct Account {
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
     /// since statking is delayed and in batches it only eventually matches env::balance()
-    /// total = available + staked + unstaked 
+    /// total = available + staked + unstaked
     pub available: u128,
 
     /// The amount of shares of the total staked balance in the pool(s) this user owns.
@@ -121,7 +124,7 @@ impl Default for Account {
             unstaked: 0,
             unstaked_requested_epoch_height: 0,
             //trip-meter
-            trip_start: env::block_timestamp(),
+            trip_start: env::block_timestamp()/1_000_000, //converted from nanoseconds to miliseconds
             trip_start_skash:0,
             trip_accum_stakes:0,
             trip_accum_unstakes:0,
@@ -141,7 +144,7 @@ pub struct StakingPoolInfo {
     //how much of the meta-pool must be staked in this pool
     //0=> do not stake, only unstake
     //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
-    weigth_basis_points: u16,
+    weight_basis_points: u16,
 
     //total staked here
     staked: u128,
@@ -159,11 +162,14 @@ pub struct StakingPoolInfo {
     
 }
 
+//---------------------------
+//  Main Contrac State    ---
+//---------------------------
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct DiversifiedPool {
     
-    /// The account ID of the owner.
+    /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: AccountId,
     /// owner_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
     pub owner_fee_basis_points: u16,
@@ -179,7 +185,7 @@ pub struct DiversifiedPool {
     /// Share price is computed using this number. share_price = total_for_staking/total_shares
     pub total_for_staking: u128,
     /// The total amount of tokens actually staked (the tokens are in the staking pools)
-    /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets unstaked in 100kN batches
+    /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
     pub total_actually_staked: u128,
     // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
@@ -225,14 +231,18 @@ impl DiversifiedPool {
 
     /* NOTE
     This contract must implement several traits
+
     1. deposit-trait [NEP-xxx]: this contract implements: deposit, get_available_balance, withdraw, withdraw_all 
        A [NEP-xxx] contract creates an account on deposit and allows you to withdraw later under certain conditions, deletes the account on withdraw_all 
+
     2. staking-pool [NEP-xxx]: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users too if they want
       that means implmenting: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
         and view methods: get_account_unstaked_balance, get_account_staked_balance, get_account_total_balance, is_account_unstaked_balance_available,
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts. 
-    3. diversified-staking: this are the extensions to the standard staking pool
+
+    3. diversified-staking: these are the extensions to the standard staking pool (buy/sell skash)
+
     */
 
     /// Requires 25 TGas (1 * BASE_GAS)
@@ -480,25 +490,44 @@ impl DiversifiedPool {
         // }
         // self.last_epoch_height = epoch_height;
 
-        if self.total_for_staking > 0 && self.total_for_unstaking>0 {
-            //internal clearing, no need to talk to the pools
-            if self.total_for_staking > self.total_for_unstaking {
-                self.total_for_staking -= self.total_for_unstaking;
-                self.total_for_unstaking = 0;
+        //-------------------------------------
+        //check if we need to actually stake
+        //-------------------------------------
+        let mut amount_to_stake = 0;
+        if self.total_for_staking > 0 && self.total_for_staking > self.total_actually_staked {
+            //more ordered for staking than actually staked
+            amount_to_stake = self.total_for_staking - self.total_actually_staked;
+        }
+
+        //-------------------------------------
+        //check if we need to actually un-stake
+        //-------------------------------------
+        let mut amount_to_unstake = 0;
+        if self.total_for_unstaking > 0 && self.total_for_unstaking > self.total_actually_unstaked {
+            //more ordered for unstaking than actually unstaked
+            amount_to_unstake = self.total_for_unstaking - self.total_actually_unstaked;
+        }
+
+        //-------------------------------------
+        //internal clearing, no need to talk to the pools
+        //-------------------------------------
+        if amount_to_stake>0 && amount_to_unstake>0 {
+            if amount_to_stake > amount_to_unstake {
+                amount_to_stake -= amount_to_unstake;
+                amount_to_unstake = 0;
             }
             else {
-                self.total_for_unstaking -= self.total_for_staking;
-                self.total_for_staking = 0;
+                amount_to_unstake -= amount_to_stake ;
+                amount_to_stake = 0;
             }
         }
 
         //-------------------------------------
         //check if we need to actually stake
         //-------------------------------------
-        if self.total_for_staking > 0 && self.total_for_staking > self.total_actually_staked {
+        if amount_to_stake>0 {
             //more ordered for staking than actually staked
-            let mut amount_to_stake = self.total_for_staking - self.total_actually_staked;
-            // doit in batches of 100/150k
+            // do it in batches of 100/150k
             if amount_to_stake > MAX_NEARS_SINGLE_MOVEMENT {
                 //split movements
                 amount_to_stake = NEARS_PER_BATCH;
@@ -562,10 +591,9 @@ impl DiversifiedPool {
         //-------------------------------------
         //check if we need to actually UN-stake
         //-------------------------------------
-        if self.total_for_unstaking > 0 && self.total_for_unstaking > self.total_actually_unstaked {
+        if amount_to_unstake > 0 {
             //more ordered for unstaking than actually unstaked
-            let mut amount_to_unstake = self.total_for_unstaking - self.total_actually_unstaked;
-            // doit in batches of 100/150k
+            //do it in batches of 100/150k
             if amount_to_unstake > MAX_NEARS_SINGLE_MOVEMENT {
                 //split movements
                 amount_to_unstake = NEARS_PER_BATCH;
@@ -573,7 +601,7 @@ impl DiversifiedPool {
             let sp_inx = self.get_staking_pool_requiring_unstake();
             if sp_inx!=usize::MAX {
                 //most unbalanced pool found & available
-                //launch async stake to unstake
+                //launch async to unstake
 
                 let sp = &mut self.staking_pools[sp_inx];
                 sp.busy_lock = true;
@@ -584,8 +612,8 @@ impl DiversifiedPool {
                 }
                 //launch async to un-stake from the pool
                 assert!(sp.staked>=amount_to_unstake);
-                self.total_actually_staked -= amount_to_unstake; //preventively consider the amount un-staked (undoes if failed)
-                self.total_actually_unstaked += amount_to_unstake; //preventively consider the amount un-staked (undoes if failed)
+                self.total_actually_staked -= amount_to_unstake; //preventively consider the amount un-staked (undoes if promise fails)
+                self.total_actually_unstaked += amount_to_unstake; //preventively consider the amount un-staked (undoes if promise fails)
                 ext_staking_pool::unstake(
                     amount_to_unstake.into(),
                     &sp.account_id,
@@ -686,7 +714,7 @@ impl DiversifiedPool {
     //------------------------------------------
     /// Returns the account ID of the owner.
     pub fn get_owner_account_id(&self) -> AccountId {
-        self.owner_account_id.clone()
+        return self.owner_account_id.clone()
     }
 
     /// The amount of tokens that were deposited to the staking pool.
@@ -721,7 +749,7 @@ impl DiversifiedPool {
         }
     }
 
-    /// gte contract totals info
+    /// get contract totals info
     /// Returns JSON representation of the totals
     pub fn get_contract_info(&self) -> GetContractInfoResult {
         return GetContractInfoResult {
@@ -741,6 +769,28 @@ impl DiversifiedPool {
         }
     }
 
+    /// get sp (staking-pool) info
+    /// Returns JSON representation of sp recorded state
+    pub fn get_sp_info(&self, sp_inx_i32:i32) -> GetSpInfoResult {
+
+        assert!(sp_inx_i32>0);
+
+        self.assert_owner();
+
+        let sp_inx = sp_inx_i32 as usize;
+        assert!(sp_inx < self.staking_pools.len());
+
+        let sp = &self.staking_pools[sp_inx];
+
+        return GetSpInfoResult {
+            account_id: sp.account_id.clone(), 
+            weight_basis_points: sp.weight_basis_points,
+            staked: sp.staked.into(),
+            unstaked: sp.unstaked.into(),
+            unstaked_requested_epoch_height: sp.unstaked_requested_epoch_height.into(),
+            last_asked_rewards_epoch_height: sp.last_asked_rewards_epoch_height.into(),
+        }
+    }
 
 }
 

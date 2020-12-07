@@ -10,7 +10,7 @@ impl DiversifiedPool {
     ///
     /// Retrieves total balance from the staking pool and remembers it internally.
     /// Also computes and distributes rewards to author, operator and delegators
-    /// this queries the staking pool.
+    /// this fn queries the staking pool.
     pub fn refresh_staking_pool_rewards(&mut self, sp_inx_i32:i32) {
 
         assert!(sp_inx_i32>0);
@@ -123,7 +123,13 @@ impl DiversifiedPool {
             new_staked_amount = total_balance.0;
 
             if new_staked_amount < sp.staked{
-                env::log("INCONSISTENCY sp says total_balance < sp.staked".as_bytes() );
+                env::log(
+                    format!(
+                        "INCONSISTENCY @{} says total_balance < sp.staked",
+                        sp.account_id
+                    )
+                    .as_bytes(),
+                );
             }
             //compute rewards, as new balance minus old balance
             rewards = new_staked_amount - sp.staked;

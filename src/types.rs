@@ -32,11 +32,9 @@ construct_uint! {
 
 /// Raw type for duration in nanoseconds
 pub type Duration = u64;
-/// Raw type for timestamp in nanoseconds
+/// Raw type for timestamp in nanoseconds or Unix Ts in miliseconds
 pub type Timestamp = u64;
 
-/// Timestamp in nanosecond wrapped into a struct for JSON serialization as a string.
-pub type WrappedTimestamp = U64;
 /// Balance wrapped into a struct for JSON serialization as a string.
 pub type U128String = U128;
 
@@ -104,6 +102,32 @@ pub struct GetAccountInfoResult {
     /// trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
     /// trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
     pub trip_rewards: U128,
+}
+
+/// Struct returned from get_sp_info
+/// Represents sp data as as JSON compatible struct
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct GetSpInfoResult {
+    pub account_id: AccountId,
+    //how much of the meta-pool must be staked in this pool
+    //0=> do not stake, only unstake
+    //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
+    pub weight_basis_points: u16,
+
+    //total staked here
+    pub staked: U128,
+
+    //total unstaked in this pool
+    pub unstaked: U128,
+    
+    //set when the unstake command is passed to the pool
+    //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
+    //We might have to block users from unstaking if all the pools are in a waiting period
+    pub unstaked_requested_epoch_height: U64, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
+
+    //EpochHeight where we asked the sp what were our staking rewards
+    pub last_asked_rewards_epoch_height: U64,
 }
 
 /// Struct returned from get_contract_info
