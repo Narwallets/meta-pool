@@ -11,12 +11,12 @@ This contract acts as an staking-pool but distributes it's delegated funds in se
 ### SKASH NEP-Tokens
 
 This contract also allows users to treat staked near as a NEP-TOKEN, called **SKASH**.
-SKASHs are staked NEARS valued 1:1 to NEAR, and can be trasnferred between contract users and swapped with NEAR in the NEAR/SKASH Liquidity Pool (discounting unstaking wait period).
+SKASHs are staked NEARS valued 1:1 to NEAR, and can be transferred between contract users and swapped with NEAR in the NEAR/SKASH Liquidity Pool (discounting unstaking wait period).
 
 ### Liquid Unstakings, Staking at Discounted Price
 
-By managing multiple users and staking pools, this contracts also gives the users the chance to **inmmediate unstakings** and **discounted-price stakings**. 
-By acting as a clearing house, users intending to stake are matched with users intending to unstake in the *NEAR/SKASH Liquidity Pool*.
+By managing multiple users and staking pools, this contracts gives the users the chance to **inmmediate unstakings** and **discounted-price stakings**. 
+Users intending to stake and Liquidity Providers are matched with users intending to unstake in the *NEAR/SKASH Liquidity Pool*.
 
 In the Liquidity Pool:
  * Users providing liquidity can earn fees and stake at a discounted price
@@ -63,5 +63,5 @@ Periodic calls to `heartbeat()` are required for this contract opertion. This co
 
 ## Technical Information, Change Log & TO-DO
 
-See the [README.md](/README.md)
+See the [github repository](https://github.com/Narwallets/diversifying-staking-pool)
 
