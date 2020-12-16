@@ -427,11 +427,11 @@ impl DiversifiedPool {
             .collect()
     }
 
-//----------------------------
-//----------------------------
-// diversified-staking trait
-//----------------------------
-//----------------------------
+//----------------------------------
+//----------------------------------
+// DIVERISIFYING-STAKING-POOL trait
+//----------------------------------
+//----------------------------------
 
     /// user method
     /// completes unstake action by moving from retreieved_from_the_pools to availabe
