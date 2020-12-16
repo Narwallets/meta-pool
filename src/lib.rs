@@ -162,6 +162,29 @@ pub struct StakingPoolInfo {
     
 }
 
+/// NEAR/SKASH Liquidity Pool information
+/// We assume this pool is always UNBALANCED, there should be more SKASH than NEAR most of the time
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
+pub struct NSLPInfo {
+
+    //The next 3 values define the Liq.Provider fee curve
+
+    ///What's the near target for this pool. Incentives (discount) increase if there are less NEAR in the pool than the target
+    ///incentives (discount) goes to zero when we reach near_target. Default value is 1m NEAR
+    near_target: u128,
+    ///Max stake discount: When there's 0 NEAR in the pool, this is the discount rate a provider can get selling NEAR for SKASH
+    /// the discounts linearly goes to zero until nears in the pool reach near_target
+    /// default is 1000 (10%) meaning if a user swaps the last 1000N she should provide 1100 SKASH 
+    max_stake_discount_basis_points: u16,
+    ///Min stake discount: When there's plenty NEAR in the pool (more than near_target), this is the min 
+    /// fee a Liquidity provider willl get to sell NEAR for SKASH 
+    min_stake_discount_basis_points: u16,
+
+    //total near in the NEAR/SKASH Liquidity Pool
+    near: u128,
+
+}
+
 //---------------------------
 //  Main Contrac State    ---
 //---------------------------
@@ -432,6 +455,58 @@ impl DiversifiedPool {
 // diversified-staking trait
 //----------------------------
 //----------------------------
+
+    /// user method - NEAR/SKASH SWAP functions
+    /// return how much SKASH you can buy with x NEAR
+    pub fn get_skash_amount(&mut self, nears_to_pay:U128String) {
+        
+        let account_id = env::predecessor_account_id();
+        let mut account = self.internal_get_account(&account_id);
+        let am:u128 = nears_to_pay.0;
+        assert!(
+            account.availabe >= am,
+            "Not enough available balance"
+        );
+
+        let num_shares = self.num_shares_from_amount(am);
+
+
+        let epoch = env::epoch_height();
+        if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
+            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", 
+                            account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
+        }
+
+        //async: try to do one of the pending withdrawals
+        self.internal_async_withdraw_from_a_pool();
+
+        if self.total_actually_unstaked_and_retrieved < amount {
+            panic!("Please wait one more hour until the funds are retrieved from the pools");
+        }
+
+        assert!(self.total_for_unstaking > amount);
+
+        //used retrieved funds
+        self.total_actually_unstaked_and_retrieved -= amount;
+        // moves from total_for_unstaking to total_available 
+        self.total_for_unstaking -= amount;
+        self.total_available += amount;
+        
+        // in the account, moves from unstaked to available
+        account.unstaked -= amount;
+        account.available += amount;
+        self.internal_save_account(&account_id, &account);
+
+        // env::log(
+        //     format!(
+        //         "@{} withdrawing {}. New unstaked balance is {}",
+        //         account_id, amount, account.unstaked
+        //     )
+        //     .as_bytes(),
+        // );
+
+    }
+
 
     /// user method
     /// completes unstake action by moving from retreieved_from_the_pools to availabe

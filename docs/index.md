@@ -108,7 +108,8 @@ Alice wants to stake her NEAR, do it at a discount price, and also help the comm
 
 Alice deposits 50_000 NEAR in her div-pool account. 
 Alice swaps 50_000 NEAR for 50_250 SKASH, she earned a .5% fee for using the SWAP mechanism for staking
-Her 50_250 SKASH are staked in one of the staking-pools by an automatic distribution mechanism to keep the validators balanced. She starts earning staking rewards on her SKASH
+Her 50_250 SKASH are staked in one of the staking-pools by an automatic distribution mechanism to keep the validators balanced. 
+She starts earning staking rewards on her SKASH
 
 ### Bob
 Bob has a div-pool account. He has 10_000 SKASH earning rewards. Bob needs to unstake 5_000 NEAR to use in an emergency. He can’t wait 36-48hs to get his NEAR.
