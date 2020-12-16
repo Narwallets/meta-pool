@@ -1,37 +1,44 @@
 # Diversifying Staking Pool
 
-This is the Smart Contract. The Web DApp UX is at https://github.com/Narwallets/dapp-diversifying-staking-pool.git
+## Overview
+What this is? and other non-Thecnical Documentation
+[CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
 
-Non-Thecnical Documentation is at https://narwallets.github.io/diversifying-staking-pool/
 
-## Change Log
+## Technical Documentation
 
-### `0.2.0`
+### Repositories 
+
+This is the Smart Contract repository. The Web UI is at https://github.com/Narwallets/dapp-diversifying-staking-pool.git
+
+### Change Log
+
+#### `0.2.0`
 
 - TO DO
 - [ ] SKASH Liquidity Pool
 
-### `0.1.0`
+#### `0.1.0`
 
 - Initial version by github.com/luciotato based on core-contracts/lockup and core-contracts/staking-pool
 
-## TO DO
+### TO DO
 
 TODO & Issues # 
 
-### View methods
+#### View methods
  - [x] List selected staking pools, getting weight, staked & unstaked
 
-### User methods
+#### User methods
  - [ ] act as a NEP-21 with staked as SKASHs
  - [ ] act as a NEP-xxx (multi-token with trasnfer-to-contract) with staked as SKASHs
  - [ ] Become an Luidity Provider, enter-exit the liquidity pool
 
-### Owner's method
+#### Owner's method
  - [ ] Set staking pool [i] account_id & weight => verify [i] is empty or current at [i] not busy|staked. whitelist new staking_pool, assign
  - [ ] Alter staking pool [i] weight => verify [i] is occupied & not busy. assign weight
 
-### Test
+#### Test
  - [ ] Unit tests for all the new functionality
  - [ ] Simulation tests for all new functionality
 
