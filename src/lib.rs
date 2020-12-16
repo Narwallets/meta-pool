@@ -450,11 +450,11 @@ impl DiversifiedPool {
             .collect()
     }
 
-//----------------------------
-//----------------------------
-// diversified-staking trait
-//----------------------------
-//----------------------------
+//----------------------------------
+//----------------------------------
+// DIVERISIFYING-STAKING-POOL trait
+//----------------------------------
+//----------------------------------
 
     /// user method - NEAR/SKASH SWAP functions
     /// return how much SKASH you can buy with x NEAR

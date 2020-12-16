@@ -126,39 +126,20 @@ Carol deposits 7_000 NEAR in her div-pool account
 Carol enters her 7_000 NEAR to the NEAR/SKASH liquidity pool, she is the first in the pool, so she gets 7_000 shares of the N/S-liq-pool
 Bob swaps 5_050 SKASH for 5_000 NEAR. He sells at a 1% discounted price to get the NEAR immediately
 The N/S-liq-pool delivers 5_000 NEAR to Bob and acquires 5_050 SKASH from Bob.
-The new value of the N/S-liq-pool is 7_050 NEAR (2000 NEAR+5050 SKASH), Carol shares value have increased, and now she owns some SKASH via the N/S-liq-pool. The pool will receive rewards on the SKASH further incrementing the value of her shares.
-
-#### Carol exits
-Carol burns all her shares of the N/S-liq-pool. She receives 2000 NEAR and 5050 SKASH in her account. 
-Carol can wait, she unstakes 5050 SKASH and gets 5050 NEAR in her account after the waiting period. 
+The new value of the N/S-liq-pool is 7_050 NEAR (2000 NEAR+5050 SKASH), Carol shares value have increased, and now she owns some SKASH via the N/S-liq-pool. The Liq.pool will automatically unstake and wait the SKASH. Carol burns all her shares and retieves 7_050 NEAR.
 Carol now has 7050 NEAR. Carol earned  0.70% in 4 epochs.
 Had her normaly staked 7000 NEAR, she would have earned only 0.05% 
-Had her SKASHED 7000 NEAR, she would have earned 0.55% in her div-pool account
 
 ### Dave
 Dave is a Liquidity Provider. He wants to provide continuous liquidity for the SKASH/NEAR pool, in order to earn a fee on each operation
-Dave enters 100_000 NEAR to the NEAR/SKASH liquidity pool, he gets shares of the N/S-liq-pool
+Dave enters 100_000 NEAR to the NEAR/SKASH liquidity pool, he gets shares of the N/S-liq-pool. 
+
 Eve swaps 50_500 SKASH for 50_000 NEAR. She sells at a 1% discounted price to get the NEAR immediately
+
 The N/S-liq-pool delivers 50_000 NEAR to Eve and acquires 50_500 SKASH from Eve.
-The liquidity pool has a low amount of NEAR now. 
-Dave burns some of his shares of the N/S-liq-pool to acquire 50_500 SKASH. He can wait, so he unstakes 50_500 SKASH and gets 50_500 NEAR in his account after the waiting period. 
-Dave enters 50_000 NEAR into the the N/S-liq-pool and pockets the 500 NEAR difference
-The N/S-liq-pool has now enough NEAR to continue operating. 
-Dave will repeat the operation, providing continuous liquidity to the N/S-liq-pool 
+The liquidity pool has a low amount of NEAR now. The liquidity pool automatically unstakes SKASH, waiting the 36-48hs to restore the balance. The liquidity pool gets NEAR after the waiting period. 
 
-### Frances
-Frances is a Liquidity Provider. He wants to automate providing continuous liquidity for the SKASH/NEAR pool, he wants to earn fees in the form of N/S-liq-pool share-price increases.
-
-Frances enters 100_000 NEAR to the NEAR/SKASH liquidity pool, he gets shares of the N/S-liq-pool
-Frances indicates he wants his NEAR to recycle automatically from SKASH->NEAR->LIQ-POOL. His shares will be managed by the auto-liquidity-provider bot
-Eve swaps 50_500 SKASH for 50_000 NEAR. She sells at a 1% discounted price to get the NEAR immediately
-The N/S-liq-pool delivers 50_000 NEAR to Eve and acquires 50_500 SKASH from Eve. The liquidity pool shares have increased in value.
-The liquidity pool has a low amount of NEAR now. 
-The auto-liquidity-provider burns shares of the N/S-liq-pool to acquire 20_000 SKASH. The auto-liquidity-provider unstakes. 
-The auto-liquidity-provider gets NEAR after the waiting period. 
-The auto-liquidity-provider re-enters the NEAR into the N/S-liq-pool 
-The N/S-liq-pool has now enough NEAR to continue operating. 
- As the N/S-liq-pool operates, Frances’ shares value increases on each operation
+As the N/S-liq-pool operates, the NEAR amount grows with each operation, and Dave’s shares' value increases too.
 
 -------------------------
 
