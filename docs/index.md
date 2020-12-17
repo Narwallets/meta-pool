@@ -96,6 +96,35 @@ In order to provide the first options (buy/sell SKASH) a Liquidity Pool and a SE
 * TO SELL SKASH: The sellers enter how much SKASH they want to sell and the contract replies with the NEAR amount they will receive, normally with a discount 1%-10%, depending on the NEAR balance of the liquidity pool and the fee curve parameters.
 
 
+## Treasury
+Part of the NEAR/SKASH LP fees goes to the DAO Treasury. Treasury funds are always SKASH and used for:
+
+* DAO Maintenance
+* DAO Expansion
+* Dividends
+
+The contract has a configurable parameter `dev_mateinance_amount`, initially 2500 SKASH transferred monthly to the account `developers.near`. By DAO governance, this value can be increased and 
+G-SKASH gov-token holders can also re-direct up to 50% of manteinance funds to other mantainers and contributors.
+
+## Governance
+G-SKASH holders can vote on:
+* Diversification: Validator distribution list, and how much NEAR to distribute to each one.
+* `distribute()` Batch stake size. By default 100-150K NEAR
+* Fee curve parameters for the NEAR/SKASH Liquidity Pool (min fee, max fee, slope)
+* How to use treasury funds for DAO expansion
+* Maintenance funds redirections
+* Move treasury funds to the dividends-pool
+
+Half of treasury funds must be used for DAO expansion and manteinance. The other 50% can be user for expansion by presenting proposals, o can be moved to the dividends-pool (once a month). 
+
+The Dividends-pool is a SKASH/G-SKASH liquidity pool allowing G-SKASH owners to burn G-SKASH to obtain SKASH. This pool sets a base-price for G-SKASH tokens. When users vote to add SKASH to the dividends-pool, G-SKASH base-price is incremented. Users can also vote to remove SKASH from the dividends-pool back to the treasury, lowering the G-SKASH base price.
+
+Users get G-SKASH tokens minted for them when:
+* They receive rewards for holding SKASH
+* They receive fees in the NEAR/SKASH Liquidity pool (by being a Liquidity Provider)
+
+So, G-SKASH governance tokens are minted and distributed to users holding SKASH and to users providing liquidity.
+
 ## User stories:
 ### Alice
 Alice wants to stake her NEAR with low risk, and also help the community by promoting validators diversification. 
@@ -104,8 +133,8 @@ Alice opens an account in the contract: diversifying.pool.near
 Alice deposits 750_000 NEAR in her div-pool account. 
 Alice buys 750_000 SKASH. Her 750_000 NEAR are distributed between the staking-pools by an automatic distribution mechanism to keep the validators balanced. 
 
-She starts earning staking rewards on her SKASH. 
-She also has the posibbility to sell some of her SKASH skipping the waiting period if the need arises.
+She starts earning staking rewards on her SKASH. She will also get G-SKASH gov tokens.
+By holding SKAHS she has the posibbility to sell some of her SKASH skipping the waiting period if the need arises.
 
 ### Bob
 Bob already has an account in the diversifying-pool conract. He has 10_000 SKASH earning rewards. 
@@ -140,7 +169,7 @@ The liquidity pool has a low amount of NEAR now. After a few minutes, the liquid
 
 The liquidity pool gets NEAR after the waiting period. The pool has now 100_500 NEAR.
 
-As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s shares value. With each operation G-SKASH tokens are also minted, and Dave and the oter providers get G-SKASH tokens besides the fees.
+As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s shares value. With each operation G-SKASH tokens are also minted, and Dave and the other providers get G-SKASH tokens besides the fees.
 
 -------------------------
 
