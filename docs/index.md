@@ -27,13 +27,13 @@ In the Liquidity Pool:
  * Users providing liquidity can earn operation fees
  * Users wanting to unstake without the waiting period can do so for a fee
 
-The *NEAR/SKASH Liquidity Pool* is an unbalanced Liquidty pool, since most of the the time there will be big amounts of SKASH and a limited amount of NEAR liquidity. Liquidity providers add only NEAR to the liq. pool. The Liq. pool allows other users to SELL SKASH for NEAR (unstake) at a discounted price. The discount represents how much users value not to wait 36-48hs to receive their funds. The discount varies with the amount of NEAR in the liq. pool, but the curve is capped. By default discount fees are in the ranege 1-10%, but the curve parameters can be changed by the G-SKASH governance tokens holders.
+The *NEAR/SKASH Liquidity Pool* is an unbalanced Liquidty pool, since most of the the time there will be big amounts of SKASH and a limited amount of NEAR liquidity. Liquidity providers add only NEAR to the liq. pool. The Liq. pool allows other users to SELL SKASH for NEAR (unstake) at a discounted price. The discount represents how much users value not to wait 36-48hs to receive their funds. The discount varies with the amount of NEAR in the liq. pool, but the curve is capped. By default discount fees are in the range 1-10%, but the curve parameters can be adjusted by DAO governance (G-SKASH governance tokens holders).
 
 ![example-fee-curve](images/example-fee-curve.png)
 
 ## Standard staking-pool
 
-This contract also has the interface and acts as a standard staking-pool, so users can perform classical stakes and unstakes (with the corresponding waiting period + 1h for the diversification mechanism).
+This contract also has the interface and acts as a standard staking-pool, so users can perform classical stakes and classical unstakes (with the corresponding waiting period + 1h for the diversification mechanism).
 
 ## Lockup contracts
 
@@ -48,16 +48,11 @@ This contract helps the community by increasing decentralization, spliting large
 
 The contract pools all users' funds and mantains a balanced distribution of those funds in a list of whitelisted, low-fee, high-uptime validators.
 
-Staking and unstaking distribution is done in batches during calls to this contract `heartbeat()` function so actual staking and unstaking are delayed. 
+Staking and unstaking distribution is done in batches during calls to this contract `distribute()` function so actual staking and unstaking are delayed. 
 
 To avoid impacting staking-pools with large unstakes, this contract has a maximum movement amount during heartbeat (this is transparent to users). E.g. if a user stakes 1m NEAR, the staking is distributed between selected pools in 100K batches.
 
 This batch mechansim ensures a good distribution of large sums between the pools, and that no pool is adversely affected by a large unstake.
-
-## Operational costs
-
-Periodic calls to `distribute()` are required for this contract operation. This calls consume gas that is mostly paid by the operator. To fund this operational cost, a owner's fee percentage (0.5% by default) is taken from rewards distributions. It can be adjusted by G-SKASH governance token holders.
-
 
 ### Guarantees
 
@@ -112,6 +107,7 @@ G-SKASH holders can vote on:
 * `distribute()` Batch stake size. By default 100-150K NEAR
 * Fee curve parameters for the NEAR/SKASH Liquidity Pool (min fee, max fee, slope)
 * How to use treasury funds for DAO expansion
+* Operational costs fee
 * Maintenance funds redirections
 * Move treasury funds to the dividends-pool
 
@@ -124,6 +120,11 @@ Users get G-SKASH tokens minted for them when:
 * They receive fees in the NEAR/SKASH Liquidity pool (by being a Liquidity Provider)
 
 So, G-SKASH governance tokens are minted and distributed to users holding SKASH and to users providing liquidity.
+
+## Operational costs
+
+Periodic calls to `distribute()` are required for this contract operation. This calls consume gas that is mostly paid by the operator. To fund this operational cost, a owner's fee percentage (0.5% by default) is taken from rewards distributions. It can be adjusted by G-SKASH governance token holders.
+
 
 ## User stories:
 ### Alice
