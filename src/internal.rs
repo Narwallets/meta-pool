@@ -21,7 +21,7 @@ impl DiversifiedPool {
 }
 
 pub fn assert_min_amount(amount:u128) {
-    assert!(amount>=TEN_NEAR,"minimun amount is 10N");
+    assert!(amount>=FIVE_NEAR,"minimun amount is 5N");
 }
 
 /***************************************/
@@ -86,11 +86,15 @@ impl DiversifiedPool {
         );
 
         // Calculate the number of "stake" shares that the account will receive for staking the given amount.
-        let num_shares = self.num_shares_from_amount(amount);
+        let num_shares = self.shares_from_amount(amount);
         assert!(num_shares>0);
 
+        //update user account
         acc.stake_shares += num_shares;
         acc.available -= amount;
+        //trip-meter
+        acc.trip_accum_stakes += amount; 
+        //--SAVE ACCOUNT--
         self.internal_save_account(&account_id, &acc);
 
         self.total_stake_shares += num_shares;
@@ -113,7 +117,7 @@ impl DiversifiedPool {
 
         assert!(
             skash >= amount_requested,
-            "You have less skash than what you requested"
+            "Not enough skash"
         );
         let remains_staked = skash - amount_requested;
         let amount_to_unstake = match remains_staked > ONE_NEAR { 
@@ -129,7 +133,7 @@ impl DiversifiedPool {
         }
         else {
             // Calculate the number of shares required to unstake the given amount.
-            num_shares = self.num_shares_from_amount(amount_to_unstake);
+            num_shares = self.shares_from_amount(amount_to_unstake);
             assert!(num_shares>0);
             assert!(
                 acc.stake_shares >= num_shares,
@@ -137,10 +141,10 @@ impl DiversifiedPool {
             );
         }
 
+        //update user account
         acc.stake_shares -= num_shares;
         acc.unstaked += amount_to_unstake;
         acc.unstaked_requested_epoch_height = env::epoch_height(); //when the unstake was requested
-
         //trip-meter
         acc.trip_accum_unstakes += amount_to_unstake;
         //--SAVE ACCOUNT--
@@ -172,7 +176,7 @@ impl DiversifiedPool {
     //--------------------------------
     pub fn add_amount_and_shares_preserve_share_price(&mut self, account_id: AccountId, amount:u128){
         if amount>0 {
-            let num_shares = self.num_shares_from_amount(amount);
+            let num_shares = self.shares_from_amount(amount);
             if num_shares > 0 {
                 let account = &mut self.internal_get_account(&account_id);
                 account.stake_shares += num_shares;
@@ -193,10 +197,13 @@ impl DiversifiedPool {
     /// (total_staked + amount) * total_shares = total_staked * (total_shares + num_shares)
     /// amount * total_shares = total_staked * num_shares
     /// num_shares = amount * total_shares / total_staked
-    pub(crate) fn num_shares_from_amount(
+    pub(crate) fn shares_from_amount(
         &self,
         amount: Balance ) -> u128 
     {
+        if self.total_stake_shares==0 { //first staker
+            return amount;
+        }
         if amount==0||self.total_for_staking==0 {
             return 0;
         }
@@ -214,6 +221,38 @@ impl DiversifiedPool {
         return (U256::from(self.total_for_staking) * U256::from(num_shares) / U256::from(self.total_stake_shares)).as_u128();
     }
 
+
+    /// NEAR/SKASH Liquidity Pool
+    /// computes the disocunt_basis_points for NEAR/SKASH Swap based on NSLP Balance
+    pub fn get_discount_basis_points(&self, available_near:u128, max_nears_to_pay:u128) -> u16 {
+        env::log(format!("get_discount_basis_points available_near={}  max_nears_to_pay={}",available_near, max_nears_to_pay).as_bytes());
+        assert!(available_near > max_nears_to_pay, "Not enough balance in NEAR/SKASH Liquidity pool");
+        let near_after = available_near - max_nears_to_pay;
+        if near_after < self.nslp_near_target/20 { return self.nslp_max_stake_discount_basis_points } //very low near, discount capped at max%
+        let discount_basis_plus_100 = self.nslp_near_target * 100 / near_after;
+        if discount_basis_plus_100 <= 100 + u128::from(self.nslp_min_stake_discount_basis_points) { return self.nslp_min_stake_discount_basis_points } // target reached or surpassed			
+        let discount_basis_points = discount_basis_plus_100 - 100;
+        if discount_basis_points > u128::from(self.nslp_max_stake_discount_basis_points) { return self.nslp_max_stake_discount_basis_points } //capped at max%
+        return discount_basis_points as u16;
+    }
+
+    /// user method - NEAR/SKASH SWAP functions
+    /// return how much NEAR you can get by selling x SKASH
+    pub(crate) fn internal_get_near_amount_sell_skash(&self, available_near:u128, skash_to_sell:u128) -> u128 {
+        
+        let discount_basis_points = self.get_discount_basis_points(available_near, skash_to_sell);
+        assert!(discount_basis_points<10000,"inconsistence d>1");
+        let discount = apply_pct(discount_basis_points,skash_to_sell);
+        return (skash_to_sell - discount).into() //when SKASH is sold user gets a discounted value because the user skips the waiting period
+        // env::log(
+        //     format!(
+        //         "@{} withdrawing {}. New unstaked balance is {}",
+        //         account_id, amount, account.unstaked
+        //     )
+        //     .as_bytes(),
+        // );
+
+    }
 
     /// Inner method to get the given account or a new default value account.
     pub(crate) fn internal_get_account(&self, account_id: &AccountId) -> Account {

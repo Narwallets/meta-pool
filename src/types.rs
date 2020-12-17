@@ -11,6 +11,7 @@ pub const MIN_BALANCE_FOR_STORAGE: u128 = 35_000_000_000_000_000_000_000_000;
 pub const NO_DEPOSIT: u128 = 0;
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 pub const TWO_NEAR: u128 = 2 * ONE_NEAR;
+pub const FIVE_NEAR: u128 = 5 * ONE_NEAR;
 pub const TEN_NEAR: u128 = 10 * ONE_NEAR;
 pub const NEAR_100K: u128 = 100_000 * ONE_NEAR;
 pub const NEARS_PER_BATCH: u128 = NEAR_100K; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches

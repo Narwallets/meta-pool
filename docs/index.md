@@ -5,13 +5,13 @@
 This contract provides the following value items:
 
 ### Don't Put All your Eggs in One Basket
-* This contract acts as an staking-pool but distributes it's delegated funds in several validators. By delegating to this contract, users greatly reduce the risk of getting no-rewards because validators' outage events and also get averaged validators' fees. 
+* This contract acts as an staking-pool but distributes it's delegated funds in several validators. By delegating to this contract, users greatly reduce the risk of getting no-rewards because validators' outage events and also get averaged validators' fees. Besides rewards, SKASH holders reveive governance tokens G-SKASH
 
 ### I need my staked funds NOW
 * This contract allows users to skip the waiting period after unstaking by providing a liquidity pool for inmediate unstaking. This provides also the opportunity for liquidity providers to earn fees for their service. 
 
 ### I want to earn fees by providing liquidity
-* This contract includes severael liquidity pools and the opportunity for liquidity providers to earn fees. The basic pools are NEAR/SKASH and NEAR/G-SKASH, where SKASH are staked nears, and G-SKASH are governance tokens.
+* This contract includes severael liquidity pools and the opportunity for liquidity providers to earn fees. The basic pools are NEAR/SKASH and SKASH/G-SKASH, where SKASH are staked nears, and G-SKASH are governance tokens.
 
 ## SKASH Tokens
 
@@ -21,13 +21,15 @@ SKASHs repesent staked NEARS, and can be transferred between contract users and 
 
 ## Immediate Unstakings & Staking at Discounted Price
 
-Users wnating to unstake skipping the waiting period can do so in the *NEAR/SKASH Liquidity Pool*.
+Users wanting to unstake skipping the waiting period can do so in the *NEAR/SKASH Liquidity Pool*.
 
 In the Liquidity Pool:
- * Users providing liquidity can earn fees and stake at a discounted price in the same operation.
+ * Users providing liquidity can earn operation fees
  * Users wanting to unstake without the waiting period can do so for a fee
 
-The *NEAR/SKASH Liquidity Pool* allows you to BUY SKASH with NEAR (stake) at a discounted price, and SELL SKASH for NEAR (unstake) at a discounted price. The discount represents how much users value not to wait 36-48hs to receive their funds.
+The *NEAR/SKASH Liquidity Pool* is an unbalanced Liquidty pool, since most of the the time there will be big amounts of SKASH and a limited amount of NEAR liquidity. Liquidity providers add only NEAR to the liq. pool. The Liq. pool allows other users to SELL SKASH for NEAR (unstake) at a discounted price. The discount represents how much users value not to wait 36-48hs to receive their funds. The discount varies with the amount of NEAR in the liq. pool, but the curve is capped. The curve parameters are defined by voting with G-SKASH governance tokens.
+
+![example-fee-curve](docs/images/example-fee-curve.png)
 
 ## Standard staking-pool
 
@@ -104,42 +106,45 @@ In order to provide the first options (buy/sell SKASH) a Liquidity Pool and a SW
 
 ## User stories:
 ### Alice
-Alice wants to stake her NEAR, do it at a discount price, and also help the community by promoting validators diversification. Alice opens an account in the contract: diversifying.pool.near
+Alice wants to stake her NEAR with low risk, and also help the community by promoting validators diversification. 
+Alice opens an account in the contract: diversifying.pool.near
 
-Alice deposits 50_000 NEAR in her div-pool account. 
-Alice swaps 50_000 NEAR for 50_250 SKASH, she earned a .5% fee for using the SWAP mechanism for staking
-Her 50_250 SKASH are staked in one of the staking-pools by an automatic distribution mechanism to keep the validators balanced. 
-She starts earning staking rewards on her SKASH
+Alice deposits 750_000 NEAR in her div-pool account. 
+Alice stakes 750_000 NEAR. Her 750_000 NEAR are distributed between the staking-pools by an automatic distribution mechanism to keep the validators balanced. 
+She starts earning staking rewards on her SKASH. 
+She also has the posibbility to some part of her SKASH skipping the waiting period if the need arises.
 
 ### Bob
-Bob has a div-pool account. He has 10_000 SKASH earning rewards. Bob needs to unstake 5_000 NEAR to use in an emergency. He can’t wait 36-48hs to get his NEAR.
+Bob has a div-pool account. He has 10_000 SKASH earning rewards. 
+Bob needs to unstake 5_000 NEAR to use in an emergency. He can’t wait 36-48hs to get his NEAR.
 
-Bob swaps 5_050 SKASH for 5_000 NEAR. He sells at a 1% discounted price to get the NEAR immediately
-Bob gets the NEAR in his div-pool account
-Bob can withdraw his NEAR immediately
+Bob swaps 5_050 SKASH for 5_000 NEAR. He sells at a 1% discounted price to get the NEAR immediately.
+Bob gets the NEAR in his div-pool account.
+Bob can withdraw his NEAR immediately.
 
 ### Carol
-Carol is an investor. She wants to provide liquidity for the SKASH/NEAR pool, in order to earn a fee on each operation plus rewards on the SKASH side.
-Being a Liquidity Provider can bring-in more earnings than just staking, while helping the community at the same time by providing liquid/immediate unstaking for other users.
-
+Carol is an investor. She wants to provide liquidity for the SKASH/NEAR pool for short period, staking in the process and earning a fee the operation.
 Carol deposits 7_000 NEAR in her div-pool account
-Carol enters her 7_000 NEAR to the NEAR/SKASH liquidity pool, she is the first in the pool, so she gets 7_000 shares of the N/S-liq-pool
-Bob swaps 5_050 SKASH for 5_000 NEAR. He sells at a 1% discounted price to get the NEAR immediately
-The N/S-liq-pool delivers 5_000 NEAR to Bob and acquires 5_050 SKASH from Bob.
-The new value of the N/S-liq-pool is 7_050 NEAR (2000 NEAR+5050 SKASH), Carol shares value have increased, and now she owns some SKASH via the N/S-liq-pool. The Liq.pool will automatically unstake and wait the SKASH. Carol burns all her shares and retieves 7_050 NEAR.
-Carol now has 7050 NEAR. Carol earned  0.70% in 4 epochs.
-Had her normaly staked 7000 NEAR, she would have earned only 0.05% 
+Carol enters her 7_000 NEAR to the NEAR/SKASH liquidity pool, she is the first in the pool, so she gets 7_000 shares of the N/S-liq-pool.
+Bob swaps 5_050 SKASH for 5_000 NEAR. He sells at a 1% discounted price to get the NEAR immediately.
+The N/S-liq-pool delivers 5_000 NEAR to Bob and acquires 5_050 SKASH from Bob. The new value of the N/S-liq-pool is 7_050 NEAR (2000 NEAR+5050 SKASH), 
+Carol shares value have increased, and now she owns some SKASH via the N/S-liq-pool.
+Carol burns all her shares and retieves 2_000 NEAR and 5_050 SKASH into her account.
+Carol has now 7_050 NEAR. Carol earned 0.70% in a few epochs.
+Had her normaly staked 7_000 NEAR, she would have earned only 0.05% 
 
 ### Dave
 Dave is a Liquidity Provider. He wants to provide continuous liquidity for the SKASH/NEAR pool, in order to earn a fee on each operation
+Being a Liquidity Provider can bring-in more earnings than just staking, while helping the community at the same time by providing immediate unstaking for other users.
 Dave enters 100_000 NEAR to the NEAR/SKASH liquidity pool, he gets shares of the N/S-liq-pool. 
 
 Eve swaps 50_500 SKASH for 50_000 NEAR. She sells at a 1% discounted price to get the NEAR immediately
 
 The N/S-liq-pool delivers 50_000 NEAR to Eve and acquires 50_500 SKASH from Eve.
-The liquidity pool has a low amount of NEAR now. The liquidity pool automatically unstakes SKASH, waiting the 36-48hs to restore the balance. The liquidity pool gets NEAR after the waiting period. 
+The liquidity pool has a low amount of NEAR now. After a few minutes, the liquidity pool automatically unstakes SKASH, to wait 36-48hs to retrieve NEAR and restore the balance. 
+The liquidity pool gets NEAR after the waiting period. The pool has now 100_500 NEAR.
 
-As the N/S-liq-pool operates, the NEAR amount grows with each operation, and Dave’s shares' value increases too.
+As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s shares value.
 
 -------------------------
 

@@ -30,6 +30,7 @@ pub mod owner;
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
+const NSLP_INTERNAL_ACCOUNT:&str = "..NSLP..";
 
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
@@ -180,13 +181,10 @@ pub struct NSLPInfo {
     /// fee a Liquidity provider willl get to sell NEAR for SKASH 
     min_stake_discount_basis_points: u16,
 
-    //total near in the NEAR/SKASH Liquidity Pool
-    near: u128,
-
 }
 
 //---------------------------
-//  Main Contrac State    ---
+//  Main Contract State   ---
 //---------------------------
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -241,6 +239,11 @@ pub struct DiversifiedPool {
     //list of pools to diversify in
     pub staking_pools: Vec<StakingPoolInfo>, 
 
+    //NEAR/SKASH Liquidity pool
+    nslp_near_target: u128,
+    nslp_max_stake_discount_basis_points: u16, //10%
+    nslp_min_stake_discount_basis_points: u16, //0.1%
+
 }
 
 impl Default for DiversifiedPool {
@@ -294,6 +297,9 @@ impl DiversifiedPool {
             total_stake_shares: 0,
             accounts: UnorderedMap::new("A".into()),
             staking_pools: Vec::new(), 
+            nslp_near_target: ONE_NEAR*1_000_000,
+            nslp_max_stake_discount_basis_points: 1000, //10%
+            nslp_min_stake_discount_basis_points: 10, //0.1%
         }
     }
 
@@ -344,8 +350,7 @@ impl DiversifiedPool {
     /// Stakes the given amount from the inner account of the predecessor.
     /// The inner account should have enough unstaked balance.
     pub fn stake(&mut self, amount: U128String) {
-        let amount: u128 = amount.into();
-        self.internal_stake(amount);
+        self.internal_stake(amount.0);
     }
 
     /// Unstakes all staked balance from the inner account of the predecessor.
@@ -456,57 +461,6 @@ impl DiversifiedPool {
 //----------------------------------
 //----------------------------------
 
-    /// user method - NEAR/SKASH SWAP functions
-    /// return how much SKASH you can buy with x NEAR
-    pub fn get_skash_amount(&mut self, nears_to_pay:U128String) {
-        
-        let account_id = env::predecessor_account_id();
-        let mut account = self.internal_get_account(&account_id);
-        let am:u128 = nears_to_pay.0;
-        assert!(
-            account.availabe >= am,
-            "Not enough available balance"
-        );
-
-        let num_shares = self.num_shares_from_amount(am);
-
-
-        let epoch = env::epoch_height();
-        if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
-            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", 
-                            account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
-        }
-
-        //async: try to do one of the pending withdrawals
-        self.internal_async_withdraw_from_a_pool();
-
-        if self.total_actually_unstaked_and_retrieved < amount {
-            panic!("Please wait one more hour until the funds are retrieved from the pools");
-        }
-
-        assert!(self.total_for_unstaking > amount);
-
-        //used retrieved funds
-        self.total_actually_unstaked_and_retrieved -= amount;
-        // moves from total_for_unstaking to total_available 
-        self.total_for_unstaking -= amount;
-        self.total_available += amount;
-        
-        // in the account, moves from unstaked to available
-        account.unstaked -= amount;
-        account.available += amount;
-        self.internal_save_account(&account_id, &account);
-
-        // env::log(
-        //     format!(
-        //         "@{} withdrawing {}. New unstaked balance is {}",
-        //         account_id, amount, account.unstaked
-        //     )
-        //     .as_bytes(),
-        // );
-
-    }
-
 
     /// user method
     /// completes unstake action by moving from retreieved_from_the_pools to availabe
@@ -520,9 +474,9 @@ impl DiversifiedPool {
             "No unstaked balance"
         );
         let epoch = env::epoch_height();
+        let epochs_to_wait= account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch;
         if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
-            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", 
-                            account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
+            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", epochs_to_wait));
         }
 
         //async: try to do one of the pending withdrawals
@@ -555,50 +509,73 @@ impl DiversifiedPool {
 
     }
 
+    /// buy_skash_stake. Identical to stake, migth change in the future
+    pub fn buy_skash_stake(&mut self, amount: U128String) {
+        self.internal_stake(amount.0);
+    }
+
+    /// user method - NEAR/SKASH SWAP functions
+    /// return how much NEAR you can get by selling x SKASH
+    pub fn get_near_amount_sell_skash(&self, skash_to_sell:U128String) -> U128String {
+
+        let lp_account = &self.internal_get_account(&NSLP_INTERNAL_ACCOUNT.into());
+        return self.internal_get_near_amount_sell_skash(lp_account.available,skash_to_sell.0).into()
+
+    }
+
     /// user method
-    /// places a buy-skash order (stake)
-    pub fn place_buy_skash_order(&mut self, amount:U128String, discount:i32, duration:i32) {
+    /// Sells-skash at discount
+    /// returns near received
+    pub fn sell_skash(&mut self, skash_amount_to_sell:U128String, min_expected_near:U128String) -> U128String {
         
+        let skash_to_sell:u128 = skash_amount_to_sell.0;
+
         let account_id = env::predecessor_account_id();
-        let mut account = self.internal_get_account(&account_id);
-        let am:u128 = amount.0;
+        let mut user_account = self.internal_get_account(&account_id);
+
+        let skash_owned = self.amount_from_shares(user_account.stake_shares);
         assert!(
-            account.availabe > 0,
-            "Not enough available balance"
+            skash_owned >= skash_amount_to_sell.0 ,
+            "Not enough skash in your account"
         );
-        let epoch = env::epoch_height();
-        if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
-            panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", 
-                            account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch).as_bytes());
-        }
-
-        //async: try to do one of the pending withdrawals
-        self.internal_async_withdraw_from_a_pool();
-
-        if self.total_actually_unstaked_and_retrieved < amount {
-            panic!("Please wait one more hour until the funds are retrieved from the pools");
-        }
-
-        assert!(self.total_for_unstaking > amount);
-
-        //used retrieved funds
-        self.total_actually_unstaked_and_retrieved -= amount;
-        // moves from total_for_unstaking to total_available 
-        self.total_for_unstaking -= amount;
-        self.total_available += amount;
         
-        // in the account, moves from unstaked to available
-        account.unstaked -= amount;
-        account.available += amount;
-        self.internal_save_account(&account_id, &account);
+        let mut lp_account = self.internal_get_account(&NSLP_INTERNAL_ACCOUNT.into());
+        let near_to_receive = self.internal_get_near_amount_sell_skash(lp_account.available,skash_to_sell);
+        assert!(
+            near_to_receive >= min_expected_near.0 ,
+            "Price changed, your min results requirements not satisfied. Try again"
+        );
+        assert!(
+            lp_account.available >= near_to_receive,
+            "lp_account.availabe < near_to_receive"
+        );
 
-        // env::log(
-        //     format!(
-        //         "@{} withdrawing {}. New unstaked balance is {}",
-        //         account_id, amount, account.unstaked
-        //     )
-        //     .as_bytes(),
-        // );
+        let stake_shares_sell = self.shares_from_amount(skash_amount_to_sell.0);
+        assert!(
+            user_account.stake_shares >= stake_shares_sell,
+            "account.stake_shares < stake_shares_sell"
+        );
+
+        //swap shares(SKASH)<->NEAR between user account and lp_account
+        lp_account.available -= near_to_receive;
+        user_account.available += near_to_receive;
+
+        user_account.stake_shares -= stake_shares_sell;
+        lp_account.stake_shares += stake_shares_sell;
+
+        //Save both accounts
+        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(),&lp_account);
+        self.internal_save_account(&account_id,&user_account);
+
+        env::log(
+            format!(
+                "@{} sold {} SKASH for {} NEAR",
+                account_id, skash_amount_to_sell.0, near_to_receive
+            )
+            .as_bytes(),
+        );
+
+        return near_to_receive.into();
 
     }
 
@@ -944,7 +921,7 @@ mod tests {
     fn basic_context() -> VMContext {
         get_context(
             system_account(),
-            to_yocto(gfme_NEAR),
+            to_yocto(TEST_INITIAL_BALANCE),
             0,
             to_ts(GENESIS_TIME_IN_DAYS),
             false,
@@ -958,7 +935,7 @@ mod tests {
         )
     }
 
-    fn gfme_only_setup() -> (VMContext, DiversifiedPool) {
+    fn contract_only_setup() -> (VMContext, DiversifiedPool) {
         let context = basic_context();
         testing_env!(context.clone());
         let contract = new_contract();
@@ -967,7 +944,7 @@ mod tests {
 
     // #[test]
     // fn test_gfme_only_basic() {
-    //     let (mut context, contract) = gfme_only_setup();
+    //     let (mut context, contract) = contract_only_setup();
     //     // Checking initial values at genesis time
     //     context.is_view = true;
     //     testing_env!(context.clone());
@@ -983,12 +960,28 @@ mod tests {
     //     context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR + 1);
     //     testing_env!(context.clone());
 
-    //     assert_almost_eq(contract.get_owners_balance().0, to_yocto(gfme_NEAR));
+    //     assert_almost_eq(contract.get_owners_balance().0, to_yocto(TEST_INITIAL_BALANCE));
     // }
+    
+    #[test]
+    fn test_internal_get_near_amount_sell_skash(){
+        let (mut context, mut contract) = contract_only_setup();
+        let lp_balance_y:u128 = to_yocto(500_000);
+        let sell_skash_y:u128 = to_yocto(120);
+        let discount_bp:u16 = contract.get_discount_basis_points(lp_balance_y,sell_skash_y);
+        let near_amount_y = contract.internal_get_near_amount_sell_skash(lp_balance_y,sell_skash_y);
+        assert!(near_amount_y <= sell_skash_y);
+        let discountedy = sell_skash_y - near_amount_y;
+        let discounted_displayN = ytof(discountedy);
+        let sell_skash_displayN = ytof(sell_skash_y);
+        assert!(discountedy == apply_pct( discount_bp, sell_skash_y ) );
+        assert!(near_amount_y == sell_skash_y - discountedy );
+    }
 
+    /*
     #[test]
     fn test_add_full_access_key() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR);
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
@@ -1001,7 +994,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Can only be called by the owner")]
     fn test_call_by_non_owner() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR);
         context.predecessor_account_id = non_owner();
         context.signer_account_id = non_owner();
@@ -1013,11 +1006,11 @@ mod tests {
 
     #[test]
     fn test_gfme_only_transfer_call_by_owner() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR + 1);
         context.is_view = true;
         testing_env!(context.clone());
-        assert_almost_eq(contract.get_owners_balance().0, to_yocto(gfme_NEAR));
+        assert_almost_eq(contract.get_owners_balance().0, to_yocto(TEST_INITIAL_BALANCE));
 
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
@@ -1025,27 +1018,27 @@ mod tests {
         context.is_view = false;
         testing_env!(context.clone());
 
-        assert_eq!(env::account_balance(), to_yocto(gfme_NEAR));
+        assert_eq!(env::account_balance(), to_yocto(TEST_INITIAL_BALANCE));
         contract.transfer(to_yocto(100).into(), non_owner());
-        assert_almost_eq(env::account_balance(), to_yocto(gfme_NEAR - 100));
+        assert_almost_eq(env::account_balance(), to_yocto(TEST_INITIAL_BALANCE - 100));
     }
 
     #[test]
     #[should_panic(expected = "Staking pool is not selected")]
     fn test_staking_pool_is_not_selected() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
         context.signer_account_pk = public_key(2).try_into().unwrap();
 
-        let amount = to_yocto(gfme_NEAR - 100);
+        let amount = to_yocto(TEST_INITIAL_BALANCE - 100);
         testing_env!(context.clone());
         contract.deposit_to_staking_pool(amount.into());
     }
 
     #[test]
     fn test_staking_pool_success() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
         context.signer_account_pk = public_key(2).try_into().unwrap();
@@ -1062,12 +1055,12 @@ mod tests {
         context.is_view = false;
 
         // Deposit to the staking_pool
-        let amount = to_yocto(gfme_NEAR - 100);
+        let amount = to_yocto(TEST_INITIAL_BALANCE - 100);
         context.predecessor_account_id = account_owner();
         testing_env!(context.clone());
         contract.deposit_to_staking_pool(amount.into());
         context.account_balance = env::account_balance();
-        assert_eq!(context.account_balance, to_yocto(gfme_NEAR) - amount);
+        assert_eq!(context.account_balance, to_yocto(TEST_INITIAL_BALANCE) - amount);
 
         context.predecessor_account_id = gfme_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
@@ -1119,7 +1112,7 @@ mod tests {
 
     #[test]
     fn test_staking_pool_refresh_balance() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
         context.signer_account_pk = public_key(2).try_into().unwrap();
@@ -1130,12 +1123,12 @@ mod tests {
         contract.select_staking_pool(staking_pool.clone());
 
         // Deposit to the staking_pool
-        let amount = to_yocto(gfme_NEAR - 100);
+        let amount = to_yocto(TEST_INITIAL_BALANCE - 100);
         context.predecessor_account_id = account_owner();
         testing_env!(context.clone());
         contract.deposit_to_staking_pool(amount.into());
         context.account_balance = env::account_balance();
-        assert_eq!(context.account_balance, to_yocto(gfme_NEAR) - amount);
+        assert_eq!(context.account_balance, to_yocto(TEST_INITIAL_BALANCE) - amount);
 
         context.predecessor_account_id = gfme_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
@@ -1193,7 +1186,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Staking pool is already selected")]
     fn test_staking_pool_selected_again() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
         context.signer_account_pk = public_key(2).try_into().unwrap();
@@ -1213,7 +1206,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Staking pool is not selected")]
     fn test_staking_pool_unselecting_non_selected() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
         context.signer_account_pk = public_key(2).try_into().unwrap();
@@ -1226,13 +1219,13 @@ mod tests {
 
     #[test]
     fn test_staking_pool_owner_balance() {
-        let (mut context, mut contract) = gfme_only_setup();
+        let (mut context, mut contract) = contract_only_setup();
         context.predecessor_account_id = account_owner();
         context.signer_account_id = account_owner();
         context.signer_account_pk = public_key(2).try_into().unwrap();
         context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR + 1);
 
-        let gfme_amount = to_yocto(gfme_NEAR);
+        let gfme_amount = to_yocto(TEST_INITIAL_BALANCE);
         context.is_view = true;
         testing_env!(context.clone());
         assert_eq!(contract.get_owners_balance().0, gfme_amount);
@@ -1301,5 +1294,6 @@ mod tests {
             context.is_view = false;
         }
     }
+    */
 }
 

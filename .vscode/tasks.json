@@ -11,7 +11,19 @@
 				"kind": "build",
 				"isDefault": true,
 			},
-			"label": ". build.sh - lockup"
+			"label": ". build.sh"
+		},
+		{
+			"type": "shell",
+			"command": "cargo +nightly test",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "test",
+				"isDefault": true,
+			},
+			"label": "cargo +nightly test"
 		}
 	]
 }

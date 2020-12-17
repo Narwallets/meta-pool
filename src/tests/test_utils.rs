@@ -4,6 +4,7 @@ use near_sdk::{AccountId, MockedBlockchain, PromiseResult, VMContext};
 pub const LOCKUP_NEAR: u128 = 1000;
 pub const GENESIS_TIME_IN_DAYS: u64 = 500;
 pub const YEAR: u64 = 365;
+pub const TEST_INITIAL_BALANCE: u128 = 100;
 
 pub fn lockup_account() -> AccountId {
     "lockup".to_string()
@@ -25,12 +26,20 @@ pub fn account_foundation() -> AccountId {
     "near".to_string()
 }
 
-pub fn to_yocto(near_balance: u128) -> u128 {
-    near_balance * 10u128.pow(24)
+pub fn to_yocto(near_amount: u128) -> u128 {
+    return near_amount * 10u128.pow(24)
+}
+pub fn to_near(yoctos_amount: u128) -> u128 {
+    return yoctos_amount / 10u128.pow(24)
+}
+//convert yocto to f64 NEAR truncate to 4 dec places
+pub fn ytof(yoctos_amount: u128) -> f64 {
+    let fourDecf:f64 = ((yoctos_amount / 10u128.pow(20)) as u32).into();
+    return fourDecf / 10000.0;
 }
 
 pub fn to_nanos(num_days: u64) -> u64 {
-    num_days * 86400_000_000_000
+    return num_days * 86400_000_000_000
 }
 
 pub fn to_ts(num_days: u64) -> u64 {
