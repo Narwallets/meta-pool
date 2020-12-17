@@ -75,11 +75,11 @@ SKASH: one SKASH represents one staked NEAR. A SKASH is a virtual token computed
 
 --- To SELL SKASH is equivalent to UNSTAKE without the waiting period ---
 
-### To buy SKASH and to stake are the same operation for the user.
+**To buy SKASH and to stake are the same operation for the user.**
 
 In order to stake the user buys SKAHS tokens. Buy SKASH/Stake are the same operation. When buying SKASH the price is always fixed 1 NEAR = 1 SKASH
 
-### To sell SKASH and to un-stake are similar.
+**To sell SKASH and to un-stake are similar.**
 
 There are two ways to un-stake: (from more convenient to less convenient)
 
