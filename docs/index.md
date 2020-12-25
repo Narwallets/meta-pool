@@ -102,24 +102,37 @@ The contract has a configurable parameter `dev_mateinance_amount`, initially 250
 G-SKASH gov-token holders can also re-direct up to 50% of manteinance funds to other mantainers and contributors.
 
 ## Governance
+
+(When Phase II - DAO Governance is implemented)
+
 G-SKASH holders can vote on:
 * Diversification: Validator distribution list, and how much NEAR to distribute to each one.
-* `distribute()` Batch stake size. By default 100-150K NEAR
 * Fee curve parameters for the NEAR/SKASH Liquidity Pool (min fee, max fee, slope)
 * How to use treasury funds for DAO expansion
 * Operational costs fee
 * Maintenance funds redirections
-* Move treasury funds to the dividends-pool
+* Move treasury funds in/out of the G-SKASH dividends-pool
+* `distribute()` Batch stake size. By default 100-150K NEAR
+* G-SKASH mint reward multiplier for:
+  * SKASH-sellers/immediate unstake (default 1 G-SKASH per each discounted NEAR)
+  * Stakers (default 5 G-SKASH per * staking reward)
+  * LP-providers (default 20 G-SKASH * fee received)
+
 
 Half of treasury funds must be used for DAO expansion and manteinance. The other 50% can be user for expansion by presenting proposals, o can be moved to the dividends-pool (once a month). 
 
 The Dividends-pool is a SKASH/G-SKASH liquidity pool allowing G-SKASH owners to burn G-SKASH to obtain SKASH. This pool sets a base-price for G-SKASH tokens. When users vote to add SKASH to the dividends-pool, G-SKASH base-price is incremented. Users can also vote to remove SKASH from the dividends-pool back to the treasury, lowering the G-SKASH base price.
 
 Users get G-SKASH tokens minted for them when:
-* They receive rewards for holding SKASH
-* They receive fees in the NEAR/SKASH Liquidity pool (by being a Liquidity Provider)
+* They sell SKASH (immediate unstaking) (1x multiplier)
+* They receive rewards for holding SKASH (5x multiplier)
+* They receive fees in the NEAR/SKASH Liquidity pool (20x multiplier)
 
-So, G-SKASH governance tokens are minted and distributed to users holding SKASH and to users providing liquidity.
+
+G-SKASH governance tokens are minted and distributed to:
+* users holding SKASH and 
+* users providing liquidity.
+* users paying immediate unstaking fees
 
 ## Operational costs
 
@@ -143,7 +156,7 @@ Bob already has an account in the diversifying-pool conract. He has 10_000 SKASH
 Bob needs to unstake 5_000 NEAR to use in an emergency. He can’t wait 36-48hs to get his NEAR. 
 
 Bob sells 5_050 SKASH for 5_000 NEAR. He sells at a 1% discounted price to get the NEAR immediately.
-Bob gets the NEAR in his div-pool account.
+Bob gets the NEAR in his div-pool account. 
 Bob can withdraw his NEAR immediately.
 
 ### Carol

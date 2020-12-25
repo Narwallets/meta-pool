@@ -105,33 +105,3 @@ pub mod owner_callbacks {
         super::BASE_GAS + super::staking_pool::WITHDRAW + ON_STAKING_POOL_WITHDRAW;
 }
 
-pub mod foundation_callbacks {
-    /// Gas attached to the inner callback for processing result of the call to get the current
-    /// staked balance from the staking pool.
-    /// The callback might proceed with unstaking.
-    /// Requires BASE for local updates + gas for unstake + gas for another callback.
-    pub const ON_GET_ACCOUNT_STAKED_BALANCE_TO_UNSTAKE: u64 =
-        super::BASE_GAS + super::staking_pool::UNSTAKE + ON_STAKING_POOL_UNSTAKE_FOR_TERMINATION;
-
-    /// Gas attached to the inner callback for processing result of the unstake call  to the
-    /// staking pool.
-    /// Requires BASE for local updates.
-    pub const ON_STAKING_POOL_UNSTAKE_FOR_TERMINATION: u64 = super::BASE_GAS;
-
-    /// Gas attached to the inner callback for processing result of the call to get the current
-    /// unstaked balance from the staking pool.
-    /// The callback might proceed with withdrawing this amount.
-    /// Requires BASE for local updates + gas for withdraw + gas for another callback.
-    pub const ON_GET_ACCOUNT_UNSTAKED_BALANCE_TO_WITHDRAW: u64 =
-        super::BASE_GAS + super::staking_pool::WITHDRAW + ON_STAKING_POOL_WITHDRAW_FOR_TERMINATION;
-
-    /// Gas attached to the inner callback for processing result of the withdraw call to the
-    /// staking pool.
-    /// Requires BASE for local updates.
-    pub const ON_STAKING_POOL_WITHDRAW_FOR_TERMINATION: u64 = super::BASE_GAS;
-
-    /// Gas attached to the inner callback for processing result of the withdrawal of the
-    /// terminated unvested balance.
-    /// Requires BASE for local updates.
-    pub const ON_WITHDRAW_UNVESTED_AMOUNT: u64 = super::BASE_GAS;
-}

@@ -2,7 +2,7 @@
 //! this contract is based on core-contracts/lockup-contract & core-contracts/staking-pool
 
 /*
-Notes: 
+Notes:
     In order to keep the skaing balanced over the pools
     large operations (>100kN) wil be splitted
     The cross contract calls are complex and can consume all allowed gas,
@@ -11,9 +11,8 @@ Notes:
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, collections::UnorderedMap};
+use near_sdk::{collections::UnorderedMap, env, ext_contract, near_bindgen, AccountId};
 
-pub use crate::getters::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::types::*;
@@ -23,14 +22,13 @@ pub mod gas;
 pub mod types;
 pub mod utils;
 
-pub mod getters;
 pub mod internal;
 pub mod owner;
 
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
-const NSLP_INTERNAL_ACCOUNT:&str = "..NSLP..";
+const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
 
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
@@ -53,15 +51,18 @@ pub trait ExtStakingPool {
     fn unstake_all(&mut self);
 }
 
-
 #[ext_contract(ext_self_owner)]
 pub trait ExtDivPoolContractOwner {
-
     fn on_staking_pool_deposit(&mut self, amount: U128String) -> bool;
 
     fn on_staking_pool_withdraw(&mut self, sp_inx: usize) -> bool;
 
-    fn on_staking_pool_stake_maybe_deposit(&mut self, sp_inx: usize, amount: u128, include_deposit:bool) -> bool;
+    fn on_staking_pool_stake_maybe_deposit(
+        &mut self,
+        sp_inx: usize,
+        amount: u128,
+        include_deposit: bool,
+    ) -> bool;
 
     fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool;
 
@@ -70,15 +71,71 @@ pub trait ExtDivPoolContractOwner {
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
     fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
-
 }
 
-// ----------------- 
+// -----------------
+// Reward meter utility
+// -----------------
+#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
+pub struct RewardMeter {
+    ///added with staking
+    ///subtracted on unstaking. WARN: Since unstaking can inlude rewards, delta_in *CAN BECOME NEGATIVE*
+    pub delta_in: i128,
+    /// (pct: 100 => x1, 200 => x2)
+    pub last_multiplier_pct: u16,
+}
+
+impl Default for RewardMeter {
+    fn default() -> Self {
+        Self {
+            delta_in: 0,
+            last_multiplier_pct: 100,
+        }
+    }
+}
+
+impl RewardMeter {
+    /// compute rewards received (extra after stake/unstake)
+    /// multiplied by last_multiplier_pct%
+    pub fn mul_rewards(&self, valued_shares: u128) -> u128 {
+        assert!(valued_shares < ((i128::MAX - self.delta_in) as u128), "TB");
+        assert!(
+            self.delta_in < 0 || valued_shares >= (self.delta_in as u128),
+            "valued_shares<this.delta_in"
+        );
+        return (U256::from((valued_shares as i128) - self.delta_in)
+            * U256::from(self.last_multiplier_pct)
+            / U256::from(100))
+        .as_u128();
+    }
+    ///register a stake (to be able to compute rewards later)
+    pub fn stake(&mut self, value: u128) {
+        assert!(value < (i128::MAX as u128));
+        self.delta_in += value as i128;
+    }
+    ///register a unstake (to be able to compute rewards later)
+    pub fn unstake(&mut self, value: u128) {
+        assert!(value < (i128::MAX as u128));
+        self.delta_in -= value as i128;
+    }
+    ///realize rewards
+    /// compute rewards received (extra after stake/unstake) multiplied by last_multiplier_pct%
+    /// adds to self.realized
+    /// then reset the meter to zero
+    /// and maybe update the multiplier
+    pub fn realize(&mut self, valued_shares: u128, new_multiplier_pct: u16) -> u128 {
+        let result = self.mul_rewards(valued_shares);
+        self.delta_in = valued_shares as i128; // reset meter to Zero
+        self.last_multiplier_pct = new_multiplier_pct; //maybe changed
+        return result;
+    }
+}
+
+// -----------------
 // User Account Data
-// ----------------- 
+// -----------------
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
 pub struct Account {
-
     /// This amount increments with deposits and decrements with for_staking
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
@@ -89,34 +146,50 @@ pub struct Account {
     /// The amount of shares of the total staked balance in the pool(s) this user owns.
     /// Before someone stakes share-price is computed and shares are "sold" to the user so he only owns what he's staking and no rewards yet
     /// When a user reequest a transfer to other user, staked & shares from the origin are moved to staked & shares of the destination
-    /// The share_price can be computed as total_staked/total_stake_shares
+    /// The share_price can be computed as total_for_staking/total_stake_shares
     /// shares * share_price = SKASHs
     pub stake_shares: u128,
 
-    /// Incremented when the user asks for unstaking. The amount of unstaked near in the pools 
+    /// Incremented when the user asks for unstaking. The amount of unstaked near in the pools
     pub unstaked: u128,
 
     /// The epoch height when the unstaked was requested
     /// The fund will be locked for NUM_EPOCHS_TO_UNLOCK epochs
-    /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK 
+    /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK
     pub unstaked_requested_epoch_height: EpochHeight,
+
+    //-- G-SKASH
+    ///realized G-SKASH, can be used to transfer G-SKASH from one user to another
+    // Total G-SKASH = realized_g_skash + staking_meter.mul_rewards(valued_stake_shares) + lp_meter.mul_rewards(valued_lp_shares)
+    // Every time the user operates on STAKE/UNSTAKE: we realize g-skash: realized_g_skash += staking_meter.mul_rewards(valued_staked_shares)
+    // Every time the user operates on ADD.LIQ/REM.LIQ.: we realize g-skash: realized_g_skash += lp_meter.mul_rewards(valued_lp_shares)
+    // if the user calls farm_g_skash() we perform both
+    pub realized_g_skash: u128,
+    ///Staking rewards meter (to mint skash for the user)
+    pub staking_meter: RewardMeter,
+    ///LP fee gains meter (to mint g-skash for the user)
+    pub lp_meter: RewardMeter,
 
     //-- STATISTICAL DATA --
     // User's statistical data
-    // These fields works as a car's "trip meter". The user can reset them to zero.
+    // This is the user-cotrolled staking rewards meter, it works as a car's "trip meter". The user can reset them to zero.
     // to compute trip_rewards we start from current_skash, undo unstakes, undo stakes and finally subtract trip_start_skash
     // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
-    /// trip_start: (timpestamp in nanoseconds) this field is set at account creation, so it will start metering rewards
+    /// trip_start: (timpestamp in miliseconds) this field is set at account creation, so it will start metering rewards
     pub trip_start: Timestamp,
-    /// How many skashs the user had at "trip_start". 
+
+    /// How much skashs the user had at "trip_start".
     pub trip_start_skash: u128,
-    // how much the user staked since trip start. always incremented
+    // how much skahs the staked since trip start. always incremented
     pub trip_accum_stakes: u128,
     // how much the user unstaked since trip start. always incremented
     pub trip_accum_unstakes: u128,
 
+    ///NS liquidity pool shares, if the user is a liquidity provider
+    pub nslp_shares: u128,
 }
 
+/// User account on this contract
 impl Default for Account {
     fn default() -> Self {
         Self {
@@ -124,19 +197,43 @@ impl Default for Account {
             stake_shares: 0,
             unstaked: 0,
             unstaked_requested_epoch_height: 0,
-            //trip-meter
-            trip_start: env::block_timestamp()/1_000_000, //converted from nanoseconds to miliseconds
-            trip_start_skash:0,
-            trip_accum_stakes:0,
-            trip_accum_unstakes:0,
+            //g-skash & reward-meters
+            realized_g_skash: 0,
+            staking_meter: RewardMeter::default(),
+            lp_meter: RewardMeter::default(),
+            //trip-meter fields
+            trip_start: env::block_timestamp() / 1_000_000, //converted from nanoseconds to miliseconds
+            trip_start_skash: 0,
+            trip_accum_stakes: 0,
+            trip_accum_unstakes: 0,
+            //NS liquidity pool
+            nslp_shares: 0,
         }
+    }
+}
+impl Account {
+    /// when the account.is_empty() it will be removed
+    fn is_empty(&self) -> bool {
+        return self.available == 0
+            && self.unstaked == 0
+            && self.stake_shares == 0
+            && self.nslp_shares == 0
+            && self.realized_g_skash == 0;
+    }
+    /// return realized g_skash plus pending rewards
+    fn total_g_skash(&self, main: &DiversifiedPool) -> u128 {
+        let valued_stake_shares = main.amount_from_stake_shares(self.stake_shares);
+        let nslp_account = main.internal_get_nslp_account();
+        let valued_lp_shares = main.amount_from_nslp_shares(self.stake_shares, &nslp_account);
+        return self.realized_g_skash
+            + self.staking_meter.mul_rewards(valued_stake_shares)
+            + self.lp_meter.mul_rewards(valued_lp_shares);
     }
 }
 
 /// items in the Vec of staking pools
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
 pub struct StakingPoolInfo {
-
     account_id: AccountId,
 
     //if we've made an async call to this pool
@@ -152,7 +249,6 @@ pub struct StakingPoolInfo {
 
     //total unstaked in this pool
     unstaked: u128,
-    
     //set when the unstake command is passed to the pool
     //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
     //We might have to block users from unstaking if all the pools are in a waiting period
@@ -160,27 +256,6 @@ pub struct StakingPoolInfo {
 
     //EpochHeight where we asked the sp what were our staking rewards
     last_asked_rewards_epoch_height: EpochHeight,
-    
-}
-
-/// NEAR/SKASH Liquidity Pool information
-/// We assume this pool is always UNBALANCED, there should be more SKASH than NEAR most of the time
-#[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
-pub struct NSLPInfo {
-
-    //The next 3 values define the Liq.Provider fee curve
-
-    ///What's the near target for this pool. Incentives (discount) increase if there are less NEAR in the pool than the target
-    ///incentives (discount) goes to zero when we reach near_target. Default value is 1m NEAR
-    near_target: u128,
-    ///Max stake discount: When there's 0 NEAR in the pool, this is the discount rate a provider can get selling NEAR for SKASH
-    /// the discounts linearly goes to zero until nears in the pool reach near_target
-    /// default is 1000 (10%) meaning if a user swaps the last 1000N she should provide 1100 SKASH 
-    max_stake_discount_basis_points: u16,
-    ///Min stake discount: When there's plenty NEAR in the pool (more than near_target), this is the min 
-    /// fee a Liquidity provider willl get to sell NEAR for SKASH 
-    min_stake_discount_basis_points: u16,
-
 }
 
 //---------------------------
@@ -189,11 +264,19 @@ pub struct NSLPInfo {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct DiversifiedPool {
-    
     /// Owner's account ID (it will be a DAO on phase II)
-    pub owner_account_id: AccountId,
-    /// owner_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
-    pub owner_fee_basis_points: u16,
+    pub owner_account_id: String,
+
+    /// Operator account ID (who's in charge to call distribute() on a periodic basis)
+    pub operator_account_id: String,
+    /// operator_rewards_fee_basis_points. (0.2% default) 100 basis point => 1%. E.g.: owner_fee_basis_points=30 => 0.3% owner's fee
+    pub operator_rewards_fee_basis_points: u16,
+    /// owner's cut on SHKASH Sell fee (3% default)
+    pub operator_swap_cut_basis_points: u16,
+    /// Treasury account ID (it will be controlled by a DAO on phase II)
+    pub treasury_account_id: String,
+    /// treasury cut on SHKASH Sell cut (25% default)
+    pub treasury_swap_cut_basis_points: u16,
 
     /// This amount increments with deposits and decrements when users stake
     /// increments with complete_unstake and decrements with user withdrawals from the contract
@@ -201,12 +284,12 @@ pub struct DiversifiedPool {
     /// since staking is delayed and in batches it only eventually matches env::balance()
     pub total_available: u128,
 
-    /// The total amount of tokens selected for staking by the users 
+    /// The total amount of tokens selected for staking by the users
     /// not necessarily what's actually staked since staking can is done in batches
     /// Share price is computed using this number. share_price = total_for_staking/total_shares
     pub total_for_staking: u128,
     /// The total amount of tokens actually staked (the tokens are in the staking pools)
-    /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
+    /// During distribute(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
     pub total_actually_staked: u128,
     // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
@@ -214,36 +297,51 @@ pub struct DiversifiedPool {
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
     pub total_stake_shares: u128,
 
-    /// The total amount of tokens selected for unstaking by the users 
+    /// total g-skash minted
+    pub total_g_skash: u128,
+
+    /// The total amount of tokens selected for unstaking by the users
     /// not necessarily what's actually unstaked since unstaking is done in batches
     /// If a user ask unstaking 100: total_for_unstaking+=100, total_for_staking-=100, total_stake_shares-=share_amount
     pub total_for_unstaking: u128,
     /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
-    /// During heartbeat(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
+    /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
     pub total_actually_unstaked: u128,
     /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// During heartbeat(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
+    /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
     /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
     pub total_actually_unstaked_and_retrieved: u128,
 
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulatred amount only for stats purposes. This amount can only grow
-    pub accumulated_staked_rewards: u128, 
+    pub accumulated_staked_rewards: u128,
 
     /// no auto-staking. true while changing staking pools
-    pub staking_paused: bool, 
+    pub staking_paused: bool,
 
     //user's accounts
-    pub accounts: UnorderedMap<AccountId, Account>,
+    pub accounts: UnorderedMap<String, Account>,
 
     //list of pools to diversify in
-    pub staking_pools: Vec<StakingPoolInfo>, 
+    pub staking_pools: Vec<StakingPoolInfo>,
 
-    //NEAR/SKASH Liquidity pool
+    //The next 3 values define the Liq.Provider fee curve
+    // NEAR/SKASH Liquidity pool fee curve params
+    // We assume this pool is always UNBALANCED, there should be more SKASH than NEAR 99% of the time
+    ///NEAR/SKASH Liquidity pool target
     nslp_near_target: u128,
-    nslp_max_stake_discount_basis_points: u16, //10%
-    nslp_min_stake_discount_basis_points: u16, //0.1%
+    ///NEAR/SKASH Liquidity pool max fee
+    nslp_max_discount_basis_points: u16, //10%
+    ///NEAR/SKASH Liquidity pool min fee
+    nslp_min_discount_basis_points: u16, //0.1%
 
+    //The next 3 values define g-skash rewards multiplers %. (100 => 1x, 200 => 2x, ...)
+    ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
+    staker_g_skash_mult_pct: u16,
+    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
+    skash_sell_g_skash_mult_pct: u16,
+    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
+    lp_provider_g_skash_mult_pct: u16,
 }
 
 impl Default for DiversifiedPool {
@@ -254,20 +352,22 @@ impl Default for DiversifiedPool {
 
 #[near_bindgen]
 impl DiversifiedPool {
-
     /* NOTE
     This contract must implement several traits
 
-    1. deposit-trait [NEP-xxx]: this contract implements: deposit, get_available_balance, withdraw, withdraw_all 
-       A [NEP-xxx] contract creates an account on deposit and allows you to withdraw later under certain conditions, deletes the account on withdraw_all 
+    1. deposit-trait [NEP-xxx]: this contract implements: deposit, get_available_balance, withdraw, withdraw_all
+       A [NEP-xxx] contract creates an account on deposit and allows you to withdraw later under certain conditions. Deletes the account on withdraw_all
 
     2. staking-pool [NEP-xxx]: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users too if they want
       that means implmenting: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
         and view methods: get_account_unstaked_balance, get_account_staked_balance, get_account_total_balance, is_account_unstaked_balance_available,
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
-            get_number_of_accounts, get_accounts. 
+            get_number_of_accounts, get_accounts.
 
     3. diversified-staking: these are the extensions to the standard staking pool (buy/sell skash)
+
+    4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_available_balance(tok), withdraw(tok), tranfer(tok), transfer_to_contract(tok)
+       A [NEP-xxx] manages multiple tokens
 
     */
 
@@ -276,16 +376,20 @@ impl DiversifiedPool {
     /// Initializes DiversifiedPool contract.
     /// - `owner_account_id` - the account ID of the owner.  Only this account can call owner's methods on this contract.
     #[init]
-    pub fn new( owner_account_id: AccountId ) -> Self {
+    pub fn new(
+        owner_account_id: AccountId,
+        treasury_account_id: AccountId,
+        operator_account_id: AccountId,
+    ) -> Self {
         assert!(!env::state_exists(), "The contract is already initialized");
-        assert!(
-            env::is_valid_account_id(owner_account_id.as_bytes()),
-            "The account ID of the owner is invalid"
-        );
 
         return Self {
             owner_account_id,
-            owner_fee_basis_points: DEFAULT_OWNER_FEE_BASIS_POINTS,
+            operator_account_id,
+            treasury_account_id,
+            operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
+            operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
+            treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
             staking_paused: true, //no auto-staking. on while there's no staking pool defined
             total_available: 0,
             total_for_staking: 0,
@@ -295,22 +399,28 @@ impl DiversifiedPool {
             total_actually_unstaked_and_retrieved: 0, // tracks unstaked AND retrieved amount (tokens are here)
             accumulated_staked_rewards: 0,
             total_stake_shares: 0,
+            total_g_skash: 0,
             accounts: UnorderedMap::new("A".into()),
-            staking_pools: Vec::new(), 
-            nslp_near_target: ONE_NEAR*1_000_000,
-            nslp_max_stake_discount_basis_points: 1000, //10%
-            nslp_min_stake_discount_basis_points: 10, //0.1%
-        }
+            staking_pools: Vec::new(),
+            nslp_near_target: ONE_NEAR * 1_000_000,
+            nslp_max_discount_basis_points: 1000, //10%
+            nslp_min_discount_basis_points: 50,   //0.5%
+            ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
+            skash_sell_g_skash_mult_pct: 100,
+            ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
+            staker_g_skash_mult_pct: 500,
+            ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
+            lp_provider_g_skash_mult_pct: 2000,
+        };
     }
 
+    //------------------------------------
+    // deposit trait & staking-pool trait
+    //------------------------------------
 
-//------------------------------------
-// deposit trait & staking-pool trait
-//------------------------------------
-
-    /// staking-pool's ping redirects to diversified-pool's heartbeat, Does a bit of work
+    /// staking-pool's ping redirects to diversified-pool's distribute, Does a bit of work
     pub fn ping(&mut self) {
-        self.heartbeat();
+        self.distribute();
     }
 
     /// Deposits the attached amount into the inner account of the predecessor.
@@ -319,12 +429,12 @@ impl DiversifiedPool {
         self.internal_deposit();
     }
 
-    /// Withdraws from the availabe balance
+    /// Withdraws from the available balance
     pub fn withdraw(&mut self, amount: U128String) {
         self.internal_withdraw(amount.into());
     }
 
-    /// Withdraws ALL from the "availabe" balance
+    /// Withdraws ALL from the "available" balance
     pub fn withdraw_all(&mut self) {
         let account_id = env::predecessor_account_id();
         let account = self.internal_get_account(&account_id);
@@ -339,7 +449,7 @@ impl DiversifiedPool {
     }
 
     /// Stakes all available unstaked balance from the inner account of the predecessor.
-    /// staking-pool "unstaked" is equivalent to diversified-pool "availabe", but here
+    /// staking-pool "unstaked" is equivalent to diversified-pool "available", but here
     /// we keep the staking-pool logic because we're implementing the staking-pool trait
     pub fn stake_all(&mut self) {
         let account_id = env::predecessor_account_id();
@@ -358,7 +468,7 @@ impl DiversifiedPool {
     pub fn unstake_all(&mut self) {
         let account_id = env::predecessor_account_id();
         let account = self.internal_get_account(&account_id);
-        let amount = self.amount_from_shares(account.stake_shares);
+        let amount = self.amount_from_stake_shares(account.stake_shares);
         self.inner_unstake(amount);
     }
 
@@ -377,7 +487,7 @@ impl DiversifiedPool {
     /// Returns the unstaked balance of the given account.
     pub fn get_account_unstaked_balance(&self, account_id: AccountId) -> U128String {
         //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
-        return self.get_account(account_id).unstaked_balance
+        return self.get_account(account_id).unstaked_balance;
     }
 
     /// Returns the staked balance of the given account.
@@ -385,20 +495,20 @@ impl DiversifiedPool {
     /// current amount of total staked balance and total stake shares on the account.
     pub fn get_account_staked_balance(&self, account_id: AccountId) -> U128String {
         //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
-        return self.get_account(account_id).staked_balance
+        return self.get_account(account_id).staked_balance;
     }
 
     /// Returns the total balance of the given account (including staked and unstaked balances).
     pub fn get_account_total_balance(&self, account_id: AccountId) -> U128String {
         //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
         let account = self.get_account(account_id);
-        return (account.unstaked_balance.0 + account.staked_balance.0).into()
+        return (account.unstaked_balance.0 + account.staked_balance.0).into();
     }
 
     /// Returns `true` if the given account can withdraw tokens in the current epoch.
     pub fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool {
         //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
-        return self.get_account(account_id).can_withdraw
+        return self.get_account(account_id).can_withdraw;
     }
 
     /// Returns account ID of the staking pool owner.
@@ -409,8 +519,9 @@ impl DiversifiedPool {
     /// Returns the current reward fee as a fraction.
     pub fn get_reward_fee_fraction(&self) -> RewardFeeFraction {
         return RewardFeeFraction {
-            numerator: self.owner_fee_basis_points.into(),
-            denominator: 10_000
+            numerator: (self.operator_rewards_fee_basis_points + AUTHOR_REWARDS_FEE_BASIS_POINTS)
+                .into(),
+            denominator: 10_000,
         };
     }
 
@@ -425,57 +536,50 @@ impl DiversifiedPool {
     }
 
     /// to implement the Staking-pool inteface, get_account returns the same as the staking-pool returns
-    /// full account info can be obtained by calling: pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult 
+    /// full account info can be obtained by calling: pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult
     /// Returns human readable representation of the account for the given account ID.
+    //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
     pub fn get_account(&self, account_id: AccountId) -> HumanReadableAccount {
         let account = self.internal_get_account(&account_id);
         return HumanReadableAccount {
             account_id,
             unstaked_balance: account.unstaked.into(),
-            staked_balance: self
-                .amount_from_shares(account.stake_shares)
-                .into(),
-            can_withdraw: env::epoch_height() >= account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK,
-        }
+            staked_balance: self.amount_from_stake_shares(account.stake_shares).into(),
+            can_withdraw: env::epoch_height()
+                >= account.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK,
+        };
     }
 
     /// Returns the number of accounts that have positive balance on this staking pool.
     pub fn get_number_of_accounts(&self) -> u64 {
-        return self.accounts.len()
+        return self.accounts.len();
     }
 
     /// Returns the list of accounts
+    //warning: self.get_accounts is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
     pub fn get_accounts(&self, from_index: u64, limit: u64) -> Vec<HumanReadableAccount> {
-
         let keys = self.accounts.keys_as_vector();
-
-        //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
         return (from_index..std::cmp::min(from_index + limit, keys.len()))
             .map(|index| self.get_account(keys.get(index).unwrap()))
-            .collect()
+            .collect();
     }
 
-//----------------------------------
-//----------------------------------
-// DIVERISIFYING-STAKING-POOL trait
-//----------------------------------
-//----------------------------------
-
+    //----------------------------------
+    //----------------------------------
+    // DIVERISIFYING-STAKING-POOL trait
+    //----------------------------------
+    //----------------------------------
 
     /// user method
-    /// completes unstake action by moving from retreieved_from_the_pools to availabe
+    /// completes unstake action by moving from retreieved_from_the_pools to available
     pub fn complete_unstaking(&mut self) {
-        
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
         let amount = account.unstaked;
-        assert!(
-            amount > 0,
-            "No unstaked balance"
-        );
+        assert!(amount > 0, "No unstaked balance");
         let epoch = env::epoch_height();
-        let epochs_to_wait= account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK - epoch;
-        if  epoch < account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK  {
+        let epochs_to_wait = account.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK - epoch;
+        if epoch < account.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK {
             panic!(format!("The unstaked balance is not yet available due to unstaking delay. You need to wait {} epochs", epochs_to_wait));
         }
 
@@ -490,10 +594,9 @@ impl DiversifiedPool {
 
         //used retrieved funds
         self.total_actually_unstaked_and_retrieved -= amount;
-        // moves from total_for_unstaking to total_available 
+        // moves from total_for_unstaking to total_available
         self.total_for_unstaking -= amount;
         self.total_available += amount;
-        
         // in the account, moves from unstaked to available
         account.unstaked -= amount;
         account.available += amount;
@@ -506,7 +609,6 @@ impl DiversifiedPool {
         //     )
         //     .as_bytes(),
         // );
-
     }
 
     /// buy_skash_stake. Identical to stake, migth change in the future
@@ -514,43 +616,56 @@ impl DiversifiedPool {
         self.internal_stake(amount.0);
     }
 
+    //---------------------------
+    // NSLP Methods
+    //---------------------------
+
     /// user method - NEAR/SKASH SWAP functions
     /// return how much NEAR you can get by selling x SKASH
-    pub fn get_near_amount_sell_skash(&self, skash_to_sell:U128String) -> U128String {
+    pub fn get_near_amount_sell_skash(&self, skash_to_sell: U128String) -> U128String {
+        let lp_account = self.internal_get_nslp_account();
+        return self
+            .internal_get_near_amount_sell_skash(lp_account.available, skash_to_sell.0)
+            .into();
+    }
 
-        let lp_account = &self.internal_get_account(&NSLP_INTERNAL_ACCOUNT.into());
-        return self.internal_get_near_amount_sell_skash(lp_account.available,skash_to_sell.0).into()
-
+    /// NEAR/SKASH Liquidity Pool
+    /// computes the discount_basis_points for NEAR/SKASH Swap based on NSLP Balance
+    /// If you want to sell x SKASH
+    pub fn nslp_get_discount_basis_points(&self, skash_to_sell: U128String) -> u16 {
+        let lp_account = self.internal_get_nslp_account();
+        return self.internal_get_discount_basis_points(lp_account.available, skash_to_sell.0);
     }
 
     /// user method
-    /// Sells-skash at discount
+    /// Sells-skash at discount in the NLSP
     /// returns near received
-    pub fn sell_skash(&mut self, skash_amount_to_sell:U128String, min_expected_near:U128String) -> U128String {
-        
-        let skash_to_sell:u128 = skash_amount_to_sell.0;
-
+    pub fn sell_skash(
+        &mut self,
+        skash_to_sell: U128String,
+        min_expected_near: U128String,
+    ) -> U128String {
         let account_id = env::predecessor_account_id();
         let mut user_account = self.internal_get_account(&account_id);
 
-        let skash_owned = self.amount_from_shares(user_account.stake_shares);
+        let skash_owned = self.amount_from_stake_shares(user_account.stake_shares);
         assert!(
-            skash_owned >= skash_amount_to_sell.0 ,
+            skash_owned >= skash_to_sell.0,
             "Not enough skash in your account"
         );
-        
-        let mut lp_account = self.internal_get_account(&NSLP_INTERNAL_ACCOUNT.into());
-        let near_to_receive = self.internal_get_near_amount_sell_skash(lp_account.available,skash_to_sell);
+        let mut lp_account = self.internal_get_nslp_account();
+        let near_to_receive =
+            self.internal_get_near_amount_sell_skash(lp_account.available, skash_to_sell.0);
         assert!(
-            near_to_receive >= min_expected_near.0 ,
+            near_to_receive >= min_expected_near.0,
             "Price changed, your min results requirements not satisfied. Try again"
         );
         assert!(
             lp_account.available >= near_to_receive,
-            "lp_account.availabe < near_to_receive"
+            "lp_account.available < near_to_receive"
         );
 
-        let stake_shares_sell = self.shares_from_amount(skash_amount_to_sell.0);
+        let stake_shares_sell = self.stake_shares_from_amount(skash_to_sell.0);
         assert!(
             user_account.stake_shares >= stake_shares_sell,
             "account.stake_shares < stake_shares_sell"
@@ -561,36 +676,166 @@ impl DiversifiedPool {
         user_account.available += near_to_receive;
 
         user_account.stake_shares -= stake_shares_sell;
-        lp_account.stake_shares += stake_shares_sell;
+        //swap-fee is the difference between skash sold and near received
+        assert!(near_to_receive < skash_to_sell.0);
+        // compute how many shares the swap fee represent
+        let fee_in_shares = self.stake_shares_from_amount(skash_to_sell.0 - near_to_receive);
+        // The treasury cut (25% by default)
+        let treasury_cut = self.shares_cut(
+            fee_in_shares,
+            &self.treasury_account_id.clone(),
+            self.treasury_swap_cut_basis_points,
+        );
+        // The cut that the contract authors take. (2% by default)
+        let author_cut = self.shares_cut(
+            fee_in_shares,
+            &AUTHOR_ACCOUNT_ID.into(),
+            AUTHOR_SWAP_CUT_BASIS_POINTS,
+        );
+        // The cut that the contract owner (operator) takes. (3% by default)
+        let operator_cut = self.shares_cut(
+            fee_in_shares,
+            &self.operator_account_id.clone(),
+            self.operator_swap_cut_basis_points,
+        );
+        // the rest (70%) go into the LP increasing share value for all LP providers
+        assert!(stake_shares_sell > treasury_cut + author_cut + operator_cut);
+        lp_account.stake_shares += stake_shares_sell - (treasury_cut + author_cut + operator_cut);
 
         //Save both accounts
-        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(),&lp_account);
-        self.internal_save_account(&account_id,&user_account);
+        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(), &lp_account);
+        self.internal_save_account(&account_id, &user_account);
 
         env::log(
             format!(
                 "@{} sold {} SKASH for {} NEAR",
-                account_id, skash_amount_to_sell.0, near_to_receive
+                account_id, skash_to_sell.0, near_to_receive
             )
             .as_bytes(),
         );
 
         return near_to_receive.into();
-
     }
 
+    /// add liquidity from deposited funds
+    pub fn nslp_add_liquidity(&mut self, amount: U128String) {
+        assert_min_amount(amount.0);
 
+        let account_id = env::predecessor_account_id();
+        let mut acc = self.internal_get_account(&account_id);
 
-//-----------------------------
-// HEARTBEAT
-//-----------------------------
+        assert!(
+            acc.available >= amount.0,
+            "Not enough available balance to add the requested amount to the NSLP"
+        );
+
+        //get NSLP account
+        let mut lp_account = self.internal_get_nslp_account();
+        let valued_actual_shares = self.amount_from_nslp_shares(acc.nslp_shares, &lp_account);
+
+        // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
+        let num_shares = self.nslp_shares_from_amount(amount.0, &lp_account);
+        assert!(num_shares > 0);
+
+        //realize g-skash pending rewards on LP operation
+        acc.realized_g_skash += acc
+            .lp_meter
+            .realize(valued_actual_shares, self.lp_provider_g_skash_mult_pct);
+        //update user account
+        acc.available -= amount.0;
+        acc.nslp_shares += num_shares;
+        //update NSLP account
+        lp_account.available += amount.0;
+        lp_account.nslp_shares += num_shares; //total nslp shares
+
+        //--SAVE ACCOUNTS
+        self.internal_save_account(&account_id, &acc);
+        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(), &lp_account);
+    }
+
+    /// add liquidity from deposited funds
+    pub fn nslp_remove_liquidity(&mut self, amount: U128String) {
+        let account_id = env::predecessor_account_id();
+        let mut acc = self.internal_get_account(&account_id);
+
+        //how much does this user owns
+        let mut nslp_account = self.internal_get_nslp_account();
+        let valued_actual_shares = self.amount_from_nslp_shares(acc.nslp_shares, &nslp_account);
+
+        //realize g-skash pending rewards on LP operation
+        acc.realized_g_skash += acc
+            .lp_meter
+            .realize(valued_actual_shares, self.lp_provider_g_skash_mult_pct);
+
+        let mut to_remove = amount.0;
+        assert!(
+            valued_actual_shares >= to_remove,
+            "Not enough share value to remove the requested amount from the NSLP"
+        );
+        // Calculate the number of "nslp" shares that the account will burn for removing the given amount of near liquidity from the lp
+        let mut num_shares_to_burn = self.nslp_shares_from_amount(to_remove, &nslp_account);
+        assert!(num_shares_to_burn > 0);
+
+        //cannot leave less than 1 NEAR
+        if valued_actual_shares - to_remove < ONE_NEAR {
+            //if less than 1 near left, remove all
+            to_remove = valued_actual_shares;
+            num_shares_to_burn = acc.nslp_shares;
+        }
+
+        //compute proportionals SKASH/UNSTAKED/NEAR
+        //first SKASH
+        let stake_shares_to_remove = proportional(
+            nslp_account.stake_shares,
+            num_shares_to_burn,
+            nslp_account.nslp_shares,
+        );
+        let skash_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
+        //then unstaked in the pool, proportional to shares beign burned
+        let unstaked_to_remove = proportional(
+            nslp_account.unstaked,
+            num_shares_to_burn,
+            nslp_account.nslp_shares,
+        );
+        //and last NEAR, by difference
+        assert!(
+            to_remove >= skash_to_remove_from_pool + unstaked_to_remove,
+            "inconsistency NTR<STR+UTR"
+        );
+        let near_to_remove = to_remove - skash_to_remove_from_pool - unstaked_to_remove;
+
+        //update user account
+        //remove first from SKASH in the pool, proportional to shares beign burned
+        acc.available += near_to_remove;
+        acc.stake_shares += stake_shares_to_remove; //move skash
+        acc.staking_meter.stake(skash_to_remove_from_pool); //the user gets SKASH, so it's akin to staking
+        acc.trip_accum_stakes += skash_to_remove_from_pool; //getting SKASH is staking, so we add here so it's not computed as trip-meter-reward
+        acc.unstaked += unstaked_to_remove;
+        acc.nslp_shares -= num_shares_to_burn; //shares this user have
+        //update NSLP account
+        nslp_account.available -= near_to_remove;
+        nslp_account.stake_shares -= stake_shares_to_remove; //move skash
+        nslp_account.unstaked -= unstaked_to_remove;
+        nslp_account.nslp_shares -= num_shares_to_burn; //burn from total nslp shares
+
+        //--SAVE ACCOUNTS
+        self.internal_save_account(&account_id, &acc);
+        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(), &nslp_account);
+    }
+
+    //---------------------------------
+    // LIST of staking-pools management
+    //---------------------------------
+
+    //-----------------------------
+    // DISTRIBUTE
+    //-----------------------------
 
     /// operator method
-    /// heartbeat. Do staking & unstaking in batches of at most 100Kn
+    /// distribute. Do staking & unstaking in batches of at most 100Kn
     /// called externaly every 30 mins or less if: a) there's a large stake/unstake oper to perform or b) the epoch is about to finish and there are stakes to be made
     /// returns "true" if there's still more job to do
-    pub fn heartbeat(&mut self) {
-
+    pub fn distribute(&mut self) {
         //let epoch_height = env::epoch_height();
         // if self.last_epoch_height == epoch_height {
         //     return false;
@@ -618,13 +863,12 @@ impl DiversifiedPool {
         //-------------------------------------
         //internal clearing, no need to talk to the pools
         //-------------------------------------
-        if amount_to_stake>0 && amount_to_unstake>0 {
+        if amount_to_stake > 0 && amount_to_unstake > 0 {
             if amount_to_stake > amount_to_unstake {
                 amount_to_stake -= amount_to_unstake;
                 amount_to_unstake = 0;
-            }
-            else {
-                amount_to_unstake -= amount_to_stake ;
+            } else {
+                amount_to_unstake -= amount_to_stake;
                 amount_to_stake = 0;
             }
         }
@@ -632,7 +876,7 @@ impl DiversifiedPool {
         //-------------------------------------
         //check if we need to actually stake
         //-------------------------------------
-        if amount_to_stake>0 {
+        if amount_to_stake > 0 {
             //more ordered for staking than actually staked
             // do it in batches of 100/150k
             if amount_to_stake > MAX_NEARS_SINGLE_MOVEMENT {
@@ -640,7 +884,7 @@ impl DiversifiedPool {
                 amount_to_stake = NEARS_PER_BATCH;
             }
             let sp_inx = self.get_staking_pool_requiring_stake();
-            if sp_inx!=usize::MAX {
+            if sp_inx != usize::MAX {
                 //most unbalanced pool found & available
                 //launch async stake or deposit_and_stake on that pool
 
@@ -653,7 +897,7 @@ impl DiversifiedPool {
                         amount_to_stake = sp.unstaked;
                     }
                     //launch async stake to re-stake on the pool
-                    assert!(sp.unstaked>=amount_to_stake);
+                    assert!(sp.unstaked >= amount_to_stake);
                     self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if failed)
                     ext_staking_pool::stake(
                         amount_to_stake.into(),
@@ -662,7 +906,9 @@ impl DiversifiedPool {
                         gas::staking_pool::STAKE,
                     )
                     .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
-                        sp_inx, amount_to_stake, false,
+                        sp_inx,
+                        amount_to_stake,
+                        false,
                         &env::current_account_id(),
                         NO_DEPOSIT,
                         gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
@@ -673,9 +919,15 @@ impl DiversifiedPool {
 
                 //here the sp has no unstaked balance, we must deposit_and_stake on the sp
                 //launch async deposit_and_stake on the pool
-                assert!( env::account_balance()-MIN_BALANCE_FOR_STORAGE >= amount_to_stake, "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_deposit_and_stake");
-                assert!( self.total_available >= amount_to_stake, "self.available < amount_to_deposit_and_stake");
-                self.total_available -= amount_to_stake;//preventively consider the amount sent (undoes if async fails)
+                assert!(
+                    env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,
+                    "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_deposit_and_stake"
+                );
+                assert!(
+                    self.total_available >= amount_to_stake,
+                    "self.available < amount_to_deposit_and_stake"
+                );
+                self.total_available -= amount_to_stake; //preventively consider the amount sent (undoes if async fails)
                 self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
 
                 ext_staking_pool::deposit_and_stake(
@@ -684,14 +936,15 @@ impl DiversifiedPool {
                     gas::staking_pool::DEPOSIT_AND_STAKE,
                 )
                 .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
-                    sp_inx, amount_to_stake, true,
+                    sp_inx,
+                    amount_to_stake,
+                    true,
                     &env::current_account_id(),
                     NO_DEPOSIT,
                     gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
                 ));
 
                 return; //just one bit of work
-                        
             }
         }
 
@@ -706,7 +959,7 @@ impl DiversifiedPool {
                 amount_to_unstake = NEARS_PER_BATCH;
             }
             let sp_inx = self.get_staking_pool_requiring_unstake();
-            if sp_inx!=usize::MAX {
+            if sp_inx != usize::MAX {
                 //most unbalanced pool found & available
                 //launch async to unstake
 
@@ -718,7 +971,7 @@ impl DiversifiedPool {
                     amount_to_unstake = sp.staked;
                 }
                 //launch async to un-stake from the pool
-                assert!(sp.staked>=amount_to_unstake);
+                assert!(sp.staked >= amount_to_unstake);
                 self.total_actually_staked -= amount_to_unstake; //preventively consider the amount un-staked (undoes if promise fails)
                 self.total_actually_unstaked += amount_to_unstake; //preventively consider the amount un-staked (undoes if promise fails)
                 ext_staking_pool::unstake(
@@ -728,63 +981,56 @@ impl DiversifiedPool {
                     gas::staking_pool::UNSTAKE,
                 )
                 .then(ext_self_owner::on_staking_pool_unstake(
-                    sp_inx, amount_to_unstake, 
+                    sp_inx,
+                    amount_to_unstake,
                     &env::current_account_id(),
                     NO_DEPOSIT,
                     gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
                 ));
 
                 return; //just one bit of work
-                        
             }
-
         }
-
     }
 
     //prev fn continues here
     /// Called after amount is staked from the sp's unstaked balance (all into  the staking pool contract).
     /// This method needs to update staking pool status.
-    pub fn on_staking_pool_stake_maybe_deposit(&mut self, sp_inx:usize, amount: u128, included_deposit:bool) -> bool {
+    pub fn on_staking_pool_stake_maybe_deposit(
+        &mut self,
+        sp_inx: usize,
+        amount: u128,
+        included_deposit: bool,
+    ) -> bool {
         assert_self();
 
         let sp = &mut self.staking_pools[sp_inx];
         sp.busy_lock = false;
-    
         let stake_succeeded = is_promise_success();
 
-        let result:&str;
+        let result: &str;
         if stake_succeeded {
-            result="succeeded";
+            result = "succeeded";
             if !included_deposit {
-                //not deposited first, so staked funds came from unstaked funds already in the sp 
+                //not deposited first, so staked funds came from unstaked funds already in the sp
                 sp.unstaked -= amount;
             }
             //move into staked
             sp.staked += amount;
-        } 
-        else {
-            result="has failed";
+        } else {
+            result = "has failed";
             if included_deposit {
                 self.total_available += amount; //undo preventive action considering the amount sent
             }
             self.total_actually_staked -= amount; //undo preventive action considering the amount staked
         }
-        env::log(
-            format!(
-                "Staking of {} at @{} {}",
-                amount,
-                sp.account_id,
-                result
-            )
-            .as_bytes(),
-        );
-        return stake_succeeded
+        env::log(format!("Staking of {} at @{} {}", amount, sp.account_id, result).as_bytes());
+        return stake_succeeded;
     }
 
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
-    pub fn on_staking_pool_unstake(&mut self, sp_inx:usize, amount: u128) -> bool {
+    pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool {
         assert_self();
 
         let sp = &mut self.staking_pools[sp_inx];
@@ -792,36 +1038,27 @@ impl DiversifiedPool {
 
         let unstake_succeeded = is_promise_success();
 
-        let result:&str;
+        let result: &str;
         if unstake_succeeded {
-            result="succeeded";
-            sp.unstaked+=amount;
-            sp.staked-=amount;
+            result = "succeeded";
+            sp.unstaked += amount;
+            sp.staked -= amount;
         } else {
-            result="has failed";
+            result = "has failed";
             self.total_actually_staked += amount; //undo preventive action considering the amount unstaked
             self.total_actually_unstaked -= amount; //undo preventive action considering the amount unstaked
         }
 
-        env::log(
-            format!(
-                "Unstaking of {} at @{} {}",
-                amount,
-                sp.account_id,
-                result
-            )
-            .as_bytes(),
-        );
+        env::log(format!("Unstaking of {} at @{} {}", amount, sp.account_id, result).as_bytes());
         return unstake_succeeded;
     }
 
-
-//------------------------------------------
-// GETTERS (moved from getters.rs)
-//------------------------------------------
+    //------------------------------------------
+    // GETTERS (moved from getters.rs)
+    //------------------------------------------
     /// Returns the account ID of the owner.
-    pub fn get_owner_account_id(&self) -> AccountId {
-        return self.owner_account_id.clone()
+    pub fn get_operator_account_id(&self) -> AccountId {
+        return self.operator_account_id.clone();
     }
 
     /// The amount of tokens that were deposited to the staking pool.
@@ -829,58 +1066,74 @@ impl DiversifiedPool {
     /// rewards acquired on the staking pool.
     /// To refresh the amount the owner can call `refresh_staking_pool_balance`.
     pub fn get_known_deposited_balance(&self) -> U128String {
-        return self.total_actually_staked.into()
+        return self.total_actually_staked.into();
     }
 
     /// full account info
     /// Returns JSON representation of the account for the given account ID.
     pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult {
         let account = self.internal_get_account(&account_id);
-        let skash = self.amount_from_shares(account.stake_shares);
+        let skash = self.amount_from_stake_shares(account.stake_shares);
         // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
-        let trip_rewards = (skash + account.trip_accum_unstakes).saturating_sub(account.trip_accum_stakes+account.trip_start_skash);
+        let trip_rewards = (skash + account.trip_accum_unstakes)
+            .saturating_sub(account.trip_accum_stakes + account.trip_start_skash);
+        //NLSP share value
+        let mut nslp_share_value: u128 = 0;
+        if account.nslp_shares != 0 {
+            let nslp_account = self.internal_get_nslp_account();
+            nslp_share_value = self.amount_from_nslp_shares(account.nslp_shares, &nslp_account);
+        }
         return GetAccountInfoResult {
             account_id,
             available: account.available.into(),
             skash: skash.into(),
             unstaked: account.unstaked.into(),
             unstaked_requested_epoch_height: account.unstaked_requested_epoch_height.into(),
-            can_withdraw: (env::epoch_height()>=account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK),
+            can_withdraw: (env::epoch_height()
+                >= account.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK),
             total: (account.available + skash + account.unstaked).into(),
             //trip-meter
             trip_start: account.trip_start.into(),
             trip_start_skash: account.trip_start_skash.into(),
             trip_accum_stakes: account.trip_accum_stakes.into(),
             trip_accum_unstakes: account.trip_accum_unstakes.into(),
-            trip_rewards: trip_rewards.into()
-        }
+            trip_rewards: trip_rewards.into(),
+
+            nslp_shares: account.nslp_shares.into(),
+            nslp_share_value: nslp_share_value.into(),
+
+            g_skash: account.total_g_skash(self).into(),
+        };
     }
 
     /// get contract totals info
     /// Returns JSON representation of the totals
     pub fn get_contract_info(&self) -> GetContractInfoResult {
         return GetContractInfoResult {
-            owner_account_id: self.owner_account_id.clone(), 
-            owner_fee_basis_points: self.owner_fee_basis_points,
             total_available: self.total_available.into(),
             total_for_staking: self.total_for_staking.into(),
             total_for_unstaking: self.total_for_unstaking.into(),
             total_actually_staked: self.total_actually_staked.into(),
             accumulated_staked_rewards: self.accumulated_staked_rewards.into(),
             total_actually_unstaked: self.total_actually_unstaked.into(),
-            total_actually_unstaked_and_retrieved: self.total_actually_unstaked_and_retrieved.into(),
+            total_actually_unstaked_and_retrieved: self
+                .total_actually_unstaked_and_retrieved
+                .into(),
             staking_paused: self.staking_paused,
             total_stake_shares: self.total_stake_shares.into(),
+            total_g_skash: self.total_g_skash.into(),
             accounts_count: self.accounts.len().into(),
             staking_pools_count: (self.staking_pools.len() as u64).into(),
-        }
+            operator_rewards_fee_basis_points: self.operator_rewards_fee_basis_points,
+            operator_swap_cut_basis_points: self.operator_swap_cut_basis_points,
+            treasury_swap_cut_basis_points: self.treasury_swap_cut_basis_points,
+        };
     }
 
     /// get sp (staking-pool) info
     /// Returns JSON representation of sp recorded state
-    pub fn get_sp_info(&self, sp_inx_i32:i32) -> GetSpInfoResult {
-
-        assert!(sp_inx_i32>0);
+    pub fn get_sp_info(&self, sp_inx_i32: i32) -> GetSpInfoResult {
+        assert!(sp_inx_i32 > 0);
 
         self.assert_owner();
 
@@ -890,15 +1143,14 @@ impl DiversifiedPool {
         let sp = &self.staking_pools[sp_inx];
 
         return GetSpInfoResult {
-            account_id: sp.account_id.clone(), 
+            account_id: sp.account_id.clone(),
             weight_basis_points: sp.weight_basis_points,
             staked: sp.staked.into(),
             unstaked: sp.unstaked.into(),
             unstaked_requested_epoch_height: sp.unstaked_requested_epoch_height.into(),
             last_asked_rewards_epoch_height: sp.last_asked_rewards_epoch_height.into(),
-        }
+        };
     }
-
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -928,18 +1180,15 @@ mod tests {
         )
     }
 
-
     fn new_contract() -> DiversifiedPool {
-        DiversifiedPool::new(
-            account_owner()
-        )
+        DiversifiedPool::new(account_owner())
     }
 
     fn contract_only_setup() -> (VMContext, DiversifiedPool) {
         let context = basic_context();
         testing_env!(context.clone());
         let contract = new_contract();
-        return (context, contract)
+        return (context, contract);
     }
 
     // #[test]
@@ -962,20 +1211,20 @@ mod tests {
 
     //     assert_almost_eq(contract.get_owners_balance().0, to_yocto(TEST_INITIAL_BALANCE));
     // }
-    
     #[test]
-    fn test_internal_get_near_amount_sell_skash(){
+    fn test_internal_get_near_amount_sell_skash() {
         let (mut context, mut contract) = contract_only_setup();
-        let lp_balance_y:u128 = to_yocto(500_000);
-        let sell_skash_y:u128 = to_yocto(120);
-        let discount_bp:u16 = contract.get_discount_basis_points(lp_balance_y,sell_skash_y);
-        let near_amount_y = contract.internal_get_near_amount_sell_skash(lp_balance_y,sell_skash_y);
+        let lp_balance_y: u128 = to_yocto(500_000);
+        let sell_skash_y: u128 = to_yocto(120);
+        let discount_bp: u16 = contract.get_discount_basis_points(lp_balance_y, sell_skash_y);
+        let near_amount_y =
+            contract.internal_get_near_amount_sell_skash(lp_balance_y, sell_skash_y);
         assert!(near_amount_y <= sell_skash_y);
         let discountedy = sell_skash_y - near_amount_y;
         let discounted_displayN = ytof(discountedy);
         let sell_skash_displayN = ytof(sell_skash_y);
-        assert!(discountedy == apply_pct( discount_bp, sell_skash_y ) );
-        assert!(near_amount_y == sell_skash_y - discountedy );
+        assert!(discountedy == apply_pct(discount_bp, sell_skash_y));
+        assert!(near_amount_y == sell_skash_y - discountedy);
     }
 
     /*
@@ -1296,4 +1545,3 @@ mod tests {
     }
     */
 }
-

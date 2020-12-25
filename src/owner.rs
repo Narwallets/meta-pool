@@ -3,7 +3,6 @@ use near_sdk::{near_bindgen, Promise, PublicKey};
 
 #[near_bindgen]
 impl DiversifiedPool {
-
     /// OWNER'S METHOD
     ///
     /// Requires 125 TGas (5 * BASE_GAS)
@@ -11,9 +10,8 @@ impl DiversifiedPool {
     /// Retrieves total balance from the staking pool and remembers it internally.
     /// Also computes and distributes rewards to author, operator and delegators
     /// this fn queries the staking pool.
-    pub fn refresh_staking_pool_rewards(&mut self, sp_inx_i32:i32) {
-
-        assert!(sp_inx_i32>0);
+    pub fn refresh_staking_pool_rewards(&mut self, sp_inx_i32: i32) {
+        assert!(sp_inx_i32 > 0);
 
         self.assert_owner();
 
@@ -21,9 +19,9 @@ impl DiversifiedPool {
         assert!(sp_inx < self.staking_pools.len());
 
         let sp = &mut self.staking_pools[sp_inx];
-        assert!(!sp.busy_lock,"sp is busy");
+        assert!(!sp.busy_lock, "sp is busy");
 
-        if sp.staked==0 || sp.busy_lock { 
+        if sp.staked == 0 || sp.busy_lock {
             return;
         }
 
@@ -94,18 +92,21 @@ impl DiversifiedPool {
     */
 
     //------------------------------
-    pub fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String) {
-
+    pub fn on_get_sp_total_balance(
+        &mut self,
+        sp_inx: usize,
+        #[callback] total_balance: U128String,
+    ) {
         //we enter here after asking the staking-pool how much do we have staked (plus rewards)
         //total_balance: U128String contains the answer from the staking-pool
 
         assert_self();
 
-        let rewards:u128;
+        let rewards: u128;
 
         //store the new staked amount for this pool
         {
-            let new_staked_amount:u128;
+            let new_staked_amount: u128;
             let sp = &mut self.staking_pools[sp_inx];
 
             sp.busy_lock = false;
@@ -122,7 +123,7 @@ impl DiversifiedPool {
 
             new_staked_amount = total_balance.0;
 
-            if new_staked_amount < sp.staked{
+            if new_staked_amount < sp.staked {
                 env::log(
                     format!(
                         "INCONSISTENCY @{} says total_balance < sp.staked",
@@ -130,52 +131,48 @@ impl DiversifiedPool {
                     )
                     .as_bytes(),
                 );
+                rewards = 0;
+            } else {
+                //compute rewards, as new balance minus old balance
+                rewards = new_staked_amount - sp.staked;
             }
-            //compute rewards, as new balance minus old balance
-            rewards = new_staked_amount - sp.staked;
+
+            //updated accumulated_staked_rewards value for the contract
+            self.accumulated_staked_rewards+=rewards;
             //updated new "staked" value for this pool
-            sp.staked = new_staked_amount; 
-        
+            sp.staked = new_staked_amount;
         }
 
         if rewards > 0 {
-
             //add to actually staked
             self.total_actually_staked += rewards;
 
             // The fee that the contract authors take.
-            let author_fee = apply_pct(AUTHOR_MIN_FEE_BASIS_POINTS,rewards);
+            let author_fee = apply_pct(AUTHOR_REWARDS_FEE_BASIS_POINTS, rewards);
             // The fee that the contract owner (operator) takes.
-            let mut owner_fee = apply_pct(self.owner_fee_basis_points, rewards);
-            
-            if owner_fee > author_fee {
-                owner_fee -= author_fee // author fee comes from the operator/owner fee
-            }
-            else {
-                //if owner_fee is less than author_fee
-                owner_fee=0;
-            }
-
+            let owner_fee = apply_pct(self.operator_rewards_fee_basis_points, rewards);
             // Now add fees & shares to the pool preserving current share value
             // adds to self.total_actually_staked, self.total_for_staking & self.total_stake_shares;
             &self.add_amount_and_shares_preserve_share_price(AUTHOR_ACCOUNT_ID.into(), author_fee);
-            &self.add_amount_and_shares_preserve_share_price(self.owner_account_id.clone(), owner_fee);
+            &self.add_amount_and_shares_preserve_share_price(
+                self.operator_account_id.clone(),
+                owner_fee,
+            );
 
             // rest of rewards go into total_actually_staked increasing share value
             assert!(rewards > author_fee + owner_fee);
             //add rest of rewards
-            self.total_for_staking += rewards - author_fee - owner_fee; //increase share price
+            self.total_for_staking += rewards - author_fee - owner_fee; //increase share price for everybody
 
             let sp = &self.staking_pools[sp_inx];
             env::log(
                 format!(
                     "Received total rewards of {} tokens from {}. Staked is now = {}",
                     rewards, sp.account_id, sp.staked,
-                ).as_bytes(),
+                )
+                .as_bytes(),
             );
-
         }
-
     }
 
     /// OWNER'S METHOD
@@ -186,7 +183,7 @@ impl DiversifiedPool {
     /// (has no accounts)
     pub fn add_full_access_key(&mut self, new_public_key: Base58PublicKey) -> Promise {
         self.assert_owner();
-        assert!(self.accounts.len()==0,"contract still has accounts");
+        assert!(self.accounts.len() == 0, "contract still has accounts");
 
         env::log(b"Adding a full access key");
 

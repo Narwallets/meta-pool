@@ -17,13 +17,18 @@ pub const NEAR_100K: u128 = 100_000 * ONE_NEAR;
 pub const NEARS_PER_BATCH: u128 = NEAR_100K; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches
 pub const MAX_NEARS_SINGLE_MOVEMENT: u128 = NEARS_PER_BATCH + NEARS_PER_BATCH/2; //150K max movement, if you try to stake 151K, it will be split into 2 movs, 100K and 51K
 
-pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4;
+pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 0; //0 for testing in guidlnet, 4 for mainnet & testnet;
 
-pub const DEFAULT_OWNER_FEE_BASIS_POINTS : u16 = 50; // 0.5% -- CANT BE HIGER THAN 10_000 / 100%
+//cut on swap fees
+pub const DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS : u16 = 2500; // 25% swap fees go to Treasury
+pub const DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS : u16 = 300; // 3% swap fees go to operator
+//Fee on staking rewards
+pub const DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS : u16 = 50; // 0.5% -- CANT BE HIGER THAN 1000 / 10%
+
 //Note: Licence forbids you to change the following 3 constants and/or the author's distribution mechanism
 pub const AUTHOR_ACCOUNT_ID: &str = "developers.near"; 
-pub const AUTHOR_MIN_FEE_BASIS_POINTS: u16 = 25; // 0.25% rewards -- CANT BE HIGER THAN 5_000 / 50%
-pub const AUTHOR_MIN_FEE_OPERATOR_BP: u16 = 200; // or 2% of the owner's fee
+pub const AUTHOR_REWARDS_FEE_BASIS_POINTS: u16 = 20; // 0.2% from rewards 
+pub const AUTHOR_SWAP_CUT_BASIS_POINTS : u16 = 200; // 2% swap fees go to authors
 
 
 construct_uint! {
@@ -85,7 +90,7 @@ pub struct GetAccountInfoResult {
     pub unstaked_requested_epoch_height: U64,
     ///if env::epoch_height()>=account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
     pub can_withdraw: bool,
-    /// total amount the user holds in this contract: account.availabe + account.staked + current_rewards + account.unstaked
+    /// total amount the user holds in this contract: account.available + account.staked + current_rewards + account.unstaked
     pub total: U128,
 
     //-- STATISTICAL DATA --
@@ -103,6 +108,14 @@ pub struct GetAccountInfoResult {
     /// trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
     /// trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
     pub trip_rewards: U128,
+
+    //NLSP
+    pub nslp_shares: U128,
+    pub nslp_share_value: U128,
+
+    //G-SKASH owned (including pending rewards)
+    pub g_skash: U128,
+
 }
 
 /// Struct returned from get_sp_info
@@ -137,11 +150,6 @@ pub struct GetSpInfoResult {
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GetContractInfoResult {
-    /// The account ID of the owner.
-    pub owner_account_id: AccountId,
-    /// owner_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
-    pub owner_fee_basis_points: u16,
-
     /// This amount increments with deposits and decrements when users stake
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
@@ -173,6 +181,9 @@ pub struct GetContractInfoResult {
     /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
     pub total_actually_unstaked_and_retrieved: U128,
 
+    /// total g-skash minted
+    pub total_g_skash: U128, 
+
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulatred amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: U128, 
@@ -185,5 +196,12 @@ pub struct GetContractInfoResult {
 
     //count of pools to diversify in
     pub staking_pools_count: U64, 
+
+    /// operator_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
+    pub operator_rewards_fee_basis_points: u16,
+    /// operator_cut_basis_points. 
+    pub operator_swap_cut_basis_points: u16,
+    /// treasury_cut_basis_points. 
+    pub treasury_swap_cut_basis_points: u16,
 
 }
