@@ -1,7 +1,7 @@
 # Diversifying Staking Pool
 
 ## Overview
-What this is? and other non-Thecnical Documentation
+What this is? and other non-Technical Documentation
 [CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
 
 
