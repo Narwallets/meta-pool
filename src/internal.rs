@@ -9,7 +9,7 @@ pub use crate::utils::*;
 /****************************/
 impl DiversifiedPool {
     /// Asserts that the method was called by the owner.
-    pub fn assert_owner(&self) {
+    pub fn assert_owner_calling(&self) {
         assert_eq!(
             &env::predecessor_account_id(),
             &self.owner_account_id,
@@ -50,15 +50,15 @@ impl DiversifiedPool {
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        if amount != acc.available {
-            assert_min_amount(amount);
-        }
-
         assert!(
             acc.available >= amount,
             "Not enough available balance to withdraw the requested amount"
         );
         acc.available -= amount;
+        if !acc.is_empty() && acc.available < self.min_account_balance {
+            env::log(format!("The min balance is {} NEAR",self.min_account_balance/ONE_NEAR).as_bytes());
+            panic!(b"Min balance required");
+        }
         self.internal_save_account(&account_id, &acc);
 
         Promise::new(account_id).transfer(amount);
@@ -336,7 +336,7 @@ impl DiversifiedPool {
     //prev fn continues here
     /// This method needs to update staking pool busyLock
     pub fn on_staking_pool_withdraw(&mut self, sp_inx: usize) -> bool {
-        assert_self();
+        assert_callback_calling();
         let sp = &mut self.staking_pools[sp_inx];
         sp.busy_lock = false;
         let amount = sp.unstaked; //we retrieved all

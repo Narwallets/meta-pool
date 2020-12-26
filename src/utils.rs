@@ -11,7 +11,7 @@ pub fn assert_min_balance(amount:u128){
 }
 
 
-pub fn assert_self() {
+pub fn assert_callback_calling() {
     assert_eq!(env::predecessor_account_id(), env::current_account_id());
 }
 

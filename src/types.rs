@@ -43,6 +43,7 @@ pub type Timestamp = u64;
 
 /// Balance wrapped into a struct for JSON serialization as a string.
 pub type U128String = U128;
+pub type U64String = U64;
 
 pub type EpochHeight = u64;
 
@@ -118,38 +119,13 @@ pub struct GetAccountInfoResult {
 
 }
 
-/// Struct returned from get_sp_info
-/// Represents sp data as as JSON compatible struct
-#[derive(Serialize, Deserialize)]
+
+/// Struct returned from get_contract_state
+/// div-pool state info
+/// Represents contact state as as JSON compatible struct
+#[derive(Serialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct GetSpInfoResult {
-    pub account_id: AccountId,
-    //how much of the meta-pool must be staked in this pool
-    //0=> do not stake, only unstake
-    //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
-    pub weight_basis_points: u16,
-
-    //total staked here
-    pub staked: U128,
-
-    //total unstaked in this pool
-    pub unstaked: U128,
-    
-    //set when the unstake command is passed to the pool
-    //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
-    //We might have to block users from unstaking if all the pools are in a waiting period
-    pub unstaked_requested_epoch_height: U64, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
-
-    //EpochHeight where we asked the sp what were our staking rewards
-    pub last_asked_rewards_epoch_height: U64,
-}
-
-/// Struct returned from get_contract_info
-/// div-pool full info
-/// Represents contact data as as JSON compatible struct
-#[derive(Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct GetContractInfoResult {
+pub struct GetContractStateResult {
     /// This amount increments with deposits and decrements when users stake
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
@@ -188,14 +164,41 @@ pub struct GetContractInfoResult {
     /// here we store the accumulatred amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: U128, 
 
-    /// no auto-staking. true while changing staking pools
-    pub staking_paused: bool, 
-
     //how many accounts there are
     pub accounts_count: U64,
 
     //count of pools to diversify in
     pub staking_pools_count: U64, 
+
+}
+
+/// Struct returned from get_contract_params
+/// div-pool parameters info
+/// Represents contact parameters as JSON compatible struct
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ContractParamsJSON {
+
+    /// no auto-staking. true while changing staking pools
+    pub staking_paused: bool, 
+
+    /// adjustable min account available balance (to backup storage)
+    pub min_account_balance: U128String,
+
+    ///NEAR/SKASH Liquidity pool target
+    pub nslp_near_target: U128String,
+    ///NEAR/SKASH Liquidity pool max fee
+    pub nslp_max_discount_basis_points: u16, //10%
+    ///NEAR/SKASH Liquidity pool min fee
+    pub nslp_min_discount_basis_points: u16, //0.1%
+
+    //The next 3 values define g-skash rewards multiplers %. (100 => 1x, 200 => 2x, ...)
+    ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
+    pub staker_g_skash_mult_pct: u16,
+    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
+    pub skash_sell_g_skash_mult_pct: u16,
+    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
+    pub lp_provider_g_skash_mult_pct: u16,
 
     /// operator_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
     pub operator_rewards_fee_basis_points: u16,
@@ -203,5 +206,19 @@ pub struct GetContractInfoResult {
     pub operator_swap_cut_basis_points: u16,
     /// treasury_cut_basis_points. 
     pub treasury_swap_cut_basis_points: u16,
-
+    
 }
+
+// get_staking_pools_list returns StakingPoolJSONInfo[]
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StakingPoolJSONInfo {
+    pub account_id: String,
+    pub weight_basis_points: u16,
+    pub staked: U128String,
+    pub unstaked: U128String,
+    pub unstaked_requested_epoch_height: U64String, 
+    //EpochHeight where we asked the sp what were our staking rewards
+    pub last_asked_rewards_epoch_height: U64String,
+}
+

@@ -13,7 +13,7 @@ impl DiversifiedPool {
     pub fn refresh_staking_pool_rewards(&mut self, sp_inx_i32: i32) {
         assert!(sp_inx_i32 > 0);
 
-        self.assert_owner();
+        self.assert_owner_calling();
 
         let sp_inx = sp_inx_i32 as usize;
         assert!(sp_inx < self.staking_pools.len());
@@ -100,7 +100,7 @@ impl DiversifiedPool {
         //we enter here after asking the staking-pool how much do we have staked (plus rewards)
         //total_balance: U128String contains the answer from the staking-pool
 
-        assert_self();
+        assert_callback_calling();
 
         let rewards: u128;
 
@@ -182,7 +182,7 @@ impl DiversifiedPool {
     /// Adds full access key with the given public key to the account once the contract is empty
     /// (has no accounts)
     pub fn add_full_access_key(&mut self, new_public_key: Base58PublicKey) -> Promise {
-        self.assert_owner();
+        self.assert_owner_calling();
         assert!(self.accounts.len() == 0, "contract still has accounts");
 
         env::log(b"Adding a full access key");

@@ -25,9 +25,6 @@ pub mod utils;
 pub mod internal;
 pub mod owner;
 
-pub mod staking_pool_list;
-pub use staking_pool_list::StakingPoolInfo;
-
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
@@ -259,15 +256,69 @@ impl Account {
 
 }
 
+//-------------------------
+//--  STAKING POOLS LIST --
+//-------------------------
+/// items in the Vec of staking pools
+#[derive(Default)]
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct StakingPoolInfo {
+    pub account_id: AccountId,
 
-//---------------------------
-//  Main Contract State   ---
-//---------------------------
+    //how much of the meta-pool must be staked in this pool
+    //0=> do not stake, only unstake
+    //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
+    pub weight_basis_points: u16,
+
+    //if we've made an async call to this pool
+    pub busy_lock: bool,
+
+    //total staked here
+    pub staked: u128,
+
+    //total unstaked in this pool
+    pub unstaked: u128,
+    //set when the unstake command is passed to the pool
+    //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
+    //We might have to block users from unstaking if all the pools are in a waiting period
+    pub unstaked_requested_epoch_height: EpochHeight, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
+
+    //EpochHeight where we asked the sp what were our staking rewards
+    pub last_asked_rewards_epoch_height: EpochHeight,
+}
+
+impl StakingPoolInfo {
+    pub fn is_empty(&self) -> bool {
+        return self.busy_lock == false
+            && self.weight_basis_points == 0
+            && self.staked == 0
+            && self.unstaked == 0
+    }
+    pub fn new(account_id:AccountId, weight_basis_points: u16) -> Self {
+        return Self {
+            account_id,
+            weight_basis_points,
+            busy_lock: false,
+            staked:0,
+            unstaked:0,
+            unstaked_requested_epoch_height:0,
+            last_asked_rewards_epoch_height:0
+        }
+    }
+}
+
+//------------------------
+//  Main Contract State --
+//------------------------
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct DiversifiedPool {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
+
+    /// if you're holding skash there's a min balance you must mantain to backup storage usage
+    /// can be adjusted down by keeping the required NEAR in the developers or operator account
+    pub min_account_balance: u128,
 
     /// Operator account ID (who's in charge to call distribute() on a periodic basis)
     pub operator_account_id: String,
@@ -290,9 +341,11 @@ pub struct DiversifiedPool {
     /// not necessarily what's actually staked since staking can is done in batches
     /// Share price is computed using this number. share_price = total_for_staking/total_shares
     pub total_for_staking: u128,
+
     /// The total amount of tokens actually staked (the tokens are in the staking pools)
     /// During distribute(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets staked in 100kN batches
     pub total_actually_staked: u128,
+
     // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
@@ -306,9 +359,11 @@ pub struct DiversifiedPool {
     /// not necessarily what's actually unstaked since unstaking is done in batches
     /// If a user ask unstaking 100: total_for_unstaking+=100, total_for_staking-=100, total_stake_shares-=share_amount
     pub total_for_unstaking: u128,
+
     /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
     /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
     pub total_actually_unstaked: u128,
+
     /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
     /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
     /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
@@ -325,26 +380,25 @@ pub struct DiversifiedPool {
     pub accounts: UnorderedMap<String, Account>,
 
     //list of pools to diversify in
-    pub staking_pools: Vec<staking_pool_list::StakingPoolInfo>,
-    pub staking_pools_count: u16,
+    pub staking_pools: Vec<StakingPoolInfo>,
 
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/SKASH Liquidity pool fee curve params
     // We assume this pool is always UNBALANCED, there should be more SKASH than NEAR 99% of the time
     ///NEAR/SKASH Liquidity pool target
-    nslp_near_target: u128,
+    pub nslp_near_target: u128,
     ///NEAR/SKASH Liquidity pool max fee
-    nslp_max_discount_basis_points: u16, //10%
+    pub nslp_max_discount_basis_points: u16, //10%
     ///NEAR/SKASH Liquidity pool min fee
-    nslp_min_discount_basis_points: u16, //0.1%
+    pub nslp_min_discount_basis_points: u16, //0.1%
 
     //The next 3 values define g-skash rewards multiplers %. (100 => 1x, 200 => 2x, ...)
     ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
-    staker_g_skash_mult_pct: u16,
+    pub staker_g_skash_mult_pct: u16,
     ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
-    skash_sell_g_skash_mult_pct: u16,
+    pub skash_sell_g_skash_mult_pct: u16,
     ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
-    lp_provider_g_skash_mult_pct: u16,
+    pub lp_provider_g_skash_mult_pct: u16,
 }
 
 impl Default for DiversifiedPool {
@@ -356,20 +410,20 @@ impl Default for DiversifiedPool {
 #[near_bindgen]
 impl DiversifiedPool {
     /* NOTE
-    This contract must implement several traits
+    This contract implements several traits
 
-    1. deposit-trait [NEP-xxx]: this contract implements: deposit, get_available_balance, withdraw, withdraw_all
+    1. deposit-trait [NEP-xxx]: this contract implements: deposit, get_account_total_balance, get_account_available_balance, withdraw, withdraw_all
        A [NEP-xxx] contract creates an account on deposit and allows you to withdraw later under certain conditions. Deletes the account on withdraw_all
 
-    2. staking-pool [NEP-xxx]: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users too if they want
-      that means implmenting: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
+    2. staking-pool [NEP-xxx]: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users.
+        This means implmenting: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
         and view methods: get_account_unstaked_balance, get_account_staked_balance, get_account_total_balance, is_account_unstaked_balance_available,
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts.
 
     3. diversified-staking: these are the extensions to the standard staking pool (buy/sell skash)
 
-    4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_available_balance(tok), withdraw(tok), tranfer(tok), transfer_to_contract(tok)
+    4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), tranfer_token(tok), transfer_token_to_contract(tok)
        A [NEP-xxx] manages multiple tokens
 
     */
@@ -390,6 +444,7 @@ impl DiversifiedPool {
             owner_account_id,
             operator_account_id,
             treasury_account_id,
+            min_account_balance: ONE_NEAR,
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
             operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
             treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
@@ -415,9 +470,10 @@ impl DiversifiedPool {
             lp_provider_g_skash_mult_pct: 2000,
 
             staking_pools: Vec::new(),
-            staking_pools_count:0,
         };
     }
+
+    //pub fn set_min_balance(&mut self)
 
     //------------------------------------
     // deposit trait & staking-pool trait
@@ -505,10 +561,17 @@ impl DiversifiedPool {
 
     /// Returns the total balance of the given account (including staked and unstaked balances).
     pub fn get_account_total_balance(&self, account_id: AccountId) -> U128String {
-        //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
-        let account = self.get_account(account_id);
-        return (account.unstaked_balance.0 + account.staked_balance.0).into();
+        let acc = self.internal_get_account(&account_id);
+        return (acc.available + self.amount_from_stake_shares(acc.stake_shares)+ acc.unstaked).into();
     }
+
+    /// additional to staking-pool to satisfy generic deposit-NEP-standard
+    /// returns the amount that can be withdrawn immediately
+    pub fn get_account_available_balance(&self, account_id: AccountId) -> U128String {
+        let acc = self.internal_get_account(&account_id);
+        return acc.available.into();
+    }
+    
 
     /// Returns `true` if the given account can withdraw tokens in the current epoch.
     pub fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool {
@@ -532,7 +595,7 @@ impl DiversifiedPool {
 
     /// Returns the staking public key
     pub fn get_staking_key(&self) -> Base58PublicKey {
-        panic!("no specific staking key");
+        panic!("no specific staking key for the div-pool");
     }
 
     /// Returns true if the staking is paused
@@ -888,42 +951,67 @@ impl DiversifiedPool {
     //---------------------------------
     // staking-pools-list (SPL) management
     //---------------------------------
-    pub fn set_staking_pool(&mut self, account_id:AccountId, weight_basis_points:u16 ){
-        
-        let mut spl = staking_pool_list::read_from_storage();
-        
-        let mut is_empty:bool=false; 
 
-        //create a scope to satisfy the borrow-checker
-        {
-            //get the entry for the sp or a new entry
-            let sp = spl.entry(account_id.clone()).or_default();
-            if sp.busy_lock {
-                panic!(b"sp is busy. retry later")
-            }
-            //set data that can be modified on new or old entries
-            sp.weight_basis_points = weight_basis_points;
-
-            //if it was new, set the account_id also
-            if sp.account_id.len()==0 {
-                //new staking pool
-                self.staking_pools_count+=1;
-                sp.account_id = account_id.clone();
-            }
-            else { //previously existing entry 
-                //chek if it's no "empty" (weight:0, staking:0, unstaked:0), to remove it later
-                is_empty = sp.is_empty()
-            }
+    /// get the current list of pools
+    pub fn get_staking_pool_list(&self) -> Vec<StakingPoolJSONInfo> {
+        let mut result = Vec::with_capacity(self.staking_pools.len());
+        for elem in self.staking_pools.iter(){
+            result.push(StakingPoolJSONInfo{
+                account_id: elem.account_id.clone(),
+                weight_basis_points: elem.weight_basis_points,
+                staked: elem.staked.into(),
+                unstaked: elem.unstaked.into(),
+                last_asked_rewards_epoch_height: elem.last_asked_rewards_epoch_height.into(),
+                unstaked_requested_epoch_height: elem.unstaked_requested_epoch_height.into(),
+            })
         }
-
-        //remove if is no longer in the list (weight==0 and no staking)
-        if is_empty {
-            spl.remove_entry(&account_id);
-        }
-
-        //save list to storage
-        staking_pool_list::save_to_storage(&spl);
+        return result;
     }
+
+    ///remove staking pool from list *if it's empty*
+    pub fn remove_staking_pool(&mut self, inx:u16 ){
+
+        self.assert_owner_calling();
+
+        let sp = &self.staking_pools[inx as usize];
+        if !sp.is_empty() {
+            panic!(b"sp is not empty")
+        }
+        self.staking_pools.remove(inx as usize);
+    }
+
+    ///update existing weight_basis_points
+    pub fn set_staking_pool_weight(&mut self, inx:u16, weight_basis_points:u16 ){
+
+        self.assert_owner_calling();
+
+        let sp = &mut self.staking_pools[inx as usize];
+        if sp.busy_lock {
+            panic!(b"sp is busy")
+        }
+        sp.weight_basis_points = weight_basis_points;
+    }
+    
+    ///add a new staking pool or update existing weight_basis_points
+    pub fn set_staking_pool(&mut self, account_id:AccountId, weight_basis_points:u16 ){
+
+        self.assert_owner_calling();
+
+        //search the pools
+        for sp in self.staking_pools.iter_mut() {
+            if sp.account_id==account_id {
+                //found
+                if sp.busy_lock {
+                    panic!(b"sp is busy")
+                }
+                (*sp).weight_basis_points = weight_basis_points;
+                return;
+            }
+        }
+        //not found, it's a new pool
+        self.staking_pools.push(  StakingPoolInfo::new(account_id, weight_basis_points) );
+    }
+
 
     //-----------------------------
     // DISTRIBUTE
@@ -935,6 +1023,8 @@ impl DiversifiedPool {
     /// returns "true" if there's still more job to do
 
     pub fn distribute(&mut self) {
+
+        self.assert_owner_calling();
 
         //let epoch_height = env::epoch_height();
         // if self.last_epoch_height == epoch_height {
@@ -1102,7 +1192,8 @@ impl DiversifiedPool {
         amount: u128,
         included_deposit: bool,
     ) -> bool {
-        assert_self();
+
+        assert_callback_calling();
 
         let sp = &mut self.staking_pools[sp_inx];
         sp.busy_lock = false;
@@ -1131,7 +1222,8 @@ impl DiversifiedPool {
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
     pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool {
-        assert_self();
+        
+        assert_callback_calling();
 
         let sp = &mut self.staking_pools[sp_inx];
         sp.busy_lock = false;
@@ -1206,10 +1298,10 @@ impl DiversifiedPool {
         };
     }
 
-    /// get contract totals info
-    /// Returns JSON representation of the totals
-    pub fn get_contract_info(&self) -> GetContractInfoResult {
-        return GetContractInfoResult {
+    /// get contract totals 
+    /// Returns JSON representation of the contract state
+    pub fn get_contract_state(&self) -> GetContractStateResult {
+        return GetContractStateResult {
             total_available: self.total_available.into(),
             total_for_staking: self.total_for_staking.into(),
             total_for_unstaking: self.total_for_unstaking.into(),
@@ -1219,30 +1311,66 @@ impl DiversifiedPool {
             total_actually_unstaked_and_retrieved: self
                 .total_actually_unstaked_and_retrieved
                 .into(),
-            staking_paused: self.staking_paused,
             total_stake_shares: self.total_stake_shares.into(),
             total_g_skash: self.total_g_skash.into(),
             accounts_count: self.accounts.len().into(),
             staking_pools_count: (self.staking_pools.len() as u64).into(),
-            operator_rewards_fee_basis_points: self.operator_rewards_fee_basis_points,
-            operator_swap_cut_basis_points: self.operator_swap_cut_basis_points,
-            treasury_swap_cut_basis_points: self.treasury_swap_cut_basis_points,
         };
     }
 
+    /// Returns JSON representation of contract parameters
+    pub fn get_contract_params(&self) -> ContractParamsJSON {
+        return ContractParamsJSON {
+            staking_paused: self.staking_paused,
+            min_account_balance: self.min_account_balance.into(),
+
+            nslp_near_target: self.nslp_near_target.into(),
+            nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
+            nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
+
+            staker_g_skash_mult_pct: self.staker_g_skash_mult_pct,
+            skash_sell_g_skash_mult_pct: self.skash_sell_g_skash_mult_pct,
+            lp_provider_g_skash_mult_pct: self.lp_provider_g_skash_mult_pct,
+                    
+            operator_rewards_fee_basis_points: self.operator_rewards_fee_basis_points,
+            operator_swap_cut_basis_points: self.operator_swap_cut_basis_points,
+            treasury_swap_cut_basis_points: self.treasury_swap_cut_basis_points,
+            };
+    }
+
+    /// Returns JSON representation of contract parameters
+    pub fn set_contract_params(&mut self, params:ContractParamsJSON) {
+
+        self.assert_owner_calling();
+
+        self.min_account_balance = params.min_account_balance.0;
+
+        self.nslp_near_target = params.nslp_near_target.0;
+        self.nslp_max_discount_basis_points = params.nslp_max_discount_basis_points;
+        self.nslp_min_discount_basis_points = params.nslp_min_discount_basis_points;
+
+        self.staker_g_skash_mult_pct = params.staker_g_skash_mult_pct;
+        self.skash_sell_g_skash_mult_pct = params.skash_sell_g_skash_mult_pct;
+        self.lp_provider_g_skash_mult_pct = params.lp_provider_g_skash_mult_pct;
+                    
+        self.operator_rewards_fee_basis_points = params.operator_rewards_fee_basis_points;
+        self.operator_swap_cut_basis_points = params.operator_swap_cut_basis_points;
+        self.treasury_swap_cut_basis_points = params.treasury_swap_cut_basis_points;
+
+    }
+    
     /// get sp (staking-pool) info
     /// Returns JSON representation of sp recorded state
-    pub fn get_sp_info(&self, sp_inx_i32: i32) -> GetSpInfoResult {
-        assert!(sp_inx_i32 > 0);
+    pub fn get_sp_info(&self, sp_inx_i32: i32) -> StakingPoolJSONInfo {
 
-        self.assert_owner();
+        assert!(sp_inx_i32 > 0);
 
         let sp_inx = sp_inx_i32 as usize;
         assert!(sp_inx < self.staking_pools.len());
 
         let sp = &self.staking_pools[sp_inx];
 
-        return GetSpInfoResult {
+        return StakingPoolJSONInfo {
             account_id: sp.account_id.clone(),
             weight_basis_points: sp.weight_basis_points,
             staked: sp.staked.into(),
