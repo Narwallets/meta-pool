@@ -148,12 +148,12 @@ impl DiversifiedPool {
             self.total_actually_staked += rewards;
 
             // The fee that the contract authors take.
-            let author_fee = apply_pct(AUTHOR_REWARDS_FEE_BASIS_POINTS, rewards);
+            let author_fee = apply_pct(DEVELOPERS_REWARDS_FEE_BASIS_POINTS, rewards);
             // The fee that the contract owner (operator) takes.
             let owner_fee = apply_pct(self.operator_rewards_fee_basis_points, rewards);
             // Now add fees & shares to the pool preserving current share value
             // adds to self.total_actually_staked, self.total_for_staking & self.total_stake_shares;
-            &self.add_amount_and_shares_preserve_share_price(AUTHOR_ACCOUNT_ID.into(), author_fee);
+            &self.add_amount_and_shares_preserve_share_price(DEVELOPERS_ACCOUNT_ID.into(), author_fee);
             &self.add_amount_and_shares_preserve_share_price(
                 self.operator_account_id.clone(),
                 owner_fee,

@@ -108,16 +108,11 @@ The contract has a configurable parameter `dev_maintenance_amount`, initially 25
 (When Phase II - DAO Governance is implemented)
 
 G-SKASH holders can vote on:
-<<<<<<< HEAD
 * Diversification: Validator distribution list, and how much NEAR to distribute to each one.
-=======
-* Diversification: How the validator distribution list is composed, and how much NEAR to distribute to each one.
->>>>>>> f132e878112925afb6a9d7f0d8090b6d366302fe
 * Fee curve parameters for the NEAR/SKASH Liquidity Pool (min fee, max fee, slope)
 * How to use treasury funds for DAO expansion
 * Operational costs fee
 * Maintenance funds redirections
-<<<<<<< HEAD
 * Move treasury funds in/out of the G-SKASH dividends-pool
 * `distribute()` Batch stake size. By default 100-150K NEAR
 * G-SKASH mint reward multiplier for:
@@ -125,10 +120,6 @@ G-SKASH holders can vote on:
   * Stakers (default 5 G-SKASH per * staking reward)
   * LP-providers (default 20 G-SKASH * fee received)
 
-=======
-* Move treasury funds to the dividends-pool
-* `distribute()` Batch stake size. By default 100-150K NEAR
->>>>>>> f132e878112925afb6a9d7f0d8090b6d366302fe
 
 Half of treasury funds must be used for DAO expansion and maintenance. The other 50% can be user for expansion by presenting proposals, o can be moved to the dividends-pool (once a month). 
 
@@ -140,14 +131,10 @@ Users get G-SKASH tokens minted for them when:
 * They receive fees in the NEAR/SKASH Liquidity pool (20x multiplier)
 
 
-<<<<<<< HEAD
 G-SKASH governance tokens are minted and distributed to:
 * users holding SKASH and 
 * users providing liquidity.
 * users paying immediate unstaking fees
-=======
-So, G-SKASH governance tokens are minted and distributed to users holding SKASH (staking) and to users providing liquidity.
->>>>>>> f132e878112925afb6a9d7f0d8090b6d366302fe
 
 ## Operational costs
 

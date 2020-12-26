@@ -65,8 +65,10 @@ impl DiversifiedPool {
         self.total_available -= amount;
     }
 
+
     //------------------------------
     pub(crate) fn internal_stake(&mut self, amount: Balance) {
+
         assert_min_amount(amount);
 
         let account_id = env::predecessor_account_id();
@@ -77,8 +79,9 @@ impl DiversifiedPool {
             "Not enough available balance to stake the requested amount"
         );
 
-        //realize g-skash pending rewards on stake operation
-        acc.realized_g_skash += acc.staking_meter.realize(self.amount_from_stake_shares(acc.stake_shares), self.staker_g_skash_mult_pct);
+        //use this operation to realize g-skash pending rewards
+        let valued_shares = self.amount_from_stake_shares(acc.stake_shares);
+        self.total_g_skash += acc.stake_realize_g_skash(valued_shares,self);
     
         // Calculate the number of "stake" shares that the account will receive for staking the given amount.
         let num_shares = self.stake_shares_from_amount(amount);
@@ -106,26 +109,24 @@ impl DiversifiedPool {
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        //realize g-skash pending rewards on stake operation
-        acc.realized_g_skash += acc.staking_meter.realize(self.amount_from_stake_shares(acc.stake_shares), self.staker_g_skash_mult_pct);
+        //use this operation to realize g-skash pending rewards
+        let valued_shares = self.amount_from_stake_shares(acc.stake_shares);
+        assert!(valued_shares >= amount_requested, "Not enough skash");
+        self.total_g_skash += acc.stake_realize_g_skash(valued_shares,self);
 
-        let skash = self.amount_from_stake_shares(acc.stake_shares);
-
-        if skash >= TEN_NEAR {
-            assert_min_amount(amount_requested);
+        let remains_staked = valued_shares - amount_requested;
+        //if less than one near would remain, unstake all
+        let amount_to_unstake = if remains_staked > ONE_NEAR {
+            amount_requested
         }
-
-        assert!(skash >= amount_requested, "Not enough skash");
-        let remains_staked = skash - amount_requested;
-        let amount_to_unstake = match remains_staked > ONE_NEAR {
-            true => amount_requested,
-            false => skash, //unstake all
+        else {
+            valued_shares //unstake all
         };
 
         let num_shares: u128;
         //if unstake all staked near, we use all shares, so we include rewards in the unstaking...
         //when "unstaking_all" the amount unstaked is the requested amount PLUS ALL ACCUMULATED REWARDS
-        if amount_to_unstake == skash {
+        if amount_to_unstake == valued_shares {
             num_shares = acc.stake_shares;
         } else {
             // Calculate the number of shares required to unstake the given amount.
@@ -145,6 +146,7 @@ impl DiversifiedPool {
         //trip-meter
         acc.staking_meter.unstake(amount_to_unstake);
         acc.trip_accum_unstakes += amount_to_unstake;
+
         //--SAVE ACCOUNT--
         self.internal_save_account(&account_id, &acc);
 
@@ -169,20 +171,6 @@ impl DiversifiedPool {
         // );
     }
 
-    //--------------------------------
-    pub(crate) fn add_stake_shares_to_account(&mut self, account_id: &String, num_shares: u128) {
-        if num_shares > 0 {
-            let mut account = self.internal_get_account(account_id);
-            account.stake_shares += num_shares;
-            &self.internal_save_account(account_id, &account);
-        }
-    }
-    //--------------------------------
-    pub(crate) fn shares_cut(&mut self, num_shares: u128, account_id: &String, cut_basis_points:u16) -> u128 {
-        let shares_cut = apply_pct(cut_basis_points, num_shares);
-        &self.add_stake_shares_to_account(&account_id,shares_cut);
-        return shares_cut;
-    }
 
 
     //--------------------------------
@@ -276,13 +264,14 @@ impl DiversifiedPool {
         assert!(discount_basis_points < 10000, "inconsistence d>1");
         let discount = apply_pct(discount_basis_points, skash_to_sell);
         return (skash_to_sell - discount).into(); //when SKASH is sold user gets a discounted value because the user skips the waiting period
-                                                  // env::log(
-                                                  //     format!(
-                                                  //         "@{} withdrawing {}. New unstaked balance is {}",
-                                                  //         account_id, amount, account.unstaked
-                                                  //     )
-                                                  //     .as_bytes(),
-                                                  // );
+
+        // env::log(
+        //     format!(
+        //         "@{} withdrawing {}. New unstaked balance is {}",
+        //         account_id, amount, account.unstaked
+        //     )
+        //     .as_bytes(),
+        // );
     }
 
     /// Inner method to get the given account or a new default value account.
@@ -341,6 +330,7 @@ impl DiversifiedPool {
                 break; //just one pool
             }
         }
+        
     }
 
     //prev fn continues here
@@ -375,7 +365,7 @@ impl DiversifiedPool {
         return withdraw_succeeded;
     }
 
-    /// finds a staking pool requireing some stake to get balanced
+    /// finds a staking pool requiring some stake to get balanced
     /// WARN: returns usize::MAX if no pool requires staking/all are busy
     pub(crate) fn get_staking_pool_requiring_stake(&self) -> usize {
         let mut max_required_amount: u128 = 0;
@@ -428,4 +418,6 @@ impl DiversifiedPool {
 
         return selected_sp_inx;
     }
+
+
 }
