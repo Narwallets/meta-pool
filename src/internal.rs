@@ -233,10 +233,11 @@ impl DiversifiedPool {
             )
             .as_bytes(),
         );
-        assert!(
-            available_near >= max_nears_to_pay,
-            "Not enough balance in NEAR/SKASH Liquidity pool"
-        );
+
+        if available_near <= max_nears_to_pay {
+            return self.nslp_max_discount_basis_points;
+        }
+        
         let near_after = available_near - max_nears_to_pay;
         if near_after < self.nslp_near_target / 20 {
             return self.nslp_max_discount_basis_points;
@@ -347,12 +348,13 @@ impl DiversifiedPool {
         if withdraw_succeeded {
             result = "succeeded";
             sp.unstaked -= amount; //no more unstaked in the pool
-                                   //move from total_actually_unstaked to total_actually_unstaked_and_retrieved
+
+            //move from total_actually_unstaked to total_actually_unstaked_and_retrieved
             assert!(self.total_actually_unstaked <= amount);
             self.total_actually_unstaked -= amount;
-            self.total_actually_unstaked_and_retrieved += amount;
-        //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls complete_unstaking
-        } else {
+            self.total_actually_unstaked_and_retrieved += amount; //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls complete_unstaking
+        } 
+        else {
             result = "has failed";
         }
         env::log(

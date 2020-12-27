@@ -9,6 +9,16 @@ Notes:
     so tha operations will be completed by calling "ping" if total_to_stake < total_staked
 */
 
+/********************************/
+/* CONTRACT Self Identification */
+/********************************/
+// [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+// see also pub fn get_contract_info
+const CONTRACT_NAME: &str = "diversifying staking pool";
+const CONTRACT_VERSION: &str = "0.1.0";
+const INITIAL_WEB_APP_URL: &str = "http://div-pool.narwallets.com";
+const INITIAL_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
+
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::{collections::UnorderedMap, env, ext_contract, near_bindgen, AccountId};
@@ -104,8 +114,9 @@ impl RewardMeter {
         assert!(valued_shares < ((i128::MAX - self.delta_in) as u128), "TB");
         assert!(
             self.delta_in < 0 || valued_shares >= (self.delta_in as u128),
-            "valued_shares<this.delta_in"
+            "valued_shares:{} .LT. self.delta_in:{}",valued_shares,self.delta_in
         );
+        
         return (U256::from((valued_shares as i128) - self.delta_in)
             * U256::from(self.last_multiplier_pct)
             / U256::from(100))
@@ -223,11 +234,15 @@ impl Account {
             && self.nslp_shares == 0
             && self.realized_g_skash == 0;
     }
+
+    #[inline]
+    fn valued_nslp_shares(&self, main: &DiversifiedPool, nslp_account: &Account) -> u128 { main.amount_from_nslp_shares(self.nslp_shares, &nslp_account) }
+
     /// return realized g_skash plus pending rewards
     fn total_g_skash(&self, main: &DiversifiedPool) -> u128 {
         let valued_stake_shares = main.amount_from_stake_shares(self.stake_shares);
         let nslp_account = main.internal_get_nslp_account();
-        let valued_lp_shares = main.amount_from_nslp_shares(self.stake_shares, &nslp_account);
+        let valued_lp_shares = self.valued_nslp_shares(main, &nslp_account);
         return self.realized_g_skash
             + self.staking_meter.mul_rewards(valued_stake_shares)
             + self.lp_meter.mul_rewards(valued_lp_shares);
@@ -319,6 +334,10 @@ pub struct DiversifiedPool {
     /// if you're holding skash there's a min balance you must mantain to backup storage usage
     /// can be adjusted down by keeping the required NEAR in the developers or operator account
     pub min_account_balance: u128,
+
+    // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    pub web_app_url: String, 
+    pub auditor_account_id: String,
 
     /// Operator account ID (who's in charge to call distribute() on a periodic basis)
     pub operator_account_id: String,
@@ -445,6 +464,8 @@ impl DiversifiedPool {
             operator_account_id,
             treasury_account_id,
             min_account_balance: ONE_NEAR,
+            web_app_url: INITIAL_WEB_APP_URL.into(),
+            auditor_account_id: INITIAL_AUDITOR_ACCOUNT_ID.into(),
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
             operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
             treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
@@ -809,11 +830,11 @@ impl DiversifiedPool {
         );
 
         //get NSLP account
-        let mut lp_account = self.internal_get_nslp_account();
-        let valued_actual_shares = self.amount_from_nslp_shares(acc.nslp_shares, &lp_account);
+        let mut nslp_account = self.internal_get_nslp_account();
+        let valued_actual_shares = acc.valued_nslp_shares(self, &nslp_account);
 
         // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
-        let num_shares = self.nslp_shares_from_amount(amount.0, &lp_account);
+        let num_shares = self.nslp_shares_from_amount(amount.0, &nslp_account);
         assert!(num_shares > 0);
 
         //use this LP operation to realize g-skash pending rewards (same as nslp_harvest_g_skash)
@@ -826,12 +847,12 @@ impl DiversifiedPool {
         acc.available -= amount.0;
         acc.nslp_shares += num_shares;
         //update NSLP account
-        lp_account.available += amount.0;
-        lp_account.nslp_shares += num_shares; //total nslp shares
+        nslp_account.available += amount.0;
+        nslp_account.nslp_shares += num_shares; //total nslp shares
 
         //--SAVE ACCOUNTS
         self.internal_save_account(&account_id, &acc);
-        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(), &lp_account);
+        self.internal_save_account(&NSLP_INTERNAL_ACCOUNT.into(), &nslp_account);
     }
 
     /// remove liquidity from deposited funds
@@ -841,7 +862,7 @@ impl DiversifiedPool {
 
         //how much does this user owns
         let mut nslp_account = self.internal_get_nslp_account();
-        let valued_actual_shares = self.amount_from_nslp_shares(acc.nslp_shares, &nslp_account);
+        let valued_actual_shares = acc.valued_nslp_shares(self, &nslp_account);
 
         //use this LP operation to realize g-skash pending rewards (same as nslp_harvest_g_skash)
         self.total_g_skash += acc.nslp_realize_g_skash(valued_actual_shares, self);
@@ -1222,7 +1243,7 @@ impl DiversifiedPool {
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
     pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool {
-        
+
         assert_callback_calling();
 
         let sp = &mut self.staking_pools[sp_inx];
@@ -1264,43 +1285,62 @@ impl DiversifiedPool {
     /// full account info
     /// Returns JSON representation of the account for the given account ID.
     pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult {
-        let account = self.internal_get_account(&account_id);
-        let skash = self.amount_from_stake_shares(account.stake_shares);
+        let acc = self.internal_get_account(&account_id);
+        let skash = self.amount_from_stake_shares(acc.stake_shares);
         // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
-        let trip_rewards = (skash + account.trip_accum_unstakes)
-            .saturating_sub(account.trip_accum_stakes + account.trip_start_skash);
+        let trip_rewards = (skash + acc.trip_accum_unstakes).saturating_sub(acc.trip_accum_stakes + acc.trip_start_skash);
         //NLSP share value
         let mut nslp_share_value: u128 = 0;
-        if account.nslp_shares != 0 {
+        if acc.nslp_shares != 0 {
             let nslp_account = self.internal_get_nslp_account();
-            nslp_share_value = self.amount_from_nslp_shares(account.nslp_shares, &nslp_account);
+            nslp_share_value = acc.valued_nslp_shares(self, &nslp_account);
         }
         return GetAccountInfoResult {
             account_id,
-            available: account.available.into(),
+            available: acc.available.into(),
             skash: skash.into(),
-            unstaked: account.unstaked.into(),
-            unstaked_requested_epoch_height: account.unstaked_requested_epoch_height.into(),
+            unstaked: acc.unstaked.into(),
+            unstaked_requested_epoch_height: acc.unstaked_requested_epoch_height.into(),
             can_withdraw: (env::epoch_height()
-                >= account.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK),
-            total: (account.available + skash + account.unstaked).into(),
+                >= acc.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK),
+            total: (acc.available + skash + acc.unstaked).into(),
             //trip-meter
-            trip_start: account.trip_start.into(),
-            trip_start_skash: account.trip_start_skash.into(),
-            trip_accum_stakes: account.trip_accum_stakes.into(),
-            trip_accum_unstakes: account.trip_accum_unstakes.into(),
+            trip_start: acc.trip_start.into(),
+            trip_start_skash: acc.trip_start_skash.into(),
+            trip_accum_stakes: acc.trip_accum_stakes.into(),
+            trip_accum_unstakes: acc.trip_accum_unstakes.into(),
             trip_rewards: trip_rewards.into(),
 
-            nslp_shares: account.nslp_shares.into(),
+            nslp_shares: acc.nslp_shares.into(),
             nslp_share_value: nslp_share_value.into(),
 
-            g_skash: account.total_g_skash(self).into(),
+            g_skash: acc.total_g_skash(self).into(),
         };
+    }
+
+
+    /// NEP-129 get information about this contract
+    /// returns JSON string according to [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    pub fn get_contract_info(&self) -> String {
+        return format!(r#"{{\
+            "dataVersion":1,\
+            "name":"{}"\
+            "version":"{}",\
+            "developersAccountId":"{}",\
+            "source":"https://github.com/Narwallets/diversifying-staking-pool", \
+            "standards":["NEP-129"], \ 
+            "webAppUrl":"{}", \
+            "auditorAccountId":"{}" \
+            }}"#, CONTRACT_NAME, CONTRACT_VERSION, DEVELOPERS_ACCOUNT_ID,
+                self.web_app_url, self.auditor_account_id )
     }
 
     /// get contract totals 
     /// Returns JSON representation of the contract state
     pub fn get_contract_state(&self) -> GetContractStateResult {
+
+        let lp_account = self.internal_get_nslp_account();
+
         return GetContractStateResult {
             total_available: self.total_available.into(),
             total_for_staking: self.total_for_staking.into(),
@@ -1308,13 +1348,13 @@ impl DiversifiedPool {
             total_actually_staked: self.total_actually_staked.into(),
             accumulated_staked_rewards: self.accumulated_staked_rewards.into(),
             total_actually_unstaked: self.total_actually_unstaked.into(),
-            total_actually_unstaked_and_retrieved: self
-                .total_actually_unstaked_and_retrieved
-                .into(),
+            total_actually_unstaked_and_retrieved: self.total_actually_unstaked_and_retrieved.into(),
             total_stake_shares: self.total_stake_shares.into(),
             total_g_skash: self.total_g_skash.into(),
             accounts_count: self.accounts.len().into(),
-            staking_pools_count: (self.staking_pools.len() as u64).into(),
+            staking_pools_count: self.staking_pools.len() as u16,
+            nslp_liquidity: lp_account.available.into(),
+            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(lp_account.available, TEN_NEAR)
         };
     }
 

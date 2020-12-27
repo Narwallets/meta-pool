@@ -164,11 +164,16 @@ pub struct GetContractStateResult {
     /// here we store the accumulatred amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: U128, 
 
+    /// How much NEAR is available to immediate unstake (sell SKASH)
+    pub nslp_liquidity: U128,
+    /// Current discount for immediate unstake (sell SKASH)
+    pub nslp_current_discount_basis_points: u16,
+
     //how many accounts there are
     pub accounts_count: U64,
 
     //count of pools to diversify in
-    pub staking_pools_count: U64, 
+    pub staking_pools_count: u16, 
 
 }
 
