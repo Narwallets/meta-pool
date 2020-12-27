@@ -1,13 +1,5 @@
-//! A smart contract that allows diversified staking
-//! this contract is based on core-contracts/lockup-contract & core-contracts/staking-pool
-
-/*
-Notes:
-    In order to keep the skaing balanced over the pools
-    large operations (>100kN) wil be splitted
-    The cross contract calls are complex and can consume all allowed gas,
-    so tha operations will be completed by calling "ping" if total_to_stake < total_staked
-*/
+//! A smart contract that allows diversified staking, SKASH and G-SKASH farming
+//! this contract include parts of core-contracts/lockup-contract & core-contracts/staking-pool
 
 /********************************/
 /* CONTRACT Self Identification */
@@ -16,8 +8,8 @@ Notes:
 // see also pub fn get_contract_info
 const CONTRACT_NAME: &str = "diversifying staking pool";
 const CONTRACT_VERSION: &str = "0.1.0";
-const INITIAL_WEB_APP_URL: &str = "http://div-pool.narwallets.com";
-const INITIAL_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
+const DEFAULT_WEB_APP_URL: &str = "http://div-pool.narwallets.com";
+const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
@@ -464,8 +456,8 @@ impl DiversifiedPool {
             operator_account_id,
             treasury_account_id,
             min_account_balance: ONE_NEAR,
-            web_app_url: INITIAL_WEB_APP_URL.into(),
-            auditor_account_id: INITIAL_AUDITOR_ACCOUNT_ID.into(),
+            web_app_url: DEFAULT_WEB_APP_URL.into(),
+            auditor_account_id: DEFAULT_AUDITOR_ACCOUNT_ID.into(),
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
             operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
             treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
