@@ -13,8 +13,8 @@ pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 pub const TWO_NEAR: u128 = 2 * ONE_NEAR;
 pub const FIVE_NEAR: u128 = 5 * ONE_NEAR;
 pub const TEN_NEAR: u128 = 10 * ONE_NEAR;
-pub const NEAR_100K: u128 = 100_000 * ONE_NEAR;
-pub const NEARS_PER_BATCH: u128 = NEAR_100K; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches
+pub const NEAR_1K: u128 = 1_000 * ONE_NEAR;
+pub const NEARS_PER_BATCH: u128 = 10*NEAR_1K; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches
 pub const MAX_NEARS_SINGLE_MOVEMENT: u128 = NEARS_PER_BATCH + NEARS_PER_BATCH/2; //150K max movement, if you try to stake 151K, it will be split into 2 movs, 100K and 51K
 
 pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 0; //0 for testing in guidlnet, 4 for mainnet & testnet;
@@ -49,6 +49,23 @@ pub type EpochHeight = u64;
 
 /// Hash of Vesting schedule.
 pub type Hash = Vec<u8>;
+
+/// NEP-129 get information about this contract
+/// returns JSON string according to [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+/// Rewards fee fraction structure for the staking pool contract.
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+#[allow(non_snake_case)]
+pub struct NEP129Response {
+    pub dataVersion:u16,
+    pub name:String,
+    pub version:String,
+    pub developersAccountId:String,
+    pub source:String,
+    pub standards:Vec<String>,
+    pub webAppUrl:String,
+    pub auditorAccountId:String,
+}
 
 /// Rewards fee fraction structure for the staking pool contract.
 #[derive(Serialize, Deserialize, Clone)]

@@ -80,27 +80,22 @@ impl DiversifiedPool {
         );
 
         //use this operation to realize g-skash pending rewards
-        let valued_shares = self.amount_from_stake_shares(acc.stake_shares);
-        self.total_g_skash += acc.stake_realize_g_skash(valued_shares,self);
+        acc.stake_realize_g_skash(self);
     
         // Calculate the number of "stake" shares that the account will receive for staking the given amount.
         let num_shares = self.stake_shares_from_amount(amount);
         assert!(num_shares > 0);
 
         //update user account
-        acc.stake_shares += num_shares;
+        acc.add_stake_shares(num_shares, amount);
         acc.available -= amount;
-
-        //trip-meter
-        acc.staking_meter.stake(amount);
-        acc.trip_accum_stakes += amount;
-
-        //--SAVE ACCOUNT--
-        self.internal_save_account(&account_id, &acc);
-
+        //contract totals
         self.total_stake_shares += num_shares;
         self.total_available -= amount;
         self.total_for_staking += amount;
+
+        //--SAVE ACCOUNT--
+        self.internal_save_account(&account_id, &acc);
     }
 
     //------------------------------
@@ -109,10 +104,11 @@ impl DiversifiedPool {
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        //use this operation to realize g-skash pending rewards
         let valued_shares = self.amount_from_stake_shares(acc.stake_shares);
         assert!(valued_shares >= amount_requested, "Not enough skash");
-        self.total_g_skash += acc.stake_realize_g_skash(valued_shares,self);
+
+        //use this operation to realize g-skash pending rewards
+        acc.stake_realize_g_skash(self);
 
         let remains_staked = valued_shares - amount_requested;
         //if less than one near would remain, unstake all
@@ -138,30 +134,26 @@ impl DiversifiedPool {
             );
         }
 
-        //update user account
-        acc.stake_shares -= num_shares;
+        //burn stake shares
+        acc.remove_stake_shares(num_shares, amount_to_unstake);
+        //the amount is now "unstaked"
         acc.unstaked += amount_to_unstake;
         acc.unstaked_requested_epoch_height = env::epoch_height(); //when the unstake was requested
-
-        //trip-meter
-        acc.staking_meter.unstake(amount_to_unstake);
-        acc.trip_accum_unstakes += amount_to_unstake;
+        //--contract totals
+        self.total_stake_shares -= num_shares;
+        self.total_for_unstaking += amount_to_unstake;
+        self.total_for_staking -= amount_to_unstake;
 
         //--SAVE ACCOUNT--
         self.internal_save_account(&account_id, &acc);
 
-        //--contract totals
-        self.total_for_unstaking += amount_to_unstake;
-        self.total_stake_shares -= num_shares;
-        self.total_for_staking -= amount_to_unstake;
-
-        // env::log(
-        //     format!(
-        //         "@{} unstaking {}. Spent {} staking shares. Total {} unstaked balance and {} staking shares",
-        //         account_id, receive_amount, num_shares, account.unstaked, account.stake_shares
-        //     )
-        //         .as_bytes(),
-        // );
+        env::log(
+            format!(
+                "@{} unstaked {}. Has now {} unstaked and {} skash",
+                account_id, amount_to_unstake, acc.unstaked, self.amount_from_stake_shares(acc.stake_shares)
+            )
+            .as_bytes(),
+        );
         // env::log(
         //     format!(
         //         "Contract total staked balance is {}. Total number of shares {}",
@@ -237,7 +229,7 @@ impl DiversifiedPool {
         if available_near <= max_nears_to_pay {
             return self.nslp_max_discount_basis_points;
         }
-        
+
         let near_after = available_near - max_nears_to_pay;
         if near_after < self.nslp_near_target / 20 {
             return self.nslp_max_discount_basis_points;
