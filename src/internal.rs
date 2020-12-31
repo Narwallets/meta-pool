@@ -295,34 +295,48 @@ impl DiversifiedPool {
 
     /// checks if there's a pending wtihdrawal from any of the pools
     /// and then launchs a withdrawal call
-    pub(crate) fn internal_async_withdraw_from_a_pool(&mut self) {
+    /// returns true if it should be called again in this epoch
+    pub(crate) fn internal_async_withdraw_from_a_pool(&mut self) -> bool {
+
         let current_epoch = env::epoch_height();
+        if self.withdraw_unstaked_last_epoch_checked==current_epoch { return false};
+
+        self.withdraw_unstaked_last_epoch_checked=current_epoch;
+
+        //becomes true if there's some funds to recover, even if the sp is busy and no work is scheduled
+        let mut should_be_called_again_this_epoch = false;
 
         for (sp_inx, sp) in self.staking_pools.iter_mut().enumerate() {
             // if the pool is not busy, and we unstaked and the waiting period has elapsed
-            if !sp.busy_lock
-                && sp.unstaked > 0
-                && sp.unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK <= current_epoch
+            if  sp.unstaked > 0
+                && sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= current_epoch
             {
-                sp.busy_lock = true;
+                should_be_called_again_this_epoch = true;
 
-                //launch withdraw
-                ext_staking_pool::withdraw(
-                    sp.unstaked.into(),
-                    &sp.account_id,
-                    NO_DEPOSIT,
-                    gas::staking_pool::WITHDRAW,
-                )
-                .then(ext_self_owner::on_staking_pool_withdraw(
-                    sp_inx,
-                    &env::current_account_id(),
-                    NO_DEPOSIT,
-                    gas::owner_callbacks::ON_STAKING_POOL_WITHDRAW,
-                ));
+                if !sp.busy_lock {
 
-                break; //just one pool
+                    sp.busy_lock = true;
+
+                    //launch withdraw
+                    ext_staking_pool::withdraw(
+                        sp.unstaked.into(),
+                        &sp.account_id,
+                        NO_DEPOSIT,
+                        gas::staking_pool::WITHDRAW,
+                    )
+                    .then(ext_self_owner::on_staking_pool_withdraw(
+                        sp_inx,
+                        &env::current_account_id(),
+                        NO_DEPOSIT,
+                        gas::owner_callbacks::ON_STAKING_POOL_WITHDRAW,
+                    ));
+
+                    break; //just one non-busy pool
+                }
             }
         }
+
+        return should_be_called_again_this_epoch;
         
     }
 
@@ -344,7 +358,7 @@ impl DiversifiedPool {
             //move from total_actually_unstaked to total_actually_unstaked_and_retrieved
             assert!(self.total_actually_unstaked <= amount);
             self.total_actually_unstaked -= amount;
-            self.total_actually_unstaked_and_retrieved += amount; //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls complete_unstaking
+            self.total_actually_unstaked_and_retrieved += amount; //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls finish_unstaking
         } 
         else {
             result = "has failed";

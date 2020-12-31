@@ -160,7 +160,7 @@ pub struct Account {
     pub unstaked: u128,
 
     /// The epoch height when the unstaked was requested
-    /// The fund will be locked for NUM_EPOCHS_TO_UNLOCK epochs
+    /// The fund will be locked for -AT LEAST- NUM_EPOCHS_TO_UNLOCK epochs
     /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK
     pub unstaked_requested_epoch_height: EpochHeight,
 
@@ -300,7 +300,7 @@ pub struct StakingPoolInfo {
     //set when the unstake command is passed to the pool
     //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
     //We might have to block users from unstaking if all the pools are in a waiting period
-    pub unstaked_requested_epoch_height: EpochHeight, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
+    pub unstk_req_epoch_height: EpochHeight, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
 
     //EpochHeight where we asked the sp what were our staking rewards
     pub last_asked_rewards_epoch_height: EpochHeight,
@@ -320,7 +320,7 @@ impl StakingPoolInfo {
             busy_lock: false,
             staked:0,
             unstaked:0,
-            unstaked_requested_epoch_height:0,
+            unstk_req_epoch_height:0,
             last_asked_rewards_epoch_height:0
         }
     }
@@ -405,6 +405,9 @@ pub struct DiversifiedPool {
     //list of pools to diversify in
     pub staking_pools: Vec<StakingPoolInfo>,
 
+    //last epoch we checkd for unstaking-delayed funds to withdraw
+    pub withdraw_unstaked_last_epoch_checked: EpochHeight,
+
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/SKASH Liquidity pool fee curve params
     // We assume this pool is always UNBALANCED, there should be more SKASH than NEAR 99% of the time
@@ -444,7 +447,7 @@ impl DiversifiedPool {
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts.
 
-    3. diversified-staking: these are the extensions to the standard staking pool (buy/sell skash)
+    3. diversified-staking: these are the extensions to the standard staking pool (buy/sell skash, finish_unstake)
 
     4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), tranfer_token(tok), transfer_token_to_contract(tok)
        A [NEP-xxx] manages multiple tokens
@@ -495,6 +498,7 @@ impl DiversifiedPool {
             lp_provider_g_skash_mult_pct: 2000,
 
             staking_pools: Vec::new(),
+            withdraw_unstaked_last_epoch_checked:0,
         };
     }
 
@@ -664,7 +668,7 @@ impl DiversifiedPool {
 
     /// user method
     /// completes unstake action by moving from retreieved_from_the_pools to available
-    pub fn complete_unstaking(&mut self) {
+    pub fn finish_unstaking(&mut self) {
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
         let amount = account.unstaked;
@@ -682,7 +686,7 @@ impl DiversifiedPool {
             panic!("Please wait one more hour until the funds are retrieved from the pools");
         }
 
-        assert!(self.total_for_unstaking > amount);
+        assert!(self.total_for_unstaking >= amount);
 
         //used retrieved funds
         self.total_actually_unstaked_and_retrieved -= amount;
@@ -986,7 +990,7 @@ impl DiversifiedPool {
                 staked: elem.staked.into(),
                 unstaked: elem.unstaked.into(),
                 last_asked_rewards_epoch_height: elem.last_asked_rewards_epoch_height.into(),
-                unstaked_requested_epoch_height: elem.unstaked_requested_epoch_height.into(),
+                unstaked_requested_epoch_height: elem.unstk_req_epoch_height.into(),
             })
         }
         return result;
@@ -1049,17 +1053,25 @@ impl DiversifiedPool {
         self.check_staking_pool_list_consistency();
     }
 
+    //--------------------------------------------------
+    /// computes unstaking dealy on current situation
+    pub fn current_unstaking_delay(&self) -> u16 {
+        for inx in 0..self.staking_pools.len()-1 {
+            //if there's at leas one pool with no unstaking in process, return standard delay
+            if self.staking_pools[inx].staked>0 && self.staking_pools[inx].unstaked==0 { return NUM_EPOCHS_TO_UNLOCK as u16}
+        }
+        //all pools are in unstaking-delay, it will take double
+        return 2* NUM_EPOCHS_TO_UNLOCK as u16; 
+    }
 
     //-----------------------------
     // DISTRIBUTE
     //-----------------------------
 
     /// operator method
-    /// distribute. Do staking & unstaking in batches of at most 100Kn
-    /// called externaly every 30 mins or less if: a) there's a large stake/unstake oper to perform or b) the epoch is about to finish and there are stakes to be made
-    /// returns "true" if there's still more job to do
-
-    pub fn distribute(&mut self) {
+    /// distribute_staking(). Do staking in batches of at most 100Kn
+    /// returns "true" if some work was scheduled
+    pub fn distribute_staking(&mut self) -> bool {
 
         self.assert_owner_calling();
 
@@ -1141,7 +1153,7 @@ impl DiversifiedPool {
                         gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
                     ));
 
-                    return; //just one bit of work
+                    return true; //some work scheduled
                 }
 
                 //here the sp has no unstaked balance, we must deposit_and_stake on the sp
@@ -1171,7 +1183,7 @@ impl DiversifiedPool {
                     gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
                 ));
 
-                return; //just one bit of work
+                return true; //some work scheduled
             }
         }
 
@@ -1215,9 +1227,12 @@ impl DiversifiedPool {
                     gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
                 ));
 
-                return; //just one bit of work
+                return true; //some work scheduled
             }
         }
+
+        //try to complete pending unstakes (recover funds if waiting period has elapsed)
+        return self.internal_async_withdraw_from_a_pool();
     }
 
     //prev fn continues here
@@ -1256,6 +1271,172 @@ impl DiversifiedPool {
         return stake_succeeded;
     }
 
+
+    /// operator method
+    /// distribute_unstaking(). Do unstaking in batches of at most 100Kn
+    /// returns "true" if some work was scheduled
+    pub fn distribute_unstaking(&mut self) -> bool {
+
+        self.assert_owner_calling();
+
+        //let epoch_height = env::epoch_height();
+        // if self.last_epoch_height == epoch_height {
+        //     return false;
+        // }
+        // self.last_epoch_height = epoch_height;
+
+        //-------------------------------------
+        //check if we need to actually un-stake
+        //-------------------------------------
+        let mut amount_to_unstake = 0;
+        if self.total_for_unstaking > self.total_actually_unstaked {
+            //more ordered for unstaking than actually unstaked
+            amount_to_unstake = self.total_for_unstaking - self.total_actually_unstaked;
+        }
+        else {
+            return false;
+        }
+
+        //-------------------------------------
+        //check if we need to stake also
+        //-------------------------------------
+        let mut amount_to_stake = 0;
+        if self.total_for_staking > self.total_actually_staked {
+            //more ordered for staking than actually staked
+            amount_to_stake = self.total_for_staking - self.total_actually_staked;
+        }
+
+        //-----------------------------------------------
+        //internal clearing, no need to talk to the pools
+        //-----------------------------------------------
+        if amount_to_stake > amount_to_unstake {
+            amount_to_stake -= amount_to_unstake;
+            amount_to_unstake = 0;
+            return false;
+        }
+
+        //-----------------------------------
+        //check if we need to actually stake
+        //-----------------------------------
+        if amount_to_stake > 0 {
+            //more ordered for staking than actually staked
+            // do it in batches of 100/150k
+            if amount_to_stake > MAX_NEARS_SINGLE_MOVEMENT {
+                //split movements
+                amount_to_stake = NEARS_PER_BATCH;
+            }
+            let sp_inx = self.get_staking_pool_requiring_stake();
+            if sp_inx != usize::MAX {
+                //most unbalanced pool found & available
+                //launch async stake or deposit_and_stake on that pool
+
+                let sp = &mut self.staking_pools[sp_inx];
+                sp.busy_lock = true;
+
+                if sp.unstaked > 0 {
+                    //pool has unstaked amount
+                    if sp.unstaked < amount_to_stake {
+                        amount_to_stake = sp.unstaked;
+                    }
+                    //launch async stake to re-stake on the pool
+                    assert!(sp.unstaked >= amount_to_stake);
+                    self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if failed)
+                    ext_staking_pool::stake(
+                        amount_to_stake.into(),
+                        &sp.account_id,
+                        NO_DEPOSIT,
+                        gas::staking_pool::STAKE,
+                    )
+                    .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
+                        sp_inx,
+                        amount_to_stake,
+                        false,
+                        &env::current_account_id(),
+                        NO_DEPOSIT,
+                        gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
+                    ));
+
+                    return true; //some work scheduled
+                }
+
+                //here the sp has no unstaked balance, we must deposit_and_stake on the sp
+                //launch async deposit_and_stake on the pool
+                assert!(
+                    env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,
+                    "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_deposit_and_stake"
+                );
+                assert!(
+                    self.total_available >= amount_to_stake,
+                    "self.available {} .LT. amount_to_deposit_and_stake {}", self.total_available, amount_to_stake
+                );
+                self.total_available -= amount_to_stake; //preventively consider the amount sent (undoes if async fails)
+                self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
+
+                ext_staking_pool::deposit_and_stake(
+                    &sp.account_id,
+                    amount_to_stake.into(), //attached amount
+                    gas::staking_pool::DEPOSIT_AND_STAKE,
+                )
+                .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
+                    sp_inx,
+                    amount_to_stake,
+                    true,
+                    &env::current_account_id(),
+                    NO_DEPOSIT,
+                    gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
+                ));
+
+                return true; //some work scheduled
+            }
+        }
+
+        //-------------------------------------
+        //check if we need to actually UN-stake
+        //-------------------------------------
+        if amount_to_unstake > 0 {
+            //more ordered for unstaking than actually unstaked
+            //do it in batches of 100/150k
+            if amount_to_unstake > MAX_NEARS_SINGLE_MOVEMENT {
+                //split movements
+                amount_to_unstake = NEARS_PER_BATCH;
+            }
+            let sp_inx = self.get_staking_pool_requiring_unstake();
+            if sp_inx != usize::MAX {
+                //most unbalanced pool found & available
+                //launch async to unstake
+
+                let sp = &mut self.staking_pools[sp_inx];
+                sp.busy_lock = true;
+
+                //max to unstake is amount staked
+                if sp.staked < amount_to_unstake {
+                    amount_to_unstake = sp.staked;
+                }
+                //launch async to un-stake from the pool
+                assert!(sp.staked >= amount_to_unstake);
+                self.total_actually_staked -= amount_to_unstake; //preventively consider the amount un-staked (undoes if promise fails)
+                self.total_actually_unstaked += amount_to_unstake; //preventively consider the amount un-staked (undoes if promise fails)
+                ext_staking_pool::unstake(
+                    amount_to_unstake.into(),
+                    &sp.account_id,
+                    NO_DEPOSIT,
+                    gas::staking_pool::UNSTAKE,
+                )
+                .then(ext_self_owner::on_staking_pool_unstake(
+                    sp_inx,
+                    amount_to_unstake,
+                    &env::current_account_id(),
+                    NO_DEPOSIT,
+                    gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
+                ));
+
+                return true; //some work scheduled
+            }
+        }
+
+        //try to complete pending unstakes (recover funds if waiting period has elapsed)
+        return self.internal_async_withdraw_from_a_pool();
+    }
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
     pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool {
@@ -1430,7 +1611,7 @@ impl DiversifiedPool {
             weight_basis_points: sp.weight_basis_points,
             staked: sp.staked.into(),
             unstaked: sp.unstaked.into(),
-            unstaked_requested_epoch_height: sp.unstaked_requested_epoch_height.into(),
+            unstaked_requested_epoch_height: sp.unstk_req_epoch_height.into(),
             last_asked_rewards_epoch_height: sp.last_asked_rewards_epoch_height.into(),
         };
     }
