@@ -27,14 +27,19 @@ pub fn assert_min_amount(amount: u128) {
 /***************************************/
 #[near_bindgen]
 impl DiversifiedPool {
+
     pub(crate) fn internal_deposit(&mut self) {
+
         let amount = env::attached_deposit();
         assert_min_amount(amount);
+
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
+
         account.available += amount;
-        self.internal_save_account(&account_id, &account);
         self.total_available += amount;
+
+        self.internal_update_account(&account_id, &account);
 
         env::log(
             format!(
@@ -46,23 +51,29 @@ impl DiversifiedPool {
     }
 
     //------------------------------
-    pub(crate) fn internal_withdraw(&mut self, amount: u128) {
+    pub(crate) fn internal_withdraw(&mut self, amount_requested: u128) {
+        
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
         assert!(
-            acc.available >= amount,
+            acc.available >= amount_requested,
             "Not enough available balance to withdraw the requested amount"
         );
-        acc.available -= amount;
-        if !acc.is_empty() && acc.available < self.min_account_balance {
-            env::log(format!("The min balance is {} NEAR",self.min_account_balance/ONE_NEAR).as_bytes());
-            panic!(b"Min balance required");
-        }
-        self.internal_save_account(&account_id, &acc);
+        let to_withdraw = 
+            if acc.available - amount_requested < ONE_NEAR_CENT/2  //small yotctos remain, withdraw all
+                { acc.available } 
+                else  { amount_requested };
 
-        Promise::new(account_id).transfer(amount);
-        self.total_available -= amount;
+        acc.available -= to_withdraw;
+        assert!( !acc.is_empty() || acc.available >= self.min_account_balance,
+            "The min balance for an open account is {} NEAR. You can remove all funds and close the account",
+            self.min_account_balance/ONE_NEAR);
+
+        self.internal_update_account(&account_id, &acc);
+
+        self.total_available -= to_withdraw;
+        Promise::new(account_id).transfer(to_withdraw);
     }
 
 
@@ -91,15 +102,21 @@ impl DiversifiedPool {
         acc.available -= amount;
         //contract totals
         self.total_stake_shares += num_shares;
-        self.total_available -= amount;
         self.total_for_staking += amount;
+        assert!(self.total_available >= amount,"i_s_Inconsistency");
+        self.total_available -= amount;
 
         //--SAVE ACCOUNT--
-        self.internal_save_account(&account_id, &acc);
+        self.internal_update_account(&account_id, &acc);
+
+        //----------
+        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate skash in the LP by internal-clearing 
+        self.nslp_try_liquidate_skash_by_clearing();
+
     }
 
     //------------------------------
-    pub(crate) fn inner_unstake(&mut self, amount_requested: u128) {
+    pub(crate) fn internal_unstake(&mut self, amount_requested: u128) {
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
@@ -130,22 +147,21 @@ impl DiversifiedPool {
             assert!(num_shares > 0);
             assert!(
                 acc.stake_shares >= num_shares,
-                "inconsistency. Not enough shares to unstake"
+                "Inconsistency. Not enough shares to unstake"
             );
         }
 
         //burn stake shares
-        acc.remove_stake_shares(num_shares, amount_to_unstake);
+        acc.sub_stake_shares(num_shares, amount_to_unstake);
         //the amount is now "unstaked"
         acc.unstaked += amount_to_unstake;
-        acc.unstaked_requested_epoch_height = env::epoch_height(); //when the unstake was requested
+        acc.unstaked_requested_unlock_epoch = env::epoch_height() + self.internal_compute_current_unstaking_delay(amount_to_unstake); //when the unstake will be available
         //--contract totals
         self.total_stake_shares -= num_shares;
-        self.total_for_unstaking += amount_to_unstake;
         self.total_for_staking -= amount_to_unstake;
 
         //--SAVE ACCOUNT--
-        self.internal_save_account(&account_id, &acc);
+        self.internal_update_account(&account_id, &acc);
 
         env::log(
             format!(
@@ -163,6 +179,24 @@ impl DiversifiedPool {
         // );
     }
 
+    //--------------------------------------------------
+    /// computes unstaking delay on current situation
+    pub fn internal_compute_current_unstaking_delay(&self, amount:u128) -> u64 {
+        let mut normal_wait_staked_available:u128 =0;
+        for (_,sp) in self.staking_pools.iter().enumerate() {
+            //if the pool has no unstaking in process
+            if !sp.busy_lock && sp.staked>0 && sp.unstaked==0 { 
+                normal_wait_staked_available += sp.staked;
+                if normal_wait_staked_available > amount {
+                    return NUM_EPOCHS_TO_UNLOCK 
+                }
+            }
+        }
+        //all pools are in unstaking-delay, it will take double the time
+        return 2 * NUM_EPOCHS_TO_UNLOCK; 
+    }
+
+
 
 
     //--------------------------------
@@ -176,7 +210,7 @@ impl DiversifiedPool {
             if num_shares > 0 {
                 let account = &mut self.internal_get_account(&account_id);
                 account.stake_shares += num_shares;
-                &self.internal_save_account(&account_id, &account);
+                &self.internal_update_account(&account_id, &account);
                 // Increasing the total amount of "stake" shares.
                 self.total_stake_shares += num_shares;
                 self.total_for_staking += amount;
@@ -195,23 +229,63 @@ impl DiversifiedPool {
         return amount_from_shares(num_shares, self.total_for_staking, self.total_stake_shares);
     }
 
+    //-----------------------------
+    // NSLP: NEAR/SKASH Liquidity Pool
+    //-----------------------------
+
     // NSLP shares are trickier to compute since the NSLP itself can have SKASH
     pub(crate) fn nslp_shares_from_amount(&self, amount: u128, nslp_account: &Account) -> u128 {
-        let total_near: u128 = nslp_account.available
+        let total_pool_value: u128 = nslp_account.available
             + self.amount_from_stake_shares(nslp_account.stake_shares)
             + nslp_account.unstaked;
-        return shares_from_amount(amount, total_near, nslp_account.nslp_shares);
+        return shares_from_amount(amount, total_pool_value, nslp_account.nslp_shares);
     }
 
     // NSLP shares are trickier to compute since the NSLP itself can have SKASH
     pub(crate) fn amount_from_nslp_shares(&self, num_shares: u128, nslp_account: &Account) -> u128 {
-        let total_near: u128 = nslp_account.available
+        let total_pool_value: u128 = nslp_account.available
             + self.amount_from_stake_shares(nslp_account.stake_shares)
             + nslp_account.unstaked;
-        return amount_from_shares(num_shares, total_near, nslp_account.nslp_shares);
+        return amount_from_shares(num_shares, total_pool_value, nslp_account.nslp_shares);
     }
 
-    /// NEAR/SKASH Liquidity Pool
+    //----------------------------------
+    // The LP acquires skash providing the sell-skash service
+    // The LP needs to unstake the skash ASAP, to recover liquidity and to keep the fee low.
+    // The LP can use staking orders to fast-liquidate its skash by clearing.
+    // returns true if it uses the clearing to liquidate
+    // ---------------------------------
+    pub(crate) fn nslp_try_liquidate_skash_by_clearing(&mut self) -> bool {
+        if self.total_for_staking <= self.total_actually_staked {
+            //nothing ordered to be actually staked
+            return false;
+        }
+        let amount_to_stake:u128 =  self.total_for_staking - self.total_actually_staked;
+        let mut nslp_account = self.internal_get_nslp_account();
+        if nslp_account.stake_shares > 0 {
+            //how much skash does the nslp have?
+            let valued_stake_shares = self.amount_from_stake_shares(nslp_account.stake_shares);
+            //how much can we liquidate?
+            let (shares_to_liquidate, amount_to_liquidate) =
+                if amount_to_stake >= valued_stake_shares  { 
+                    ( nslp_account.stake_shares, valued_stake_shares )
+                } 
+                else { 
+                    ( self.stake_shares_from_amount(amount_to_stake), amount_to_stake )
+                };
+            //nslp sells-skash directly, contract now needs to stake less
+            nslp_account.sub_stake_shares(shares_to_liquidate, amount_to_liquidate);
+            self.total_stake_shares -= shares_to_liquidate;
+            self.total_for_staking -= amount_to_liquidate; //nslp has burned shares, total_for_staking is less now
+            self.total_available += amount_to_liquidate; // amount returns to total_available (since it was never staked to begin with)
+            nslp_account.available += amount_to_liquidate; //nslp has more available now
+            //save account
+            self.internal_save_nslp_account(&nslp_account);
+            return true;
+        }        
+        return false;
+    }
+
     /// computes the disocunt_basis_points for NEAR/SKASH Swap based on NSLP Balance
     pub(crate) fn internal_get_discount_basis_points(
         &self,
@@ -231,17 +305,21 @@ impl DiversifiedPool {
         }
 
         let near_after = available_near - max_nears_to_pay;
+
         if near_after < self.nslp_near_target / 20 {
-            return self.nslp_max_discount_basis_points;
-        } //very low near, discount capped at max%
+            return self.nslp_max_discount_basis_points; // 1/20 (5%) target, discount capped at max%
+        } 
+
         let discount_basis_plus_100 = self.nslp_near_target * 100 / near_after;
         if discount_basis_plus_100 <= 100 + u128::from(self.nslp_min_discount_basis_points) {
-            return self.nslp_min_discount_basis_points;
-        } // target reached or surpassed
+            return self.nslp_min_discount_basis_points; // target reached or surpassed
+        } 
+
         let discount_basis_points = discount_basis_plus_100 - 100;
         if discount_basis_points > u128::from(self.nslp_max_discount_basis_points) {
-            return self.nslp_max_discount_basis_points;
-        } //capped at max%
+            return self.nslp_max_discount_basis_points; //capped at max%
+        } 
+
         return discount_basis_points as u16;
     }
 
@@ -274,11 +352,11 @@ impl DiversifiedPool {
 
     /// Inner method to save the given account for a given account ID.
     /// If the account balances are 0, the account is deleted instead to release storage.
-    pub(crate) fn internal_save_account(&mut self, account_id: &String, account: &Account) {
+    pub(crate) fn internal_update_account(&mut self, account_id: &String, account: &Account) {
         if account.is_empty() {
             self.accounts.remove(account_id);
         } else {
-            self.accounts.insert(account_id, &account);
+            self.accounts.insert(account_id, &account); //insert_or_update
         }
     }
 
@@ -288,95 +366,15 @@ impl DiversifiedPool {
             .get(&NSLP_INTERNAL_ACCOUNT.into())
             .unwrap_or_default()
     }
-
-    //----------------------------------
-    // Heartbeat & Talking to the pools
-    // ---------------------------------
-
-    /// checks if there's a pending wtihdrawal from any of the pools
-    /// and then launchs a withdrawal call
-    /// returns true if it should be called again in this epoch
-    pub(crate) fn internal_async_withdraw_from_a_pool(&mut self) -> bool {
-
-        let current_epoch = env::epoch_height();
-        if self.withdraw_unstaked_last_epoch_checked==current_epoch { return false};
-
-        self.withdraw_unstaked_last_epoch_checked=current_epoch;
-
-        //becomes true if there's some funds to recover, even if the sp is busy and no work is scheduled
-        let mut should_be_called_again_this_epoch = false;
-
-        for (sp_inx, sp) in self.staking_pools.iter_mut().enumerate() {
-            // if the pool is not busy, and we unstaked and the waiting period has elapsed
-            if  sp.unstaked > 0
-                && sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= current_epoch
-            {
-                should_be_called_again_this_epoch = true;
-
-                if !sp.busy_lock {
-
-                    sp.busy_lock = true;
-
-                    //launch withdraw
-                    ext_staking_pool::withdraw(
-                        sp.unstaked.into(),
-                        &sp.account_id,
-                        NO_DEPOSIT,
-                        gas::staking_pool::WITHDRAW,
-                    )
-                    .then(ext_self_owner::on_staking_pool_withdraw(
-                        sp_inx,
-                        &env::current_account_id(),
-                        NO_DEPOSIT,
-                        gas::owner_callbacks::ON_STAKING_POOL_WITHDRAW,
-                    ));
-
-                    break; //just one non-busy pool
-                }
-            }
-        }
-
-        return should_be_called_again_this_epoch;
-        
+    pub(crate) fn internal_save_nslp_account(&mut self, nslp_account: &Account) {
+        self.internal_update_account(&NSLP_INTERNAL_ACCOUNT.into(), &nslp_account);
     }
 
-    //prev fn continues here
-    /// This method needs to update staking pool busyLock
-    pub fn on_staking_pool_withdraw(&mut self, sp_inx: usize) -> bool {
-        assert_callback_calling();
-        let sp = &mut self.staking_pools[sp_inx];
-        sp.busy_lock = false;
-        let amount = sp.unstaked; //we retrieved all
-
-        let withdraw_succeeded = is_promise_success();
-
-        let result: &str;
-        if withdraw_succeeded {
-            result = "succeeded";
-            sp.unstaked -= amount; //no more unstaked in the pool
-
-            //move from total_actually_unstaked to total_actually_unstaked_and_retrieved
-            assert!(self.total_actually_unstaked <= amount);
-            self.total_actually_unstaked -= amount;
-            self.total_actually_unstaked_and_retrieved += amount; //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls finish_unstaking
-        } 
-        else {
-            result = "has failed";
-        }
-        env::log(
-            format!(
-                "The withdrawal of {} from @{} {}",
-                amount, &sp.account_id, result
-            )
-            .as_bytes(),
-        );
-        return withdraw_succeeded;
-    }
 
     /// finds a staking pool requiring some stake to get balanced
-    /// WARN: returns usize::MAX if no pool requires staking/all are busy
-    pub(crate) fn get_staking_pool_requiring_stake(&self) -> usize {
-        let mut max_required_amount: u128 = 0;
+    /// WARN: (returns usize::MAX,0) if no pool requires staking/all are busy
+    pub(crate) fn get_staking_pool_requiring_stake(&self, total_to_stake:u128) -> (usize,u128) {
+        let mut selected_to_stake_amount: u128 = 0;
         let mut selected_sp_inx: usize = usize::MAX;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
@@ -389,21 +387,31 @@ impl DiversifiedPool {
                     // how much?
                     let require_amount = should_have - sp.staked;
                     // is this the most unbalanced pool so far?
-                    if require_amount > max_required_amount {
-                        max_required_amount = require_amount;
+                    if require_amount > selected_to_stake_amount {
+                        selected_to_stake_amount = require_amount;
                         selected_sp_inx = sp_inx;
                     }
                 }
             }
         }
 
-        return selected_sp_inx;
+        if selected_to_stake_amount>0 {
+            //to avoid moving small amounts, if the remainder is less than 1K increase amount to include all in this movement
+            if selected_to_stake_amount > total_to_stake { selected_to_stake_amount = total_to_stake };
+            let remainder = total_to_stake - selected_to_stake_amount;
+            if remainder <= MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT { 
+                selected_to_stake_amount += remainder 
+            };
+        }
+
+        return (selected_sp_inx, selected_to_stake_amount);
     }
 
     /// finds a staking pool requireing some stake to get balanced
-    /// WARN: returns usize::MAX if no pool requires staking/all are busy
-    pub(crate) fn get_staking_pool_requiring_unstake(&self) -> usize {
-        let mut max_required_amount: u128 = 0;
+    /// WARN: returns (usize::MAX,0) if no pool requires staking/all are busy
+    pub(crate) fn get_staking_pool_requiring_unstake(&self, total_to_unstake:u128) -> (usize,u128) {
+        let mut selected_to_unstake_amount: u128 = 0;
+        let mut selected_stake: u128 = 0;
         let mut selected_sp_inx: usize = usize::MAX;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
@@ -414,18 +422,28 @@ impl DiversifiedPool {
                 // does this pool requires un-staking? (has too much staked?)
                 if sp.staked > should_have {
                     // how much?
-                    let require_amount = sp.staked - should_have;
+                    let unstake_amount = sp.staked - should_have;
                     // is this the most unbalanced pool so far?
-                    if require_amount > max_required_amount {
-                        max_required_amount = require_amount;
+                    if unstake_amount > selected_to_unstake_amount {
+                        selected_to_unstake_amount = unstake_amount;
+                        selected_stake = sp.staked;
                         selected_sp_inx = sp_inx;
                     }
                 }
             }
         }
 
-        return selected_sp_inx;
+        if selected_to_unstake_amount>0 {
+            if selected_to_unstake_amount > total_to_unstake { 
+                selected_to_unstake_amount = total_to_unstake 
+            };
+            //to avoid moving small amounts, if the remainder is less than 1K and this pool can accomodate, increase amount
+            let remainder = total_to_unstake - selected_to_unstake_amount;
+            if remainder<=MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT && selected_stake>selected_to_unstake_amount+remainder+2*MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT { 
+                selected_to_unstake_amount += remainder 
+            };
+        }
+        return (selected_sp_inx, selected_to_unstake_amount);
     }
-
 
 }

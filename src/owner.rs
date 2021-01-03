@@ -154,10 +154,7 @@ impl DiversifiedPool {
             // Now add fees & shares to the pool preserving current share value
             // adds to self.total_actually_staked, self.total_for_staking & self.total_stake_shares;
             &self.add_amount_and_shares_preserve_share_price(DEVELOPERS_ACCOUNT_ID.into(), author_fee);
-            &self.add_amount_and_shares_preserve_share_price(
-                self.operator_account_id.clone(),
-                owner_fee,
-            );
+            &self.add_amount_and_shares_preserve_share_price(self.operator_account_id.clone(),owner_fee);
 
             // rest of rewards go into total_actually_staked increasing share value
             assert!(rewards > author_fee + owner_fee);

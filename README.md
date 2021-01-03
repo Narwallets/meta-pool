@@ -4,41 +4,46 @@
 What this is? and other non-Technical Documentation
 [CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
 
-
 ## Technical Documentation
+[Technical Notes](https://narwallets.github.io/diversifying-staking-pool/technical-notes)
 
 ### Repositories 
 
-This is the Smart Contract repository. The Web UI is at https://github.com/Narwallets/dapp-diversifying-staking-pool.git
+This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/dapp-diversifying-staking-pool.git
 
 ### Change Log
-
-#### `0.2.0`
-
-- TO DO
-- [ ] SKASH Liquidity Pool
-
 #### `0.1.0`
 
 - Initial version by github.com/luciotato based on core-contracts/lockup and core-contracts/staking-pool
 
 ### TO DO
 
-TODO & Issues # 
+#### Bounties
+There are Bounties!!!! check https://github.com/Narwallets/bounties
 
-#### View methods
- - [x] List selected staking pools, getting weight, staked & unstaked
-
-#### User methods
- - [ ] act as a NEP-21 with staked as SKASHs
- - [ ] act as a NEP-xxx (multi-token with trasnfer-to-contract) with staked as SKASHs
- - [ ] Become an Luidity Provider, enter-exit the liquidity pool
-
-#### Owner's method
- - [ ] Set staking pool [i] account_id & weight => verify [i] is empty or current at [i] not busy|staked. whitelist new staking_pool, assign
- - [ ] Alter staking pool [i] weight => verify [i] is occupied & not busy. assign weight
+#### Smart Contract  
+ - [x] Deposit/withdraw
+ - [x] Buy Skash/Stake
+ - [x] Sell SKASH/immediate unstake
+ - [x] Classic unstake-wait-finish-unstake
+ - [x] User trip-meter, measure rewards
+ - [x] distribute staking/unstaking
+ - [x] retrieve unstaked and ready
+ - [x] NEAR/SKASH Liquidity Pool, Add/Remove liquidity
+ - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token with transfer-to-contract). Implement for NEAR, SKASH and G-SKASH
 
 #### Test
- - [ ] Unit tests for all the new functionality
- - [ ] Simulation tests for all new functionality
+ - [ ] Unit Tests
+ - [ ] Simulation tests
+
+#### Staking pool list
+ - [x] List selected staking pools, getting weight, staked & unstaked
+ - [x] add a staking pool, set weight
+
+#### Governing
+ - [x] Mint and distribute G-SKASH with rewards
+ - [ ] Phase II - Governing DAO
+
+#### Infrastructure
+- [ ] External chron to call distribute()
 

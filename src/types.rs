@@ -3,13 +3,10 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{AccountId};
 use uint::construct_uint;
 
-/// The contract keeps at least 35 NEAR in the account to avoid being transferred out to cover
-/// contract code storage and some internal state.
-pub const MIN_BALANCE_FOR_STORAGE: u128 = 35_000_000_000_000_000_000_000_000;
-
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+pub const ONE_NEAR_CENT: u128 = ONE_NEAR/100;
 pub const TWO_NEAR: u128 = 2 * ONE_NEAR;
 pub const FIVE_NEAR: u128 = 5 * ONE_NEAR;
 pub const TEN_NEAR: u128 = 10 * ONE_NEAR;
@@ -18,6 +15,12 @@ pub const NEARS_PER_BATCH: u128 = 10*NEAR_1K; // if amount>MAX_NEARS_SINGLE_MOVE
 pub const MAX_NEARS_SINGLE_MOVEMENT: u128 = NEARS_PER_BATCH + NEARS_PER_BATCH/2; //150K max movement, if you try to stake 151K, it will be split into 2 movs, 100K and 51K
 
 pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 0; //0 for testing in guidlnet, 4 for mainnet & testnet;
+
+/// The contract keeps at least 35 NEAR in the account to avoid being transferred out to cover
+/// contract code storage and some internal state.
+pub const MIN_BALANCE_FOR_STORAGE: u128 = 35_000_000_000_000_000_000_000_000;
+/// if the remainder falls below this amount, it's included in the current movement
+pub const MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT: u128 = NEAR_1K;
 
 //cut on swap fees
 pub const DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS : u16 = 2500; // 25% swap fees go to Treasury
@@ -102,19 +105,19 @@ pub struct GetAccountInfoResult {
     pub skash: U128,
     /// The amount unstaked waiting for withdraw
     pub unstaked: U128,
-    /// The epoch height when the unstaked was requested
-    /// The fund will be locked for NUM_EPOCHS_TO_UNLOCK epochs
-    /// unlock epoch = unstaked_requested_epoch_height + NUM_EPOCHS_TO_UNLOCK 
-    pub unstaked_requested_epoch_height: U64,
-    ///if env::epoch_height()>=account.unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
+
+    /// The epoch height when the unstaked will be available
+    pub unstaked_requested_unlock_epoch: U64,
+    ///if env::epoch_height()>=unstaked_requested_unlock_epoch
     pub can_withdraw: bool,
+    
     /// total amount the user holds in this contract: account.available + account.staked + current_rewards + account.unstaked
     pub total: U128,
 
     //-- STATISTICAL DATA --
     // User's statistical data
     // These fields works as a car's "trip meter". The user can reset them to zero.
-    /// trip_start: (timpestamp in nanoseconds) this field is set at account creation, so it will start metering rewards
+    /// trip_start: (unix timpestamp) this field is set at account creation, so it will start metering rewards
     pub trip_start: U64,
     /// How many skashs the user had at "trip_start". 
     pub trip_start_skash: U128,
@@ -153,24 +156,23 @@ pub struct GetContractStateResult {
     /// not necessarily what's actually staked since staking can is done in batches
     /// Share price is computed using this number. share_price = total_for_staking/total_shares
     pub total_for_staking: U128,
+
     /// The total amount of tokens actually staked (the tokens are in the staking pools)
     /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets unstaked in 100kN batches
     pub total_actually_staked: U128,
+
     // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
     pub total_stake_shares: U128,
 
-    /// The total amount of tokens selected for unstaking by the users 
-    /// not necessarily what's actually unstaked since unstaking is done in batches
-    /// If a user ask unstaking 100: total_for_unstaking+=100, total_for_staking-=100, total_stake_shares-=share_amount
-    pub total_for_unstaking: U128,
     /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
-    /// During heartbeat(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
-    pub total_actually_unstaked: U128,
+    /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
+    pub total_unstaked_and_waiting: U128,
+
     /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// During heartbeat(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
+    /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
     /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
     pub total_actually_unstaked_and_retrieved: U128,
 
