@@ -36,8 +36,10 @@ There are Bounties!!!! check https://github.com/Narwallets/bounties
  - [x] retrieve unstaked and ready
  - [x] NEAR/SKASH Liquidity Pool, Add/Remove liquidity
  - [x] clearing mechanism on stake to restore liquidity in the NSLP
- - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token with transfer-to-contract). Implement for NEAR, SKASH and G-SKASH
+ - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token contract). Implement for NEAR, SKASH and G-SKASH
  - [ ] Dividends-pool SKASH/G-SKASH
+ - [ ] Staking-loans to whitelisted validators
+ - [ ] Emergency Staking (from the nslp) to whitelisted validators
 
 #### Test
  - [ ] Unit Tests

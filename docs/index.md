@@ -2,28 +2,28 @@
 
 ## Overview
 
-This contract provides the following value items:
+This contract provides the following value items for the NEAR community:
 
-#### Helps you to avoid Putting All your Eggs in One Basket
-* This contract acts as an staking-pool but distributes it's delegated funds in several validators. By delegating to this contract, you greatly reduce the risk of getting no-rewards because validators' outage events. Besides rewards, by staking you wil receive governance tokens: G-SKASH
+#### Helps stakers to avoid putting all eggs in one basket
+* This contract acts as an staking-pool but distributes it's delegated funds in several validators. By delegating to this contract, you greatly reduce the risk of getting no-rewards because validators' outage events and you contribute to network decentralization. Besides rewards, by staking you wil receive governance tokens: G-SKASH
 
 #### Provides immediate unstake 
 * This contract allows users to skip the waiting period after unstaking by providing a liquidity pool for inmediate unstaking. This also creates the opportunity for liquidity providers to earn fees for this service. 
 
 #### Contributes to decentralization for the NEAR network
-* This contract helps decentralization by distributing it's delegated funds in several validators. If you own a lockup-contract with considerable funds, you can contribute to the network decentralization automatically by using this contract. Your funds will be automatically distributed between several validators.
+* This contract helps decentralization by distributing it's delegated funds in several validators. If you own a lockup-contract with considerable funds, you can greatly contribute to the network decentralization and reduce your risk by using this contract. Your funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
 
 #### Creates new Liquidity Pools
 * This contract includes several liquidity pools and the opportunity for liquidity providers to earn fees. The main pool is the NEAR/SKASH pool that provides immediate unstake (sell SKASH) for a fee 0.5-10%. There will be other pools like the SKASH/G-SKASH for the the governance tokens.
 
 #### Creates a safety-net to avoid losing validators on the seat-price cliff 
-* This contract will allow struggling validators to keep a seat and keep validating in case of sudden rises in seat-price. There will be staking-loans available for whitelisted validators and also emergencys stakes from the liquidity pool. Pools requiring staking-loan will have to pay 8-epoch rewards in advance. All fees wil be distributed as rewards between the SKASH holders or the Liquidity providers.
+* This contract will allow struggling validators to keep a seat and keep validating in case of sudden rises in seat-price. There will be staking-loans available for whitelisted validators and also emergencys stakes from the liquidity pool. Pools requiring staking will have to pay 8-epoch rewards in advance. All fees wil be distributed as rewards between the SKASH holders or the Liquidity providers.
 
 ## SKASH Tokens
 
 This contract allows users to manage staked near as a TOKEN, called **SKASH**.
 
-SKASHs repesent staked NEARS, and can be transferred between users and sold for NEAR in the NEAR/SKASH Liquidity Pool (paying a fee to skip the unstaking wait period). The amount of SKASH you hold is automatically incremented each epoch when staking rewards are paid. This contract also includes a Trip-meter functionality, so you can preciseliy measure rewards received.
+SKASHs repesent staked NEARS, and can be transferred between users and sold for NEAR in the NEAR/SKASH Liquidity Pool (paying a fee to skip the unstaking wait period). The amount of SKASH you hold is automatically incremented each epoch when staking rewards are paid. This contract also includes a trip-meter functionality, so you can preciseliy measure rewards received.
 
 ## Immediate Unstakings
 
@@ -47,7 +47,7 @@ By implementing the standard-staking-pool trait, *lockup contracts* can delegate
 
 ## Decentralization
 
-This contract helps the community by increasing decentralization, spliting large sums automatically betweeen several validators.
+This contract helps the community by increasing decentralization, spliting stake automatically betweeen several validators, and also rescuing validators falling from the seat-price cliff.
 
 
 ## Technical details
@@ -56,7 +56,7 @@ The contract pools all users' funds and keeps a balanced distribution of those f
 
 Staking and unstaking distribution is done by periodically calling `distribute_staking()/distribute_unstaking()`, so actual staking and unstaking are delayed. 
 
-Users can choose to "sell" some of their SKAHS (stake_shares) to Liquidity Providers for a fee. Liquidity Providers get the SKASH+fee and deliver NEAR. No stake/unstake ins performed in those cases.
+Users can choose to "sell" some of their SKAHS (stake_shares) to Liquidity Providers for a fee. Liquidity Providers get the SKASH+fee and deliver NEAR. No stake/unstake is performed at that point.
 ### Guarantees
 
 (To verify)
