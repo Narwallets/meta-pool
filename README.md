@@ -2,6 +2,7 @@
 
 ## Overview
 What this is? and other non-Technical Documentation
+
 [CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
 
 ## Technical Documentation
@@ -14,9 +15,13 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 ### Change Log
 #### `0.1.0`
 
-- Initial version by github.com/luciotato based on core-contracts/lockup and core-contracts/staking-pool
+- Initial version based on core-contracts/lockup and core-contracts/staking-pool
+- Deposit, withdraw
+- Distributed stake/unstake
+- NEAR/SKASH liquidity pool, Add/Remove liquidity
+- G-SKASH Minting wtih rewards
 
-### TO DO
+### TO DO & Help needded
 
 #### Bounties
 There are Bounties!!!! check https://github.com/Narwallets/bounties
@@ -30,7 +35,9 @@ There are Bounties!!!! check https://github.com/Narwallets/bounties
  - [x] distribute staking/unstaking
  - [x] retrieve unstaked and ready
  - [x] NEAR/SKASH Liquidity Pool, Add/Remove liquidity
+ - [x] clearing mechanism on stake to restore liquidity in the NSLP
  - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token with transfer-to-contract). Implement for NEAR, SKASH and G-SKASH
+ - [ ] Dividends-pool SKASH/G-SKASH
 
 #### Test
  - [ ] Unit Tests
@@ -46,4 +53,7 @@ There are Bounties!!!! check https://github.com/Narwallets/bounties
 
 #### Infrastructure
 - [ ] External chron to call distribute()
+- [ ] compute remainig epoch time
+- [ ] withelist pools before adding them
+- [ ] auto-unstake SKASH in the NSLP (when the clearing mechanism is not enough)
 
