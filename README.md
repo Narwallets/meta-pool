@@ -23,8 +23,6 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 
 ### TO DO & Help needded
 
-#### Bounties
-There are Bounties!!!! check https://github.com/Narwallets/bounties
 
 #### Smart Contract  
  - [x] Deposit/withdraw
