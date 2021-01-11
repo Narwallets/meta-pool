@@ -66,8 +66,8 @@ pub struct NEP129Response {
     pub developersAccountId:String,
     pub source:String,
     pub standards:Vec<String>,
-    pub webAppUrl:String,
-    pub auditorAccountId:String,
+    pub webAppUrl:Option<String>,
+    pub auditorAccountId:Option<String>,
 }
 
 /// Rewards fee fraction structure for the staking pool contract.

@@ -27,6 +27,7 @@ pub mod utils;
 
 pub mod internal;
 pub mod owner;
+pub mod multi_fun_token;
 
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
@@ -74,6 +75,7 @@ pub trait ExtDivPoolContractOwner {
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
     fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
+
 }
 
 // -----------------
@@ -339,9 +341,9 @@ pub struct DiversifiedPool {
     /// can be adjusted down by keeping the required NEAR in the developers or operator account
     pub min_account_balance: u128,
 
-    // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    pub web_app_url: String, 
-    pub auditor_account_id: String,
+    // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    pub web_app_url: Option<String>, 
+    pub auditor_account_id: Option<String>,
 
     /// This amount increments with deposits and decrements when users stake
     /// increments with finish_unstake and decrements with user withdrawals from the contract
@@ -464,8 +466,8 @@ impl DiversifiedPool {
             operator_account_id,
             treasury_account_id,
             min_account_balance: ONE_NEAR,
-            web_app_url: DEFAULT_WEB_APP_URL.into(),
-            auditor_account_id: DEFAULT_AUDITOR_ACCOUNT_ID.into(),
+            web_app_url: Some(String::from(DEFAULT_WEB_APP_URL)),
+            auditor_account_id: Some(String::from(DEFAULT_AUDITOR_ACCOUNT_ID)),
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
             operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
             treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
@@ -683,7 +685,7 @@ impl DiversifiedPool {
 
         //use retrieved funds
         // moves from total_actually_unstaked_and_retrieved to total_available
-        assert!(self.total_actually_unstaked_and_retrieved >= amount, "Funds are not yet availabe due to unstaking delay");
+        assert!(self.total_actually_unstaked_and_retrieved >= amount, "Funds are not yet available due to unstaking delay");
         self.total_actually_unstaked_and_retrieved -= amount;
         self.total_available += amount;
         // in the account, moves from unstaked to available
@@ -1311,12 +1313,14 @@ impl DiversifiedPool {
         //return promise
         return ext_staking_pool::withdraw(
             sp.unstaked.into(),
+            //promise params:
             &sp.account_id,
             NO_DEPOSIT,
             gas::staking_pool::WITHDRAW,
         )
         .then(ext_self_owner::on_staking_pool_withdraw(
             inx,
+            //promise params:
             &env::current_account_id(),
             NO_DEPOSIT,
             gas::owner_callbacks::ON_STAKING_POOL_WITHDRAW,
@@ -1422,10 +1426,18 @@ impl DiversifiedPool {
             version:CONTRACT_VERSION.into(),
             developersAccountId:DEVELOPERS_ACCOUNT_ID.into(),
             source:"https://github.com/Narwallets/diversifying-staking-pool".into(), 
-            standards:vec!("NEP-129".into()),  
+            standards:vec!("NEP-129".into(),"NEP-138".into()),  
             webAppUrl:self.web_app_url.clone(),
-            auditorAccountId:self.auditor_account_id.clone()
+            auditorAccountId: self.auditor_account_id.clone()
         }
+    }
+
+    /// sets confirgurable contract info [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    // Note: params are not Option<String> so the user cannot inadvertely set null to data by not including the argument
+    pub fn set_contract_info(&mut self, web_app_url:String, auditor_account_id:String) {
+        self.assert_owner_calling();
+        self.web_app_url = if web_app_url.len()>0 { Some(web_app_url) } else { None };
+        self.auditor_account_id = if auditor_account_id.len()>0 { Some(auditor_account_id) } else { None };
     }
 
     /// get contract totals 
@@ -1470,7 +1482,7 @@ impl DiversifiedPool {
             };
     }
 
-    /// Returns JSON representation of contract parameters
+    /// Sets contract parameters 
     pub fn set_contract_params(&mut self, params:ContractParamsJSON) {
 
         self.assert_owner_calling();

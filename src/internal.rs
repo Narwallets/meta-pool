@@ -446,4 +446,37 @@ impl DiversifiedPool {
         return (selected_sp_inx, selected_to_unstake_amount);
     }
 
+    // MULTI FUN TOKEN [NEP-138](https://github.com/near/NEPs/pull/138)
+    /// Transfer `amount` of tok tokens from the caller of the contract (`predecessor_id`) to `receiver_id`.
+    /// Requirements:
+    /// * receiver_id must pre-exist
+    pub fn internal_multifuntok_transfer(&mut self, sender_id: &AccountId, receiver_id: &AccountId, symbol:&String, am: u128) {
+        let mut sender_acc = self.internal_get_account(&sender_id);
+        let mut receiver_acc = self.internal_get_account(&receiver_id);
+        match &symbol as &str {
+            "NEAR" => {
+                assert!(sender_acc.available >= am, "not enough NEAR at {}",sender_id);
+                sender_acc.available -= am;
+                receiver_acc.available += am;
+            }
+            "SKASH" => {
+                let skash = self.amount_from_stake_shares(sender_acc.stake_shares);
+                assert!(skash >= am,"not enough SKASH at {}",sender_id);
+                let shares = self.stake_shares_from_amount(am);
+                assert!(sender_acc.stake_shares <= shares,"IC");
+                sender_acc.stake_shares -= shares;
+                receiver_acc.stake_shares += shares;
+            }
+            "G-SKASH" => {
+                sender_acc.stake_realize_g_skash(self);
+                assert!(sender_acc.realized_g_skash >= am,"not enough G-SKASH at {}",sender_id);
+                sender_acc.realized_g_skash -= am;
+                receiver_acc.realized_g_skash += am;
+            }
+            _ => panic!("invalid symbol")
+        }
+        self.internal_update_account(&sender_id, &sender_acc);
+        self.internal_update_account(&receiver_id, &receiver_acc);
+    }
+
 }
