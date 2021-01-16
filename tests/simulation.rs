@@ -15,8 +15,9 @@ use near_sdk_sim::{
 };
 
 // //Note: the struct xxxxxxContract is created by #[near_bindgen] (near_skd_rs~2.0.4)
-use divpool::{DiversifiedPool,DiversifiedPoolContract};
+use divpool::*;
 
+use staking_pool::*;
 // Load contracts' bytes.
 near_sdk_sim::lazy_static! {
   static ref WASM_BYTES: &'static [u8] = include_bytes!("../res/divpool.wasm").as_ref();
