@@ -7,14 +7,11 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'diversifying-staking-pool'",
+            "name": "Debug unit tests in library 'divpool'",
             "cargo": {
                 "args": [
                     "+nightly",
-                    "test",
-                    "--no-run",
-                    "--lib",
-                    "--package=diversifying-staking-pool"
+                    "test"
                 ],
                 /*"filter": {
                     "name": "diversifying-staking-pool",
@@ -22,8 +19,31 @@
                 }
                 */
             },
-            "args": [],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Debug Simulation Tests",
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "program": "target/debug/deps/tests-78512ce406ce79d4",
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "sourceLanguages": [
+              "rust"
+            ]
+        },
+        {
+            "name": "Run Simulation Tests",
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "program": "target/debug/deps/tests-78512ce406ce79d4",
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "sourceLanguages": [
+              "rust"
+            ]
         }
     ]
 }

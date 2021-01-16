@@ -117,11 +117,10 @@ G-SKASH holders can vote on:
 * Operational costs fee
 * Maintenance funds redirections
 * Move treasury funds in/out of the G-SKASH dividends-pool
-* `distribute()` Batch stake size. By default 100-150K NEAR
 * G-SKASH mint reward multiplier for:
   * SKASH-sellers/immediate unstake (default 1 G-SKASH per each discounted NEAR)
-  * Stakers (default 5 G-SKASH per * staking reward)
-  * LP-providers (default 20 G-SKASH * fee received)
+  * Stakers (default 5 G-SKASH per each SKASH of staking reward)
+  * LP-providers (default 20 G-SKASH per each SKASH fee received)
 * Approve stake-loans to struggling validators
 
 Half of treasury funds must be used for DAO expansion and maintenance. The other 50% can be user for expansion by presenting proposals, o can be moved to the dividends-pool (once a month). 

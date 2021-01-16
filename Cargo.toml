@@ -1,5 +1,5 @@
 [package]
-name = "diversifying-staking-pool"
+name = "divpool"
 version = "0.1.0"
 authors = ["Narwallets.com <hello@narwallets.com>"]
 edition = "2018"
@@ -8,7 +8,8 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = "2.0.0"
+#near-sdk = "2.0.1"
+near-sdk = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
 uint = { version = "0.8.3", default-features = false }
 
 [profile.release]
@@ -28,4 +29,5 @@ log = "0.4"
 env_logger = { version = "0.7.1", default-features = false }
 near-crypto = { git = "https://github.com/nearprotocol/nearcore.git" }
 near-primitives = { git = "https://github.com/nearprotocol/nearcore.git" }
-near-runtime-standalone = { git = "https://github.com/nearprotocol/nearcore.git" }
+#near-runtime-standalone = { git = "https://github.com/nearprotocol/nearcore.git" }
+near-sdk-sim = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }

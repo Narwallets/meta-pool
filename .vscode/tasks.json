@@ -2,6 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "build WASM",
 			"type": "shell",
 			"command": "./build.sh",
 			"problemMatcher": [
@@ -11,11 +12,19 @@
 				"kind": "build",
 				"isDefault": true,
 			},
-			"label": ". build.sh"
 		},
 		{
 			"type": "shell",
-			"command": "cargo +nightly test",
+			"command": "cargo test",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "cargo test -- --nocapture"
+		},
+		{
+			"type": "shell",
+			"label": "simulation test",
+			"command": "cargo test -- --nocapture",
 			"problemMatcher": [
 				"$rustc"
 			],
@@ -23,7 +32,7 @@
 				"kind": "test",
 				"isDefault": true,
 			},
-			"label": "cargo +nightly test"
+			"dependsOn":["build WASM"]
 		}
 	]
 }

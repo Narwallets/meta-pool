@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
 
-RUSTFLAGS='-C link-arg=-s' cargo +stable build --target wasm32-unknown-unknown --release
-cp target/wasm32-unknown-unknown/release/diversifying_staking_pool.wasm res/
+RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-unknown-unknown --release
+cp target/wasm32-unknown-unknown/release/divpool.wasm res/
 

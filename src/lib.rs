@@ -8,26 +8,30 @@
 // see also pub fn get_contract_info
 const CONTRACT_NAME: &str = "diversifying staking pool";
 const CONTRACT_VERSION: &str = "0.1.0";
-const DEFAULT_WEB_APP_URL: &str = "http://div-pool.narwallets.com";
+const DEFAULT_WEB_APP_URL: &str = "http://divpool.narwallets.com";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
-use near_sdk::Promise;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::{collections::UnorderedMap, env, ext_contract, near_bindgen, AccountId};
 
 pub use crate::internal::*;
 pub use crate::owner::*;
+pub use crate::getters::*;
 pub use crate::types::*;
 pub use crate::utils::*;
 
 pub mod gas;
 pub mod types;
 pub mod utils;
+pub mod getters;
 
+pub mod distribute;
 pub mod internal;
 pub mod owner;
 pub mod multi_fun_token;
+
+pub mod simulation_support;
 
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
@@ -972,565 +976,26 @@ impl DiversifiedPool {
     }
 
 
-    //---------------------------------
-    // staking-pools-list (SPL) management
-    //---------------------------------
 
-    /// get the current list of pools
-    pub fn get_staking_pool_list(&self) -> Vec<StakingPoolJSONInfo> {
-        let mut result = Vec::with_capacity(self.staking_pools.len());
-        for elem in self.staking_pools.iter(){
-            result.push(StakingPoolJSONInfo{
-                account_id: elem.account_id.clone(),
-                weight_basis_points: elem.weight_basis_points,
-                staked: elem.staked.into(),
-                unstaked: elem.unstaked.into(),
-                last_asked_rewards_epoch_height: elem.last_asked_rewards_epoch_height.into(),
-                unstaked_requested_epoch_height: elem.unstk_req_epoch_height.into(),
-            })
-        }
-        return result;
-    }
 
-    ///remove staking pool from list *if it's empty*
-    pub fn remove_staking_pool(&mut self, inx:u16 ){
 
-        self.assert_owner_calling();
-
-        let sp = &self.staking_pools[inx as usize];
-        if !sp.is_empty() {
-            panic!(b"sp is not empty")
-        }
-        self.staking_pools.remove(inx as usize);
-    }
-
-    ///update existing weight_basis_points
-    pub fn set_staking_pool_weight(&mut self, inx:u16, weight_basis_points:u16 ){
-
-        self.assert_owner_calling();
-
-        let sp = &mut self.staking_pools[inx as usize];
-        if sp.busy_lock {
-            panic!(b"sp is busy")
-        }
-        sp.weight_basis_points = weight_basis_points;
-
-        self.check_staking_pool_list_consistency();
-
-    }
-    
-    fn check_staking_pool_list_consistency(&self) {
-        let mut total_weight: u16 = 0;
-        for sp in self.staking_pools.iter() {
-            total_weight+=sp.weight_basis_points;
-        }
-        assert!(total_weight<=10000,"sum(staking_pools.weight) can not be GT 100%");
-    }
-
-    ///add a new staking pool or update existing weight_basis_points
-    pub fn set_staking_pool(&mut self, account_id:AccountId, weight_basis_points:u16 ){
-
-        self.assert_owner_calling();
-
-        //search the pools
-        for sp in self.staking_pools.iter_mut() {
-            if sp.account_id==account_id {
-                //found
-                if sp.busy_lock {
-                    panic!(b"sp is busy")
-                }
-                (*sp).weight_basis_points = weight_basis_points;
-                return;
-            }
-        }
-        //not found, it's a new pool
-        self.staking_pools.push(  StakingPoolInfo::new(account_id, weight_basis_points) );
-
-        self.check_staking_pool_list_consistency();
-    }
-
-    //--------------------------------------------------
-    /// computes unstaking delay on current situation
-    pub fn compute_current_unstaking_delay(&self, amount:U128String) -> u16 {
-        return self.internal_compute_current_unstaking_delay(amount.0) as u16;
-    }
-
-    //----------------------------------
-    // Heartbeat & Talking to the pools
-    // ---------------------------------
-
-    //-----------------------------
-    // DISTRIBUTE
-    //-----------------------------
-
-    /// operator method -------------------------------------------------
-    /// distribute_staking(). Do staking in batches of at most 100Kn
-    /// returns "true" if the operator needs to call this fn again
-    pub fn distribute_staking(&mut self) -> bool {
-
-        //Note: In order to make this contract independent from the operator
-        //this fn is open to be called by anyone
-
-        //let epoch_height = env::epoch_height();
-        // if self.last_epoch_height == epoch_height {
-        //     return false;
-        // }
-        // self.last_epoch_height = epoch_height;
-
-        //----------
-        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate skash in the LP by internal-clearing 
-        if self.nslp_try_liquidate_skash_by_clearing(){
-            return true; //call again
-        }
-
-        //do wo need to stake?
-        if self.total_for_staking <= self.total_actually_staked {
-            //no staking needed
-            return false;
-        }
-
-        //-------------------------------------
-        //compute amount to stake
-        //-------------------------------------
-        let total_amount_to_stake =  self.total_for_staking - self.total_actually_staked;
-        let (sp_inx, mut amount_to_stake) = self.get_staking_pool_requiring_stake(total_amount_to_stake);
-        if amount_to_stake > 0 {
-            //most unbalanced pool found & available
-            //launch async stake or deposit_and_stake on that pool
-
-            let sp = &mut self.staking_pools[sp_inx];
-            sp.busy_lock = true;
-
-            //case 1. pool has unstaked amount (could be on the unstaking delay wait period)
-            if sp.unstaked > 0 {
-                //pool has unstaked amount
-                if sp.unstaked < amount_to_stake {
-                    //re-stake the unstaked
-                    amount_to_stake = sp.unstaked;
-                }
-                //launch async stake to re-stake on the pool
-                self.total_unstaked_and_waiting -= amount_to_stake; //preventively consider the amount removed from total_unstaked_and_waiting (undoes if failed)
-                self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if failed)
-                ext_staking_pool::stake(
-                    amount_to_stake.into(),
-                    &sp.account_id,
-                    NO_DEPOSIT,
-                    gas::staking_pool::STAKE,
-                )
-                .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
-                    sp_inx,
-                    amount_to_stake,
-                    false,
-                    &env::current_account_id(),
-                    NO_DEPOSIT,
-                    gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
-                ));
-
-                return true; //some work scheduled
-            }
-
-            //here the sp has no unstaked balance, we must deposit_and_stake on the sp
-            //launch async deposit_and_stake on the pool
-            assert!(
-                env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,
-                "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_stake"
-            );
-            assert!(
-                self.total_available >= total_amount_to_stake,
-                "self.available {} .LT. amount_to_deposit_and_stake {}", self.total_available, total_amount_to_stake
-            );
-            self.total_available -= total_amount_to_stake; //preventively consider the amount sent (undoes if async fails)
-            self.total_actually_staked += total_amount_to_stake; //preventively consider the amount staked (undoes if async fails)
-
-            ext_staking_pool::deposit_and_stake(
-                &sp.account_id,
-                total_amount_to_stake.into(), //attached amount
-                gas::staking_pool::DEPOSIT_AND_STAKE,
-            )
-            .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
-                sp_inx,
-                total_amount_to_stake,
-                true,
-                &env::current_account_id(),
-                NO_DEPOSIT,
-                gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
-            ));
-
-        }
-
-        return true; //more work needed
-
-    }
-
-    //prev fn continues here
-    /// Called after amount is staked from the sp's unstaked balance (all into  the staking pool contract).
-    /// This method needs to update staking pool status.
-    pub fn on_staking_pool_stake_maybe_deposit(
-        &mut self,
-        sp_inx: usize,
-        amount: u128,
-        included_deposit: bool,
-    ) -> bool {
-
-        assert_callback_calling();
-
-        let sp = &mut self.staking_pools[sp_inx];
-        sp.busy_lock = false;
-
-        let stake_succeeded = is_promise_success();
-
-        let result: &str;
-        if stake_succeeded {
-            //STAKED OK
-            result = "succeeded";
-            if !included_deposit {
-                //not deposited first, so staked funds came from unstaked funds already in the sp
-                sp.unstaked -= amount;
-            }
-            //move into staked
-            sp.staked += amount;
-        } 
-        else {
-            //STAKE FAILED
-            result = "has failed";
-            if included_deposit {
-                self.total_available += amount; //undo preventive action considering the amount taken from available
-            }
-            else {
-                self.total_unstaked_and_waiting += amount; //undo preventive action considering the amount taken from wating for unstake
-            }
-            self.total_actually_staked -= amount; //undo preventive action considering the amount staked
-        }
-        env::log(format!("Staking of {} at @{} {}", amount, sp.account_id, result).as_bytes());
-        return stake_succeeded;
-    }
-
-
-    // Operator method, but open to anyone
-    /// distribute_unstaking(). Do unstaking in batches of 100-150KN
-    /// returns "true" if needs to be called again
-    pub fn distribute_unstaking(&mut self) -> bool {
-
-        //Note: In order to make this contract independent from the operator
-        //this fn is open to be called by anyone
-
-        //let epoch_height = env::epoch_height();
-        // if self.last_epoch_height == epoch_height {
-        //     return false;
-        // }
-        // self.last_epoch_height = epoch_height;
-
-        //--------------------------
-        //compute amount to unstake
-        //--------------------------
-        if self.total_actually_staked <= self.total_for_staking {
-            //no unstaking needed
-            return false;
-        }
-        let total_to_unstake = self.total_actually_staked - self.total_for_staking;
-
-        let (sp_inx, amount_to_unstake) = self.get_staking_pool_requiring_unstake(total_to_unstake);
-        if amount_to_unstake > 0 {
-            //most unbalanced pool found & available
-            //launch async to unstake
-
-            let sp = &mut self.staking_pools[sp_inx];
-            sp.busy_lock = true;
-
-            //preventively consider the amount un-staked (undoes if promise fails)
-            self.total_actually_staked -= amount_to_unstake; 
-            self.total_unstaked_and_waiting += amount_to_unstake; 
-            //launch async to un-stake from the pool
-            ext_staking_pool::unstake(
-                amount_to_unstake.into(),
-                &sp.account_id,
-                NO_DEPOSIT,
-                gas::staking_pool::UNSTAKE,
-            )
-            .then(ext_self_owner::on_staking_pool_unstake(
-                sp_inx,
-                amount_to_unstake,
-                &env::current_account_id(),
-                NO_DEPOSIT,
-                gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
-            ));
-
-        }
-
-        return true; //needs to be called again
-    }
-
-    /// The prev fn continues here
-    /// Called after the given amount was unstaked at the staking pool contract.
-    /// This method needs to update staking pool status.
-    pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool {
-
-        assert_callback_calling();
-
-        let sp = &mut self.staking_pools[sp_inx];
-        sp.busy_lock = false;
-
-        let unstake_succeeded = is_promise_success();
-
-        let result: &str;
-        if unstake_succeeded {
-            result = "succeeded";
-            sp.staked -= amount;
-            sp.unstaked += amount;
-            sp.unstk_req_epoch_height = env::epoch_height();
-        } else {
-            result = "has failed";
-            self.total_actually_staked += amount; //undo preventive action considering the amount unstaked
-            self.total_unstaked_and_waiting -= amount; //undo preventive action considering the amount unstaked
-        }
-
-        env::log(format!("Unstaking of {} at @{} {}", amount, sp.account_id, result).as_bytes());
-        return unstake_succeeded;
-    }
-
-    // Operator method, but open to anyone
-    //----------------------------------------------------------------------
-    //  WITHDRAW FROM ONE OF THE POOLS ONCE THE WAITING PERIOD HAS ELAPSED
-    //----------------------------------------------------------------------
-    /// launchs a withdrawal call
-    /// returns the amount withdrew
-    pub fn withdraw_from_a_pool(&mut self, inx:u16) -> Promise {
-
-        //Note: In order to make fund-recovering independent from the operator
-        //this fn is open to be called by anyone
-
-        assert!(inx < self.staking_pools.len() as u16,"invalid index");
-
-        let sp = &mut self.staking_pools[inx as usize];
-        assert!(!sp.busy_lock,"sp is busy");
-        assert!(sp.unstaked > 0,"sp unstaked == 0");
-        assert!(env::epoch_height() >= sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK,
-            "unstaking-delay ends at {}, now is {}",sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK,env::epoch_height());
-
-        // if the pool is not busy, and we unstaked and the waiting period has elapsed
-        sp.busy_lock = true;
-
-        //return promise
-        return ext_staking_pool::withdraw(
-            sp.unstaked.into(),
-            //promise params:
-            &sp.account_id,
-            NO_DEPOSIT,
-            gas::staking_pool::WITHDRAW,
-        )
-        .then(ext_self_owner::on_staking_pool_withdraw(
-            inx,
-            //promise params:
-            &env::current_account_id(),
-            NO_DEPOSIT,
-            gas::owner_callbacks::ON_STAKING_POOL_WITHDRAW,
-        ));
-        
-    }
-
-    //prev fn continues here
-    /// This method needs to update staking pool busyLock
-    pub fn on_staking_pool_withdraw(&mut self, inx: u16) -> u128 {
-
-        assert_callback_calling();
-
-        let sp = &mut self.staking_pools[inx as usize];
-        sp.busy_lock = false;
-        
-        let amount = sp.unstaked; //we retrieved all
-
-        let withdraw_succeeded = is_promise_success();
-        let mut withdrew_amount:u128=0;
-
-        let result: &str;
-        if withdraw_succeeded {
-            result = "succeeded";
-            sp.unstaked = sp.unstaked.saturating_sub(amount); //no more unstaked in the pool
-            //move from total_unstaked_and_waiting to total_actually_unstaked_and_retrieved
-            self.total_unstaked_and_waiting = self.total_unstaked_and_waiting.saturating_sub(amount);
-            self.total_actually_unstaked_and_retrieved += amount; //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls finish_unstaking
-            withdrew_amount = amount;
-        } 
-        else {
-            result = "has failed";
-        }
-        env::log(
-            format!(
-                "The withdrawal of {} from @{} {}",
-                amount, &sp.account_id, result
-            )
-            .as_bytes(),
-        );
-        return withdrew_amount;
-    }
-
-
-    //------------------------------------------
-    // GETTERS (moved from getters.rs)
-    //------------------------------------------
-    /// Returns the account ID of the owner.
-    pub fn get_operator_account_id(&self) -> AccountId {
-        return self.operator_account_id.clone();
-    }
-
-    /// The amount of tokens that were deposited to the staking pool.
-    /// NOTE: The actual balance can be larger than this known deposit balance due to staking
-    /// rewards acquired on the staking pool.
-    /// To refresh the amount the owner can call `refresh_staking_pool_balance`.
-    pub fn get_known_deposited_balance(&self) -> U128String {
-        return self.total_actually_staked.into();
-    }
-
-    /// full account info
-    /// Returns JSON representation of the account for the given account ID.
-    pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult {
-        let acc = self.internal_get_account(&account_id);
-        let skash = self.amount_from_stake_shares(acc.stake_shares);
-        // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
-        let trip_rewards = (skash + acc.trip_accum_unstakes).saturating_sub(acc.trip_accum_stakes + acc.trip_start_skash);
-        //NLSP share value
-        let mut nslp_share_value: u128 = 0;
-        if acc.nslp_shares != 0 {
-            let nslp_account = self.internal_get_nslp_account();
-            nslp_share_value = acc.valued_nslp_shares(self, &nslp_account);
-        }
-        return GetAccountInfoResult {
-            account_id,
-            available: acc.available.into(),
-            skash: skash.into(),
-            unstaked: acc.unstaked.into(),
-            unstaked_requested_unlock_epoch: acc.unstaked_requested_unlock_epoch.into(),
-            can_withdraw: (env::epoch_height() >= acc.unstaked_requested_unlock_epoch),
-            total: (acc.available + skash + acc.unstaked).into(),
-            //trip-meter
-            trip_start: acc.trip_start.into(),
-            trip_start_skash: acc.trip_start_skash.into(),
-            trip_accum_stakes: acc.trip_accum_stakes.into(),
-            trip_accum_unstakes: acc.trip_accum_unstakes.into(),
-            trip_rewards: trip_rewards.into(),
-
-            nslp_shares: acc.nslp_shares.into(),
-            nslp_share_value: nslp_share_value.into(),
-
-            g_skash: acc.total_g_skash(self).into(),
-        };
-    }
-
-
-    /// NEP-129 get information about this contract
-    /// returns JSON string according to [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    pub fn get_contract_info(&self) -> NEP129Response {
-        return NEP129Response {
-            dataVersion:1,
-            name: CONTRACT_NAME.into(),
-            version:CONTRACT_VERSION.into(),
-            developersAccountId:DEVELOPERS_ACCOUNT_ID.into(),
-            source:"https://github.com/Narwallets/diversifying-staking-pool".into(), 
-            standards:vec!("NEP-129".into(),"NEP-138".into()),  
-            webAppUrl:self.web_app_url.clone(),
-            auditorAccountId: self.auditor_account_id.clone()
-        }
-    }
-
-    /// sets confirgurable contract info [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    // Note: params are not Option<String> so the user cannot inadvertely set null to data by not including the argument
-    pub fn set_contract_info(&mut self, web_app_url:String, auditor_account_id:String) {
-        self.assert_owner_calling();
-        self.web_app_url = if web_app_url.len()>0 { Some(web_app_url) } else { None };
-        self.auditor_account_id = if auditor_account_id.len()>0 { Some(auditor_account_id) } else { None };
-    }
-
-    /// get contract totals 
-    /// Returns JSON representation of the contract state
-    pub fn get_contract_state(&self) -> GetContractStateResult {
-
-        let lp_account = self.internal_get_nslp_account();
-
-        return GetContractStateResult {
-            total_available: self.total_available.into(),
-            total_for_staking: self.total_for_staking.into(),
-            total_actually_staked: self.total_actually_staked.into(),
-            accumulated_staked_rewards: self.accumulated_staked_rewards.into(),
-            total_unstaked_and_waiting: self.total_unstaked_and_waiting.into(),
-            total_actually_unstaked_and_retrieved: self.total_actually_unstaked_and_retrieved.into(),
-            total_stake_shares: self.total_stake_shares.into(),
-            total_g_skash: self.total_g_skash.into(),
-            accounts_count: self.accounts.len().into(),
-            staking_pools_count: self.staking_pools.len() as u16,
-            nslp_liquidity: lp_account.available.into(),
-            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(lp_account.available, TEN_NEAR)
-        };
-    }
-
-    /// Returns JSON representation of contract parameters
-    pub fn get_contract_params(&self) -> ContractParamsJSON {
-        return ContractParamsJSON {
-            staking_paused: self.staking_paused,
-            min_account_balance: self.min_account_balance.into(),
-
-            nslp_near_target: self.nslp_near_target.into(),
-            nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
-            nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
-
-            staker_g_skash_mult_pct: self.staker_g_skash_mult_pct,
-            skash_sell_g_skash_mult_pct: self.skash_sell_g_skash_mult_pct,
-            lp_provider_g_skash_mult_pct: self.lp_provider_g_skash_mult_pct,
-                    
-            operator_rewards_fee_basis_points: self.operator_rewards_fee_basis_points,
-            operator_swap_cut_basis_points: self.operator_swap_cut_basis_points,
-            treasury_swap_cut_basis_points: self.treasury_swap_cut_basis_points,
-            };
-    }
-
-    /// Sets contract parameters 
-    pub fn set_contract_params(&mut self, params:ContractParamsJSON) {
-
-        self.assert_owner_calling();
-
-        self.min_account_balance = params.min_account_balance.0;
-
-        self.nslp_near_target = params.nslp_near_target.0;
-        self.nslp_max_discount_basis_points = params.nslp_max_discount_basis_points;
-        self.nslp_min_discount_basis_points = params.nslp_min_discount_basis_points;
-
-        self.staker_g_skash_mult_pct = params.staker_g_skash_mult_pct;
-        self.skash_sell_g_skash_mult_pct = params.skash_sell_g_skash_mult_pct;
-        self.lp_provider_g_skash_mult_pct = params.lp_provider_g_skash_mult_pct;
-                    
-        self.operator_rewards_fee_basis_points = params.operator_rewards_fee_basis_points;
-        self.operator_swap_cut_basis_points = params.operator_swap_cut_basis_points;
-        self.treasury_swap_cut_basis_points = params.treasury_swap_cut_basis_points;
-
-    }
-    
-    /// get sp (staking-pool) info
-    /// Returns JSON representation of sp recorded state
-    pub fn get_sp_info(&self, sp_inx_i32: i32) -> StakingPoolJSONInfo {
-
-        assert!(sp_inx_i32 > 0);
-
-        let sp_inx = sp_inx_i32 as usize;
-        assert!(sp_inx < self.staking_pools.len());
-
-        let sp = &self.staking_pools[sp_inx];
-
-        return StakingPoolJSONInfo {
-            account_id: sp.account_id.clone(),
-            weight_basis_points: sp.weight_basis_points,
-            staked: sp.staked.into(),
-            unstaked: sp.unstaked.into(),
-            unstaked_requested_epoch_height: sp.unstk_req_epoch_height.into(),
-            last_asked_rewards_epoch_height: sp.last_asked_rewards_epoch_height.into(),
-        };
-    }
 }
+
+/*
+#[cfg(not(target_arch = "wasm32"))]
+mod tests {
+    fn test() {
+      assert!(false);
+    }
+  }
+*/
 
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
+    //use std::convert::TryInto;
 
-    use near_sdk::{testing_env, MockedBlockchain, PromiseResult, VMContext};
+/*    use near_sdk::{testing_env, MockedBlockchain,  VMContext}; //PromiseResult,
 
     use test_utils::*;
 
@@ -1538,9 +1003,9 @@ mod tests {
 
     mod test_utils;
 
-    pub type AccountId = String;
+    //pub type AccountId = String;
 
-    const SALT: [u8; 3] = [1, 2, 3];
+    //const SALT: [u8; 3] = [1, 2, 3];
 
     fn basic_context() -> VMContext {
         get_context(
@@ -1553,7 +1018,7 @@ mod tests {
     }
 
     fn new_contract() -> DiversifiedPool {
-        DiversifiedPool::new(account_owner())
+        DiversifiedPool::new(account_owner(), account_owner(), account_owner())
     }
 
     fn contract_only_setup() -> (VMContext, DiversifiedPool) {
@@ -1585,19 +1050,20 @@ mod tests {
     // }
     #[test]
     fn test_internal_get_near_amount_sell_skash() {
-        let (mut context, mut contract) = contract_only_setup();
+        let (_context, contract) = contract_only_setup();
         let lp_balance_y: u128 = to_yocto(500_000);
         let sell_skash_y: u128 = to_yocto(120);
-        let discount_bp: u16 = contract.get_discount_basis_points(lp_balance_y, sell_skash_y);
+        let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_skash_y);
         let near_amount_y =
             contract.internal_get_near_amount_sell_skash(lp_balance_y, sell_skash_y);
         assert!(near_amount_y <= sell_skash_y);
         let discountedy = sell_skash_y - near_amount_y;
-        let discounted_displayN = ytof(discountedy);
-        let sell_skash_displayN = ytof(sell_skash_y);
+        let _discounted_display_n = ytof(discountedy);
+        let _sell_skash_display_n = ytof(sell_skash_y);
         assert!(discountedy == apply_pct(discount_bp, sell_skash_y));
         assert!(near_amount_y == sell_skash_y - discountedy);
     }
+*/
 
     /*
     #[test]
@@ -1915,5 +1381,7 @@ mod tests {
             context.is_view = false;
         }
     }
+
     */
+
 }

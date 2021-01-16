@@ -63,10 +63,10 @@ pub struct NEP129Response {
     pub dataVersion:u16,
     pub name:String,
     pub version:String,
-    pub developersAccountId:String,
     pub source:String,
     pub standards:Vec<String>,
     pub webAppUrl:Option<String>,
+    pub developersAccountId:String,
     pub auditorAccountId:Option<String>,
 }
 

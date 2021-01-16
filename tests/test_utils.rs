@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(dead_code)]
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::{AccountId, MockedBlockchain, PromiseResult, VMContext};
 
@@ -34,8 +37,8 @@ pub fn to_near(yoctos_amount: u128) -> u128 {
 }
 //convert yocto to f64 NEAR truncate to 4 dec places
 pub fn ytof(yoctos_amount: u128) -> f64 {
-    let fourDecf:f64 = ((yoctos_amount / 10u128.pow(20)) as u32).into();
-    return fourDecf / 10000.0;
+    let four_dec_f:f64 = ((yoctos_amount / 10u128.pow(20)) as u32).into();
+    return four_dec_f / 10000.0;
 }
 
 pub fn to_nanos(num_days: u64) -> u64 {

@@ -7,170 +7,6 @@ impl DiversifiedPool {
     ///
     /// Requires 125 TGas (5 * BASE_GAS)
     ///
-    /// Retrieves total balance from the staking pool and remembers it internally.
-    /// Also computes and distributes rewards to author, operator and delegators
-    /// this fn queries the staking pool.
-    pub fn refresh_staking_pool_rewards(&mut self, sp_inx_i32: i32) {
-        assert!(sp_inx_i32 > 0);
-
-        self.assert_owner_calling();
-
-        let sp_inx = sp_inx_i32 as usize;
-        assert!(sp_inx < self.staking_pools.len());
-
-        let sp = &mut self.staking_pools[sp_inx];
-        assert!(!sp.busy_lock, "sp is busy");
-
-        if sp.staked == 0 || sp.busy_lock {
-            return;
-        }
-
-        let epoch_height = env::epoch_height();
-        if sp.last_asked_rewards_epoch_height == epoch_height {
-            return;
-        }
-
-        env::log(
-            format!(
-                "Fetching total balance from the staking pool @{}",
-                sp.account_id
-            )
-            .as_bytes(),
-        );
-
-        sp.busy_lock = true;
-
-        ext_staking_pool::get_account_total_balance(
-            env::current_account_id(),
-            &sp.account_id,
-            NO_DEPOSIT,
-            gas::staking_pool::GET_ACCOUNT_TOTAL_BALANCE,
-        )
-        .then(ext_self_owner::on_get_sp_total_balance(
-            sp_inx,
-            &env::current_account_id(),
-            NO_DEPOSIT,
-            gas::owner_callbacks::ON_GET_SP_TOTAL_BALANCE,
-        ));
-    }
-
-    /// prev fn continues here
-    /*
-    Note: what does #[callback] do?
-    #[callback] parses the previous promise's result into the param
-        Check out https://nomicon.io/RuntimeSpec/Components/BindingsSpec/PromisesAPI.html
-        1. check promise_results_count() == 1
-        2  check the execution status of the first promise and write the result into the register using promise_result(0, register_id) == 1
-            Let's say that you used register_id == 0
-        3. read register using register_len and read_register into Wasm memory
-        4. parse the data using: let total_balance: WrappedBalance = serde_json::from_slice(&buf).unwrap();
-
-    it has be last argument? can you add another argument for the on_xxx callback ?
-    before that
-    for example:
-        /// Called after the request to get the current total balance from the staking pool.
-        pub fn on_get_account_total_balance(&mut self, staking_pool_account: AccountId, #[callback] total_balance: WrappedBalance) {
-            assert_self();
-            self.set_staking_pool_status(TransactionStatus::Idle);
-            ...
-        and in the call
-            ext_staking_pool::get_account_total_balance(
-                env::current_account_id(),
-                staking_pool_account_id,
-                NO_DEPOSIT,
-                gas::staking_pool::GET_ACCOUNT_TOTAL_BALANCE,
-            )
-            .then(ext_self_owner::on_get_account_total_balance(
-                staking_pool_account_id,
-                &env::current_account_id(),
-                NO_DEPOSIT,
-                gas::owner_callbacks::ON_GET_ACCOUNT_TOTAL_BALANCE,
-            ))
-
-    #[callback] marked-arguments are parsed in order. The position within arguments are not important, but the order is.
-    If you have 2 arguments marked as #[callback] then you need to expect 2 promise results joined with promise_and
-    */
-
-    //------------------------------
-    pub fn on_get_sp_total_balance(
-        &mut self,
-        sp_inx: usize,
-        #[callback] total_balance: U128String,
-    ) {
-        //we enter here after asking the staking-pool how much do we have staked (plus rewards)
-        //total_balance: U128String contains the answer from the staking-pool
-
-        assert_callback_calling();
-
-        let rewards: u128;
-
-        //store the new staked amount for this pool
-        {
-            let new_staked_amount: u128;
-            let sp = &mut self.staking_pools[sp_inx];
-
-            sp.busy_lock = false;
-
-            // env::log(
-            //     format!(
-            //         "The current total balance on the staking pool is {}",
-            //         total_balance.0
-            //     )
-            //     .as_bytes(),
-            // );
-
-            sp.last_asked_rewards_epoch_height = env::epoch_height();
-
-            new_staked_amount = total_balance.0;
-
-            if new_staked_amount < sp.staked {
-                env::log(
-                    format!(
-                        "INCONSISTENCY @{} says total_balance < sp.staked",
-                        sp.account_id
-                    )
-                    .as_bytes(),
-                );
-                rewards = 0;
-            } else {
-                //compute rewards, as new balance minus old balance
-                rewards = new_staked_amount - sp.staked;
-            }
-
-            //updated accumulated_staked_rewards value for the contract
-            self.accumulated_staked_rewards+=rewards;
-            //updated new "staked" value for this pool
-            sp.staked = new_staked_amount;
-        }
-
-        if rewards > 0 {
-            //add to actually staked
-            self.total_actually_staked += rewards;
-
-            // The fee that the contract authors take.
-            let author_fee = apply_pct(DEVELOPERS_REWARDS_FEE_BASIS_POINTS, rewards);
-            // The fee that the contract owner (operator) takes.
-            let owner_fee = apply_pct(self.operator_rewards_fee_basis_points, rewards);
-            // Now add fees & shares to the pool preserving current share value
-            // adds to self.total_actually_staked, self.total_for_staking & self.total_stake_shares;
-            &self.add_amount_and_shares_preserve_share_price(DEVELOPERS_ACCOUNT_ID.into(), author_fee);
-            &self.add_amount_and_shares_preserve_share_price(self.operator_account_id.clone(),owner_fee);
-
-            // rest of rewards go into total_actually_staked increasing share value
-            assert!(rewards > author_fee + owner_fee);
-            //add rest of rewards
-            self.total_for_staking += rewards - author_fee - owner_fee; //increase share price for everybody
-
-            let sp = &self.staking_pools[sp_inx];
-            env::log(
-                format!(
-                    "Received total rewards of {} tokens from {}. Staked is now = {}",
-                    rewards, sp.account_id, sp.staked,
-                )
-                .as_bytes(),
-            );
-        }
-    }
 
     /// OWNER'S METHOD
     ///
@@ -179,7 +15,9 @@ impl DiversifiedPool {
     /// Adds full access key with the given public key to the account once the contract is empty
     /// (has no accounts)
     pub fn add_full_access_key(&mut self, new_public_key: Base58PublicKey) -> Promise {
+        
         self.assert_owner_calling();
+
         assert!(self.accounts.len() == 0, "contract still has accounts");
 
         env::log(b"Adding a full access key");
@@ -188,4 +26,88 @@ impl DiversifiedPool {
 
         Promise::new(env::current_account_id()).add_full_access_key(new_public_key)
     }
+
+    //---------------------------------
+    // staking-pools-list (SPL) management
+    //---------------------------------
+
+    /// get the current list of pools
+    pub fn get_staking_pool_list(&self) -> Vec<StakingPoolJSONInfo> {
+        let mut result = Vec::with_capacity(self.staking_pools.len());
+        for elem in self.staking_pools.iter(){
+            result.push(StakingPoolJSONInfo{
+                account_id: elem.account_id.clone(),
+                weight_basis_points: elem.weight_basis_points,
+                staked: elem.staked.into(),
+                unstaked: elem.unstaked.into(),
+                last_asked_rewards_epoch_height: elem.last_asked_rewards_epoch_height.into(),
+                unstaked_requested_epoch_height: elem.unstk_req_epoch_height.into(),
+            })
+        }
+        return result;
+    }
+
+    ///remove staking pool from list *if it's empty*
+    pub fn remove_staking_pool(&mut self, inx:u16 ){
+
+        self.assert_owner_calling();
+
+        let sp = &self.staking_pools[inx as usize];
+        if !sp.is_empty() {
+            panic!(b"sp is not empty")
+        }
+        self.staking_pools.remove(inx as usize);
+    }
+
+    ///update existing weight_basis_points
+    pub fn set_staking_pool_weight(&mut self, inx:u16, weight_basis_points:u16 ){
+
+        self.assert_owner_calling();
+
+        let sp = &mut self.staking_pools[inx as usize];
+        if sp.busy_lock {
+            panic!(b"sp is busy")
+        }
+        sp.weight_basis_points = weight_basis_points;
+
+        self.check_staking_pool_list_consistency();
+
+    }
+    
+    fn check_staking_pool_list_consistency(&self) {
+        let mut total_weight: u16 = 0;
+        for sp in self.staking_pools.iter() {
+            total_weight+=sp.weight_basis_points;
+        }
+        assert!(total_weight<=10000,"sum(staking_pools.weight) can not be GT 100%");
+    }
+
+    ///add a new staking pool or update existing weight_basis_points
+    pub fn set_staking_pool(&mut self, account_id:AccountId, weight_basis_points:u16 ){
+
+        self.assert_owner_calling();
+
+        //search the pools
+        for sp in self.staking_pools.iter_mut() {
+            if sp.account_id==account_id {
+                //found
+                if sp.busy_lock {
+                    panic!(b"sp is busy")
+                }
+                (*sp).weight_basis_points = weight_basis_points;
+                return;
+            }
+        }
+        //not found, it's a new pool
+        self.staking_pools.push(  StakingPoolInfo::new(account_id, weight_basis_points) );
+
+        self.check_staking_pool_list_consistency();
+    }
+
+    //--------------------------------------------------
+    /// computes unstaking delay on current situation
+    pub fn compute_current_unstaking_delay(&self, amount:U128String) -> u16 {
+        return self.internal_compute_current_unstaking_delay(amount.0) as u16;
+    }
+
 }
