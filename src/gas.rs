@@ -1,4 +1,5 @@
-pub const BASE_GAS: u64 = 25_000_000_000_000;
+pub const TGAS: u64 = 1_000_000_000_000;
+pub const BASE_GAS: u64 = 25*TGAS;
 
 pub mod whitelist {
     /// Gas attached to the promise to check whether the given staking pool Account ID is

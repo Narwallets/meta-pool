@@ -25,7 +25,7 @@ impl DiversifiedPool {
                     owner_account_id
                     ).into(),//arguments: Vec<u8>,
                 0,//amount: Balance,
-                gas::BASE_GAS //gas: Gas,
+                100*gas::TGAS //gas: Gas,
             );
         }
 }
