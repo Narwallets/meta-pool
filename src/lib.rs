@@ -33,6 +33,9 @@ pub mod multi_fun_token;
 
 pub mod simulation_support;
 
+#[cfg(not(target = "wasm32"))]
+pub mod staking_pool;
+
 #[cfg(target = "wasm32")]
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;

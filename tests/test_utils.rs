@@ -30,19 +30,19 @@ pub fn account_foundation() -> AccountId {
 }
 
 pub fn to_yocto(near_amount: u128) -> u128 {
-    return near_amount * 10u128.pow(24)
+    return near_amount * 10u128.pow(24);
 }
 pub fn to_near(yoctos_amount: u128) -> u128 {
-    return yoctos_amount / 10u128.pow(24)
+    return yoctos_amount / 10u128.pow(24);
 }
 //convert yocto to f64 NEAR truncate to 4 dec places
 pub fn ytof(yoctos_amount: u128) -> f64 {
-    let four_dec_f:f64 = ((yoctos_amount / 10u128.pow(20)) as u32).into();
+    let four_dec_f: f64 = ((yoctos_amount / 10u128.pow(20)) as u32).into();
     return four_dec_f / 10000.0;
 }
 
 pub fn to_nanos(num_days: u64) -> u64 {
-    return num_days * 86400_000_000_000
+    return num_days * 86400_000_000_000;
 }
 
 pub fn to_ts(num_days: u64) -> u64 {
