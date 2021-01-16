@@ -33,6 +33,7 @@ pub mod multi_fun_token;
 
 pub mod simulation_support;
 
+#[cfg(target = "wasm32")]
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 

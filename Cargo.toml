@@ -27,7 +27,8 @@ quickcheck = "0.9"
 quickcheck_macros = "0.9"
 log = "0.4"
 env_logger = { version = "0.7.1", default-features = false }
-near-crypto = { git = "https://github.com/nearprotocol/nearcore.git" }
-near-primitives = { git = "https://github.com/nearprotocol/nearcore.git" }
-#near-runtime-standalone = { git = "https://github.com/nearprotocol/nearcore.git" }
+# near-crypto = { git = "https://github.com/nearprotocol/nearcore.git" }
+# near-primitives = { git = "https://github.com/nearprotocol/nearcore.git" }
 near-sdk-sim = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
+
+staking-pool =  { git = "https://github.com/near/core-contracts" }
