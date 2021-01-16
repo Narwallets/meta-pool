@@ -979,19 +979,6 @@ dependencies = [
 [[package]]
 name = "near-rpc-error-core"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffa8dbf8437a28ac40fcb85859ab0d0b8385013935b000c7a51ae79631dd74d9"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "syn",
-]
-
-[[package]]
-name = "near-rpc-error-core"
-version = "0.1.0"
 source = "git+https://github.com/near/nearcore.git?tag=profiler-1.0.0#f30281aac023059c2e36bcdcc35af271a68a1a35"
 dependencies = [
  "proc-macro2",
@@ -1001,12 +988,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "near-rpc-error-macro"
+name = "near-rpc-error-core"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6111d713e90c7c551dee937f4a06cb9ea2672243455a4454cc7566387ba2d9"
+checksum = "ffa8dbf8437a28ac40fcb85859ab0d0b8385013935b000c7a51ae79631dd74d9"
 dependencies = [
- "near-rpc-error-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2",
  "quote",
  "serde",
@@ -1020,6 +1006,20 @@ version = "0.1.0"
 source = "git+https://github.com/near/nearcore.git?tag=profiler-1.0.0#f30281aac023059c2e36bcdcc35af271a68a1a35"
 dependencies = [
  "near-rpc-error-core 0.1.0 (git+https://github.com/near/nearcore.git?tag=profiler-1.0.0)",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+]
+
+[[package]]
+name = "near-rpc-error-macro"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c6111d713e90c7c551dee937f4a06cb9ea2672243455a4454cc7566387ba2d9"
+dependencies = [
+ "near-rpc-error-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2",
  "quote",
  "serde",

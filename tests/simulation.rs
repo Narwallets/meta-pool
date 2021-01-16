@@ -125,7 +125,7 @@ fn ntoy(near:u64) -> u128 { to_yocto(&near.to_string()) }
 fn yton(yoctos:u128) -> String { 
   let mut str = yoctos.to_string();
   let dec = str.split_off(str.len()-24);
-  return [str,".".into(),dec].concat();
+  return [&str,".",&dec].concat();
 }
 
 #[test]
@@ -164,17 +164,15 @@ fn simtest() {
      .submit();
   print_helper(view_tx_res);
 
-  println!("test: {:#?}", yton(1*NEAR));
-  println!("test: {:#?}", yton(10*NEAR));
-  println!("test: {:#?}", yton(123*NEAR));
-  println!("test: {:#?}", yton(ntoy(1)));
-  println!("test: {:#?}", yton(ntoy(10)));
-  println!("test: {:#?}", yton(ntoy(123)));
+  // println!("test: {}", yton(1*NEAR));
+  // println!("test: {}", yton(10*NEAR));
+  // println!("test: {}", yton(123*NEAR));
+  // println!("test: {}", yton(ntoy(1)));
+  // println!("test: {}", yton(ntoy(10)));
+  // println!("test: {}", yton(ntoy(123)));
 
-  println!("sp1 amount: {:#?}", yton(sp1.amount()));
-  println!("sp1 amount: {}", sp1.amount());
-
-  println!("treasury amount: {:#?}", yton(treasury.amount()));
+  println!("sp1 amount: (sp1 stakes 75%) {} {}", yton(sp1.amount()), yton(sp1.locked()));
+  println!("treasury amount: {}", yton(treasury.amount()));
   //let view_results = view!(divpool_contract.get_contract_info());
   //print_vecu8(&view_results.unwrap());
 
