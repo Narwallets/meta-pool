@@ -31,8 +31,6 @@ pub mod internal;
 pub mod owner;
 pub mod multi_fun_token;
 
-pub mod simulation_support;
-
 #[cfg(target = "wasm32")]
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
@@ -279,6 +277,29 @@ impl Account {
         self.trip_accum_unstakes += skash;
         self.staking_meter.unstake(skash);
     }
+
+    /// user method
+    /// completes unstake action by moving from retreieved_from_the_pools to available
+    fn try_finish_unstaking(&mut self, main:&mut DiversifiedPool) {
+
+        let amount = self.unstaked;
+        assert!(amount > 0, "No unstaked balance");
+        
+        let epoch = env::epoch_height();
+        assert!( epoch >= self.unstaked_requested_unlock_epoch,
+            "The unstaked balance is not yet available due to unstaking delay. You need to wait at least {} epochs"
+            , self.unstaked_requested_unlock_epoch - epoch);
+
+        //use retrieved funds
+        // moves from total_actually_unstaked_and_retrieved to total_available
+        assert!(main.total_actually_unstaked_and_retrieved >= amount, "Funds are not yet available due to unstaking delay. Epoch:{}",env::epoch_height());
+        main.total_actually_unstaked_and_retrieved -= amount;
+        main.total_available += amount;
+        // in the account, moves from unstaked to available
+        self.unstaked -= amount; //Zeroes
+        self.available += amount;
+    }
+
 
 }
 
@@ -680,31 +701,17 @@ impl DiversifiedPool {
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
 
-        let amount = account.unstaked;
-        assert!(amount > 0, "No unstaked balance");
-        
-        let epoch = env::epoch_height();
-        assert!( epoch >= account.unstaked_requested_unlock_epoch,
-            "The unstaked balance is not yet available due to unstaking delay. You need to wait at least {} epochs"
-            , account.unstaked_requested_unlock_epoch - epoch);
+        account.try_finish_unstaking(self);
 
-        //use retrieved funds
-        // moves from total_actually_unstaked_and_retrieved to total_available
-        assert!(self.total_actually_unstaked_and_retrieved >= amount, "Funds are not yet available due to unstaking delay");
-        self.total_actually_unstaked_and_retrieved -= amount;
-        self.total_available += amount;
-        // in the account, moves from unstaked to available
-        account.unstaked -= amount; //Zeroes
-        account.available += amount;
         self.internal_update_account(&account_id, &account);
 
-        // env::log(
-        //     format!(
-        //         "@{} withdrawing {}. New unstaked balance is {}",
-        //         account_id, amount, account.unstaked
-        //     )
-        //     .as_bytes(),
-        // );
+        env::log(
+            format!(
+                "@{} finishing unstaking. New available balance is {}",
+                account_id, account.available
+            )
+            .as_bytes(),
+        );
     }
 
     /// buy_skash_stake. Identical to stake, migth change in the future

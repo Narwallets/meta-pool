@@ -50,16 +50,26 @@ impl DiversifiedPool {
         );
     }
 
+
     //------------------------------
     pub(crate) fn internal_withdraw(&mut self, amount_requested: u128) {
         
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
+        if acc.available <  amount_requested && acc.unstaked > 0 { //not enough available, but there's some unstaked
+            let epoch = env::epoch_height();
+            if epoch >= acc.unstaked_requested_unlock_epoch {
+                //bring from unstaked to available
+                acc.try_finish_unstaking(self);
+            }
+        }
+
         assert!(
             acc.available >= amount_requested,
             "Not enough available balance to withdraw the requested amount"
         );
+
         let to_withdraw = 
             if acc.available - amount_requested < ONE_NEAR_CENT/2  //small yotctos remain, withdraw all
                 { acc.available } 
@@ -165,8 +175,8 @@ impl DiversifiedPool {
 
         env::log(
             format!(
-                "@{} unstaked {}. Has now {} unstaked and {} skash",
-                account_id, amount_to_unstake, acc.unstaked, self.amount_from_stake_shares(acc.stake_shares)
+                "@{} unstaked {}. Has now {} unstaked and {} skash. Epoch:{}",
+                account_id, amount_to_unstake, acc.unstaked, self.amount_from_stake_shares(acc.stake_shares), env::epoch_height()
             )
             .as_bytes(),
         );
@@ -370,10 +380,10 @@ impl DiversifiedPool {
 
 
     /// finds a staking pool requiring some stake to get balanced
-    /// WARN: (returns usize::MAX,0) if no pool requires staking/all are busy
+    /// WARN: (returns 0,0) if no pool requires staking/all are busy
     pub(crate) fn get_staking_pool_requiring_stake(&self, total_to_stake:u128) -> (usize,u128) {
         let mut selected_to_stake_amount: u128 = 0;
-        let mut selected_sp_inx: usize = usize::MAX;
+        let mut selected_sp_inx:usize=0;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
             // if the pool is not busy, and this pool can stake
@@ -406,11 +416,11 @@ impl DiversifiedPool {
     }
 
     /// finds a staking pool requireing some stake to get balanced
-    /// WARN: returns (usize::MAX,0) if no pool requires staking/all are busy
+    /// WARN: returns (0,0) if no pool requires staking/all are busy
     pub(crate) fn get_staking_pool_requiring_unstake(&self, total_to_unstake:u128) -> (usize,u128) {
         let mut selected_to_unstake_amount: u128 = 0;
         let mut selected_stake: u128 = 0;
-        let mut selected_sp_inx: usize = usize::MAX;
+        let mut selected_sp_inx: usize = 0;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
             // if the pool is not busy, has stake, and has not unstaked blanace waiting for withdrawal
@@ -435,9 +445,9 @@ impl DiversifiedPool {
             if selected_to_unstake_amount > total_to_unstake { 
                 selected_to_unstake_amount = total_to_unstake 
             };
-            //to avoid moving small amounts, if the remainder is less than 1K and this pool can accomodate, increase amount
+            //to avoid moving small amounts, if the remainder is less than 5K and this pool can accomodate the unstaking, increase amount
             let remainder = total_to_unstake - selected_to_unstake_amount;
-            if remainder<=MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT && selected_stake>selected_to_unstake_amount+remainder+2*MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT { 
+            if remainder <= MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT && selected_stake > selected_to_unstake_amount+remainder+2*MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT { 
                 selected_to_unstake_amount += remainder 
             };
         }

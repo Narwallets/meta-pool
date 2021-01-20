@@ -26,12 +26,14 @@ impl DiversifiedPool {
         // }
         // self.last_epoch_height = epoch_height;
 
+        env::log("1".as_bytes());
         //----------
         //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate skash in the LP by internal-clearing 
         if self.nslp_try_liquidate_skash_by_clearing(){
             return true; //call again
         }
 
+        env::log("2".as_bytes());
         //do wo need to stake?
         if self.total_for_staking <= self.total_actually_staked {
             //no staking needed
@@ -43,6 +45,7 @@ impl DiversifiedPool {
         //-------------------------------------
         let total_amount_to_stake =  self.total_for_staking - self.total_actually_staked;
         let (sp_inx, mut amount_to_stake) = self.get_staking_pool_requiring_stake(total_amount_to_stake);
+        env::log(format!("{} {} {}",total_amount_to_stake,sp_inx, amount_to_stake).as_bytes());
         if amount_to_stake > 0 {
             //most unbalanced pool found & available
             //launch async stake or deposit_and_stake on that pool
@@ -50,7 +53,8 @@ impl DiversifiedPool {
             let sp = &mut self.staking_pools[sp_inx];
             sp.busy_lock = true;
 
-            //case 1. pool has unstaked amount (could be on the unstaking delay wait period)
+            env::log("3".as_bytes());
+            //case 1. pool has unstaked amount (we could be at the unstaking delay waiting period)
             if sp.unstaked > 0 {
                 //pool has unstaked amount
                 if sp.unstaked < amount_to_stake {
@@ -58,6 +62,7 @@ impl DiversifiedPool {
                     amount_to_stake = sp.unstaked;
                 }
                 //launch async stake to re-stake on the pool
+                assert!(self.total_unstaked_and_waiting >= amount_to_stake,"total_unstaked_and_waiting < amount_to_stake");
                 self.total_unstaked_and_waiting -= amount_to_stake; //preventively consider the amount removed from total_unstaked_and_waiting (undoes if failed)
                 self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if failed)
                 ext_staking_pool::stake(
@@ -84,21 +89,16 @@ impl DiversifiedPool {
                 env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,
                 "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_stake"
             );
-            assert!(
-                self.total_available >= total_amount_to_stake,
-                "self.available {} .LT. amount_to_deposit_and_stake {}", self.total_available, total_amount_to_stake
-            );
-            self.total_available -= total_amount_to_stake; //preventively consider the amount sent (undoes if async fails)
-            self.total_actually_staked += total_amount_to_stake; //preventively consider the amount staked (undoes if async fails)
 
+            self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
             ext_staking_pool::deposit_and_stake(
                 &sp.account_id,
-                total_amount_to_stake.into(), //attached amount
+                amount_to_stake.into(), //attached amount
                 gas::staking_pool::DEPOSIT_AND_STAKE,
             )
             .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
                 sp_inx,
-                total_amount_to_stake,
+                amount_to_stake,
                 true,
                 &env::current_account_id(),
                 NO_DEPOSIT,
@@ -142,10 +142,7 @@ impl DiversifiedPool {
         else {
             //STAKE FAILED
             result = "has failed";
-            if included_deposit {
-                self.total_available += amount; //undo preventive action considering the amount taken from available
-            }
-            else {
+            if !included_deposit { //was staking from "wating for unstake"
                 self.total_unstaked_and_waiting += amount; //undo preventive action considering the amount taken from wating for unstake
             }
             self.total_actually_staked -= amount; //undo preventive action considering the amount staked
@@ -401,13 +398,29 @@ impl DiversifiedPool {
         }
     }
 
+    //----------------------------------------------------------------------
+    /// finds a pool with the unstake delay completed
+    /// withdraws. Returns -1 is there are no funds ready to retrieve
+    pub fn get_staking_pool_requiring_retrieve(&mut self) -> i32 {
+
+        for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
+            // if the pool is not busy, has stake, and has not unstaked blanace waiting for withdrawal
+            if !sp.busy_lock && sp.unstaked > 0 && sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= env::epoch_height() {
+                // if this pool has unstaked and the waiting period has ended
+                return sp_inx as i32;
+            }
+        }
+        return -1;
+
+    }
+
     // Operator method, but open to anyone
     //----------------------------------------------------------------------
     //  WITHDRAW FROM ONE OF THE POOLS ONCE THE WAITING PERIOD HAS ELAPSED
     //----------------------------------------------------------------------
     /// launchs a withdrawal call
     /// returns the amount withdrew
-    pub fn withdraw_from_a_pool(&mut self, inx:u16) -> Promise {
+    pub fn retrieve_funds_from_a_pool(&mut self, inx:u16) -> Promise {
 
         //Note: In order to make fund-recovering independent from the operator
         //this fn is open to be called by anyone

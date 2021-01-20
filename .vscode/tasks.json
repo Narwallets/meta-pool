@@ -1,6 +1,8 @@
 {
 	"version": "2.0.0",
+
 	"tasks": [
+
 		{
 			"label": "build WASM",
 			"type": "shell",
@@ -13,18 +15,20 @@
 				"isDefault": true,
 			},
 		},
+
 		{
+			"label": "only cargo test -- --nocapture",
 			"type": "shell",
-			"command": "cargo test",
+			"command": "clear && cargo test",
 			"problemMatcher": [
 				"$rustc"
 			],
-			"label": "cargo test -- --nocapture"
 		},
+
 		{
 			"type": "shell",
 			"label": "simulation test",
-			"command": "cargo test -- --nocapture",
+			"command": "clear && cargo test -- --nocapture",
 			"problemMatcher": [
 				"$rustc"
 			],

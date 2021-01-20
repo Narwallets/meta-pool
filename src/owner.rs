@@ -69,39 +69,37 @@ impl DiversifiedPool {
             panic!(b"sp is busy")
         }
         sp.weight_basis_points = weight_basis_points;
-
         self.check_staking_pool_list_consistency();
-
     }
     
-    fn check_staking_pool_list_consistency(&self) {
-        let mut total_weight: u16 = 0;
-        for sp in self.staking_pools.iter() {
-            total_weight+=sp.weight_basis_points;
-        }
-        assert!(total_weight<=10000,"sum(staking_pools.weight) can not be GT 100%");
-    }
-
     ///add a new staking pool or update existing weight_basis_points
     pub fn set_staking_pool(&mut self, account_id:AccountId, weight_basis_points:u16 ){
 
         self.assert_owner_calling();
 
         //search the pools
-        for sp in self.staking_pools.iter_mut() {
-            if sp.account_id==account_id {
-                //found
-                if sp.busy_lock {
-                    panic!(b"sp is busy")
-                }
-                (*sp).weight_basis_points = weight_basis_points;
+        for sp_inx in 0..self.staking_pools.len() {
+            if self.staking_pools[sp_inx].account_id==account_id {
+                //found, set weight_basis_points
+                self.set_staking_pool_weight(sp_inx as u16, weight_basis_points);
                 return;
             }
         }
         //not found, it's a new pool
         self.staking_pools.push(  StakingPoolInfo::new(account_id, weight_basis_points) );
-
         self.check_staking_pool_list_consistency();
+    }
+
+    fn check_staking_pool_list_consistency(&self) {
+        assert!(self.sum_staking_pool_list_weight_basis_points()<=10000,"sum(staking_pools.weight) can not be GT 100%");
+    }
+
+    pub fn sum_staking_pool_list_weight_basis_points(&self) -> u16 {
+        let mut total_weight: u16 = 0;
+        for sp in self.staking_pools.iter() {
+            total_weight+=sp.weight_basis_points;
+        }
+        return total_weight;
     }
 
     //--------------------------------------------------
