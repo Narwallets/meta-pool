@@ -400,17 +400,28 @@ impl DiversifiedPool {
 
     //----------------------------------------------------------------------
     /// finds a pool with the unstake delay completed
-    /// withdraws. Returns -1 is there are no funds ready to retrieve
-    pub fn get_staking_pool_requiring_retrieve(&mut self) -> i32 {
+    /// withdraws. Returns pol index or:
+    /// -1 if there are funds ready to retrieve but the pool is busy
+    /// -2 if there funds unstaked, but not ready in this epoch
+    /// -3 if there are no unstaked funds
+    pub fn get_staking_pool_requiring_retrieve(&self) -> i32 {
+        
+        let mut result:i32 = -3;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
             // if the pool is not busy, has stake, and has not unstaked blanace waiting for withdrawal
-            if !sp.busy_lock && sp.unstaked > 0 && sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= env::epoch_height() {
-                // if this pool has unstaked and the waiting period has ended
-                return sp_inx as i32;
+            if sp.unstaked > 0  {
+                if result == -3 { result = -2};
+                if sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= env::epoch_height() {
+                    if result == -2 { result = -1};
+                    if !sp.busy_lock {
+                        // if this pool has unstaked and the waiting period has ended
+                        return sp_inx as i32;
+                    }
+                }
             }
         }
-        return -1;
+        return result;
 
     }
 

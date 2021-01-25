@@ -41,7 +41,8 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 
 #### Test
  - [ ] Unit Tests
- - [ ] Simulation tests
+ - [x] Simulation tests
+ - [ ] Full code coverage
 
 #### Staking pool list
  - [x] List selected staking pools, getting weight, staked & unstaked
@@ -57,3 +58,6 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 - [ ] withelist pools before adding them
 - [ ] auto-unstake SKASH in the NSLP (when the clearing mechanism is not enough)
 
+#### Expansions
+
+- [ ] USDN: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & SKASH as collateral

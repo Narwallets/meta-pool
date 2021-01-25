@@ -27,6 +27,14 @@ impl DiversifiedPool {
         Promise::new(env::current_account_id()).add_full_access_key(new_public_key)
     }
 
+    /// Owner's method.
+    /// Pauses pool staking.
+    pub fn pause_staking(&mut self) {
+        self.assert_owner_calling();
+        assert!(!self.staking_paused, "The staking is already paused");
+        self.staking_paused = true;
+    }
+
     //---------------------------------
     // staking-pools-list (SPL) management
     //---------------------------------

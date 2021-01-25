@@ -6,7 +6,7 @@
 		{
 			"label": "build WASM",
 			"type": "shell",
-			"command": "./build.sh",
+			"command": "bash build.sh",
 			"problemMatcher": [
 				"$rustc"
 			],
@@ -28,7 +28,7 @@
 		{
 			"type": "shell",
 			"label": "simulation test",
-			"command": "clear && cargo test -- --nocapture",
+			"command": "clear && cd divpool && cargo test -- --nocapture",
 			"problemMatcher": [
 				"$rustc"
 			],

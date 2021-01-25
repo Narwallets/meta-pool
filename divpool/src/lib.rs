@@ -35,7 +35,14 @@ pub mod multi_fun_token;
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
-const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
+pub const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
+
+macro_rules! debug {
+    ($($arg:tt)*) => ({
+        env::log(format!($($arg)*).as_bytes());
+    });
+}
+
 
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
@@ -240,6 +247,8 @@ impl Account {
         let valued_stake_shares = main.amount_from_stake_shares(self.stake_shares);
         let nslp_account = main.internal_get_nslp_account();
         let valued_lp_shares = self.valued_nslp_shares(main, &nslp_account);
+        debug!("self.realized_g_skash:{}, self.staking_meter.compute_rewards(valued_stake_shares):{} self.lp_meter.compute_rewards(valued_lp_shares):{}",
+            self.realized_g_skash, self.staking_meter.compute_rewards(valued_stake_shares), self.lp_meter.compute_rewards(valued_lp_shares));
         return self.realized_g_skash
             + self.staking_meter.compute_rewards(valued_stake_shares)
             + self.lp_meter.compute_rewards(valued_lp_shares);
@@ -433,7 +442,7 @@ pub struct DiversifiedPool {
     pub staker_g_skash_mult_pct: u16,
     ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
     pub skash_sell_g_skash_mult_pct: u16,
-    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
+    ///for each SKASH paid as discount, reward LP providers  with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
     pub lp_provider_g_skash_mult_pct: u16,
 
     /// Operator account ID (who's in charge to call distribute_xx() on a periodic basis)
@@ -497,7 +506,7 @@ impl DiversifiedPool {
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
             operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
             treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
-            staking_paused: true, //no auto-staking. on while there's no staking pool defined
+            staking_paused: false, 
             total_available: 0,
             total_for_staking: 0,
             total_actually_staked: 0, //amount actually sent to the staking_pool and staked
@@ -508,14 +517,14 @@ impl DiversifiedPool {
             total_g_skash: 0,
             accounts: UnorderedMap::new("A".into()),
             nslp_near_target: ONE_NEAR * 1_000_000,
-            nslp_max_discount_basis_points: 1000, //10%
+            nslp_max_discount_basis_points: 500, //5%
             nslp_min_discount_basis_points: 50,   //0.5%
             ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
-            skash_sell_g_skash_mult_pct: 100,
+            skash_sell_g_skash_mult_pct: 100, //1x
             ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
-            staker_g_skash_mult_pct: 500,
-            ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
-            lp_provider_g_skash_mult_pct: 2000,
+            staker_g_skash_mult_pct: 500, //5x
+            ///for each SKASH paid as discount, reward LPs with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
+            lp_provider_g_skash_mult_pct: 2000, //20x
 
             staking_pools: Vec::new(),
 
@@ -759,7 +768,7 @@ impl DiversifiedPool {
             self.internal_get_near_amount_sell_skash(nslp_account.available, skash_to_sell.0);
         assert!(
             near_to_receive >= min_expected_near.0,
-            "Price changed, your min results requirements not satisfied. Try again"
+            "Price changed, your min results requirements {} not satisfied {}. Try again", min_expected_near.0, near_to_receive
         );
         assert!(
             nslp_account.available >= near_to_receive,
@@ -809,16 +818,33 @@ impl DiversifiedPool {
         operator_account.realized_g_skash += g_skash_from_operation/2;
         developers_account.realized_g_skash += g_skash_from_operation/2;
 
-        //The rest of the skash-fee (70%) go into the LP increasing share value for all LP providers.
-        //Adding value to the pool via adding more skash than the near removed, will be counted as rewards for the nslp_meter, 
-        // so g-skash for LP providers will be created. G-skash for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_g_skash_from_lp()
-        assert!(stake_shares_sell > treasury_stake_shares_cut + developers_stake_shares_cut + operator_stake_shares_cut);
-        nslp_account.add_stake_shares( 
-            fee_in_shares - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
-            fee_in_skash - (treasury_skash_cut + operator_skash_cut + developers_skash_cut ));
+        debug!("treasury_stake_shares_cut:{} operator_stake_shares_cut:{} developers_stake_shares_cut:{} fee_in_stake_shares:{}",
+            treasury_stake_shares_cut,operator_stake_shares_cut,developers_stake_shares_cut,fee_in_shares);
 
-        //we're selling skash but not unstaking, staked-near passed to the LP & others
+        debug!("treasury_skash_cut:{} operator_skash_cut:{} developers_skash_cut:{} fee_in_skash:{} skash_non_lp_cut:{} ",
+            treasury_skash_cut,operator_skash_cut,developers_skash_cut,fee_in_skash,skash_non_lp_cut);
+
+        assert!(fee_in_shares > treasury_stake_shares_cut + developers_stake_shares_cut + operator_stake_shares_cut);
+
+        // The rest of the skash sold goes into the LP. Because it is a larger number than NEAR removes, it will increase share value for all LP providers.
+        // Adding value to the pool via adding more skash than the near removed, will be counted as rewards for the nslp_meter, 
+        // so g-skash for LP providers will be created. G-skash for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_g_skash_from_lp()
+        debug!("nslp_account.add_stake_shares {} {}",
+            stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
+            skash_to_sell.0 - (treasury_skash_cut + operator_skash_cut + developers_skash_cut));
+
+        // major part of skash sold goes to the NSLP
+        nslp_account.add_stake_shares( 
+            stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
+            skash_to_sell.0 - (treasury_skash_cut + operator_skash_cut + developers_skash_cut ));
+
+        //complete the transfer, remove skash from the user (skash was transferred to the LP & others)
         user_account.sub_stake_shares(stake_shares_sell, skash_to_sell.0);
+        { //give the selling user some g-skash too
+            let g_skash_to_seller = apply_multiplier(fee_in_skash, self.skash_sell_g_skash_mult_pct);
+            self.total_g_skash += g_skash_to_seller;
+            user_account.realized_g_skash += g_skash_to_seller;
+        }
 
         //Save involved accounts
         self.internal_update_account(&self.treasury_account_id.clone(), &treasury_account);
@@ -988,15 +1014,6 @@ impl DiversifiedPool {
 
 
 }
-
-/*
-#[cfg(not(target_arch = "wasm32"))]
-mod tests {
-    fn test() {
-      assert!(false);
-    }
-  }
-*/
 
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]

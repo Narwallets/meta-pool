@@ -1,0 +1,34 @@
+[package]
+edition = "2018"
+name = "divpool"
+version = "0.1.0"
+authors = ["Narwallets.com <hello@narwallets.com>"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+
+#near-sdk = "2.0.1"
+near-sdk = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
+#near-sdk = { git = "https://github.com/Narwallets/near-sdk-rs.git", tag="2.4.0" }
+
+uint = { version = "0.8.3", default-features = false }
+
+[dev-dependencies]
+lazy_static = "1.4.0"
+quickcheck = "0.9"
+quickcheck_macros = "0.9"
+log = "0.4"
+env_logger = { version = "0.7.1", default-features = false }
+# near-crypto = { git = "https://github.com/nearprotocol/nearcore.git" }
+# near-primitives = { git = "https://github.com/nearprotocol/nearcore.git" }
+
+near-sdk-sim = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
+#near-sdk-sim = { git = "https://github.com/Narwallets/near-sdk-rs.git", tag="2.4.0" }
+
+#[dependencies.near-sdk]
+#path="../../near-sdk-rs/near-sdk"
+
+#[dev-dependencies.near-sdk-sim]
+#path="../../near-sdk-rs/near-sdk-sim"

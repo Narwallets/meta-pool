@@ -188,6 +188,13 @@ As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s nslp-shares val
 
 -------------------------
 
+## Future Expansions
+
+* USDN: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & SKASH as collateral
+
+
+-------------------------
+
 ## Technical Information, Change Log & TO-DO
 
 See the [smart contract github repository README](https://github.com/Narwallets/diversifying-staking-pool)

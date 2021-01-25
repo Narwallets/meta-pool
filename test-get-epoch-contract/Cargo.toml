@@ -1,0 +1,18 @@
+[package]
+edition = "2018"
+name = "get-epoch-contract"
+version = "0.1.0"
+authors = ["luciotato <luciotato@gmail.com>"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "2.0.0"
+
+[dev-dependencies]
+lazy_static = "1.4.0"
+quickcheck = "0.9"
+quickcheck_macros = "0.9"
+log = "0.4"
+env_logger = { version = "0.7.1", default-features = false }
