@@ -1,8 +1,8 @@
 # GREAT NEWS!!!
 
-## Welcome to the beta-test launch of DIV-POOL, one of the first BIG DAO on NEAR!
+## Welcome to the beta-test launch of DIV-POOL, one of the first BIG DAO's on NEAR!
 
-The beta-test period on GUILDNET is starting, and we need a lot of help from the guild members and the great near community.
+The beta-test period on GUILDNET is starting, and we need a lot of help from the guild and the NEAR community.
 
 ### What's the div-pool?
 
@@ -13,12 +13,12 @@ See [here](https://narwallets.github.io/diversifying-staking-pool/)
 #### Testing
 
 * Test the web app, report bugs here [github.com/Narwallets/dapp-diversifying-staking-pool/issues](https://github.com/Narwallets/dapp-diversifying-staking-pool/issues)
-* If you can track a bug into the contract, report it here [github.com/Narwallets/diversifying-staking-pool/issues](https://github.com/Narwallets/diversifying-staking-pool/issues)
+* If find a bug in the contract, report it here [github.com/Narwallets/diversifying-staking-pool/issues](https://github.com/Narwallets/diversifying-staking-pool/issues)
 
 #### Designing
 
-* Help by adding some beauty to our basic UI 
-* Migth be a popular vote if more than one UI design appears
+* Help by adding beauty to our basic UI 
+* More than one UI design, might be popular
 
 #### Analyzing
 
@@ -36,7 +36,7 @@ Yes, G-SKASH (The governance token) will be awarded to collaborators. Your G-SKA
 
 ### What will be the value of a G-SKASH on mainnet?
 
-It's not clear now. It depend on the final tokenomics, it depends on how much funds the div-pool attracts, and the future G-SKASH demand.
+It's not clear now. It depend on the final tokenomics, it depends on the amount of funding the div-pool attracts, and the future G-SKASH demand.
 
 ### How do I participate on the birth of the first BIG DAO on NEAR?
 
