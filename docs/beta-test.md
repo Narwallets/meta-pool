@@ -1,6 +1,6 @@
 # GREAT NEWS!!!
 
-## Welcome to the beta-test launch of DIV-POOL, one of the first BIG DAO's on NEAR!
+## Welcome to the beta-test launch of DIV-POOL, one of the first BIG DAOs on NEAR!
 
 The beta-test period on GUILDNET is starting, and we need a lot of help from the guild and the NEAR community.
 
@@ -43,7 +43,7 @@ It's not clear now. It depend on the final tokenomics, it depends on the amount 
 1. You need to install Narwallets' [chrome-extension wallet](https://chrome.google.com/webstore/detail/narwallets/bnbmlmjhaohpobnjfifeghjmamjfolnb)
 2. [Create an account on guildet](https://wallet.openshards.io/create)
 3. Open the wallet, choose "guildet" as network and import the account into the wallet
-4. Go to [narwallets.com/dapp/divpool](narwallets.com/dapp/divpool)
+4. Go to [www.narwallets.com/dapp/testnet/divpool](http://www.narwallets.com/dapp/testnet/divpool)
 5. Open the wallet, select your guildnet account and click "connect to web site"
 6. Operate the Dapp, stake, sell SKASH, add liquidity, find and squash bugs, help make it better and prettier, get rewards!
 
