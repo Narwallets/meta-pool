@@ -4,14 +4,14 @@
 
 This contract provides the following value items for the NEAR community:
 
-#### Helps stakers to avoid putting all eggs in one basket
-* This contract acts as an staking-pool but distributes it's delegated funds in several validators. By delegating to this contract, you greatly reduce the risk of getting no-rewards because validators' outage events and you contribute to network decentralization. Besides rewards, by staking you wil receive governance tokens: G-SKASH
+#### Helps stakers avoid putting all eggs in one basket
+* This contract acts as a staking-pool that distributes it's delegated funds to several validators. By delegating to this contract, you greatly reduce the risk of getting no-rewards due to a validators' outage and you contribute to decentralization of the network. Besides rewards, by staking you wil receive governance tokens: G-SKASH
 
 #### Provides immediate unstake 
 * This contract allows users to skip the waiting period after unstaking by providing a liquidity pool for inmediate unstaking. This also creates the opportunity for liquidity providers to earn fees for this service. 
 
 #### Contributes to decentralization for the NEAR network
-* This contract helps decentralization by distributing it's delegated funds in several validators. If you own a lockup-contract with considerable funds, you can greatly contribute to the network decentralization and reduce your risk by using this contract. Your funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
+* This contract helps decentralization by distributing it's delegated funds to several validators. If you own a lockup-contract with considerable funds, you can greatly contribute to the decentralization of the network and reduce your risk. Your funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
 
 #### Creates new Liquidity Pools
 * This contract includes several liquidity pools and the opportunity for liquidity providers to earn fees. The main pool is the NEAR/SKASH pool that provides immediate unstake (sell SKASH) for a fee 0.5-10%. There will be other pools like the SKASH/G-SKASH for the the governance tokens.
@@ -23,7 +23,7 @@ This contract provides the following value items for the NEAR community:
 
 This contract allows users to manage staked near as a TOKEN, called **SKASH**.
 
-SKASHs repesent staked NEARS, and can be transferred between users and sold for NEAR in the NEAR/SKASH Liquidity Pool (paying a fee to skip the unstaking wait period). The amount of SKASH you hold is automatically incremented each epoch when staking rewards are paid. This contract also includes a trip-meter functionality, so you can preciseliy measure rewards received.
+SKASHs repesent staked NEAR, and can be transferred between users and sold for NEAR in the NEAR/SKASH Liquidity Pool (paying a fee to skip the unstaking wait period). The amount of SKASH you hold is automatically incremented each epoch when staking rewards are paid. This contract also includes a trip-meter functionality, so you can preciseliy measure rewards received.
 
 ## Immediate Unstakings
 
@@ -33,7 +33,7 @@ In the Liquidity Pool:
  * Users providing liquidity can earn fees on each sell
  * Users wanting to unstake without the waiting period can do so for a fee
 
-The *NEAR/SKASH Liquidity Pool* is a one-sided Liquidty pool. Liquidity providers add only NEAR to the Liq. pool. The Liq. pool allows other users to SELL SKASH for NEAR (unstake) at a discounted price. The discount represents how much users value not waiting 39-52hs to receive their funds. The discount varies with the amount of NEAR in the liq. pool, but the curve is capped at the extremes. By default discount fees are in the range 1-10%, but the curve parameters can be adjusted by DAO governance (by the vote of G-SKASH governance token holders).
+The *NEAR/SKASH Liquidity Pool* is a one-sided Liquidty pool. Liquidity providers add only NEAR to the Liq. pool. The Liq. pool allows other users to SELL SKASH for NEAR (unstake) at a discounted price. The discount represents how much users do not value waiting 39-52hs to receive their funds. The discount varies with the amount of NEAR in the liq. pool, but the curve is capped at the extremes. By default discount fees are in the range 1-10%, but the curve parameters can be adjusted by DAO governance (by the vote of G-SKASH governance token holders).
 
 ![example-fee-curve](images/example-fee-curve.png)
 
@@ -67,7 +67,7 @@ Users can choose to "sell" some of their SKAHS (stake_shares) to Liquidity Provi
 
 Definitions:
 
-SKASH: one SKASH represents one staked NEAR. A SKASH is a virtual token computed from the user’s share in the total staked funds. By staking in the diversifying pool a user mint SKASHs, by unstaking, SKASHs are burned, when rewards are paid, new SKASH are minted an distributed.
+SKASH: one SKASH represents one staked NEAR. A SKASH is a virtual token computed from the user’s share in the total staked funds. By staking in the diversifying pool a user mints SKASHs, by unstaking, SKASHs are burned, when rewards are paid, new SKASH are minted and distributed.
 
 --- To BUY SKASH is equivalent to STAKE  ---
 
@@ -92,7 +92,7 @@ This operations are reflected in the UI in two steps that the user must complete
 
 In order to provide immediate unstake (sell SKASH) a Liquidity Pool and a SELL SKASH mechanism are provided by the contract:
 
-* TO SELL SKASH: The seller enter how much SKASH they want to sell and the contract replies with the NEAR amount they will receive, normally with a discount 1%-10%, depending on the NEAR balance of the liquidity pool and the fee curve parameters.
+* TO SELL SKASH: The seller enters the amount of SKASH they want to sell and the contract replies with the amount of NEAR they will receive, normally with a discount 1%-10%, depending on the NEAR balance of the liquidity pool and the fee curve parameters.
 
 
 ## Treasury
@@ -123,7 +123,7 @@ G-SKASH holders can vote on:
   * LP-providers (default 20 G-SKASH per each SKASH fee received)
 * Approve stake-loans to struggling validators
 
-Half of treasury funds must be used for DAO expansion and maintenance. The other 50% can be user for expansion by presenting proposals, o can be moved to the dividends-pool (once a month). 
+Half of treasury funds must be used for DAO expansion and maintenance. The other 50% can be user for expansion by presenting proposals, or can be moved to the dividends-pool (once a month). 
 
 The Dividends-pool is a SKASH/G-SKASH liquidity pool allowing G-SKASH owners to burn G-SKASH to obtain SKASH. This pool sets a base-price for G-SKASH tokens. When users vote to add SKASH to the dividends-pool, G-SKASH base-price is incremented. Users can also vote to remove SKASH from the dividends-pool back to the treasury, lowering the G-SKASH base price.
 
