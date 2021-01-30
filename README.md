@@ -1,7 +1,7 @@
 # Diversifying Staking Pool
 
 ## Overview
-What this is? and other non-Technical Documentation
+What is Div-Pool and other non-Technical Documentation
 
 [CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
 
@@ -21,7 +21,7 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 - NEAR/stNEAR liquidity pool, Add/Remove liquidity
 - META Minting wtih rewards
 
-### TO DO & Help needded
+### TO DO & Help needed
 
 
 #### Smart Contract  

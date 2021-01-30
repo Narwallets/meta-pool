@@ -1,10 +1,10 @@
 # GREAT NEWS!!!
 
-## Welcome to the beta-test launch of DIV-POOL, one of the first BIG DAO on NEAR!
+## Welcome to the beta-test launch of META-POOL, one of the first BIG DAOs on NEAR!
 
-The beta-test period on GUILDNET is starting, and we need a lot of help from the guild members and the great near community.
+The beta test period on TESTNET is starting, and we need a lot of help from the guild and the NEAR community.
 
-### What's the div-pool?
+### What's the meta-staking-pool?
 
 See [here](https://narwallets.github.io/diversifying-staking-pool/)
 
@@ -13,12 +13,12 @@ See [here](https://narwallets.github.io/diversifying-staking-pool/)
 #### Testing
 
 * Test the web app, report bugs here [github.com/Narwallets/dapp-diversifying-staking-pool/issues](https://github.com/Narwallets/dapp-diversifying-staking-pool/issues)
-* If you can track a bug into the contract, report it here [github.com/Narwallets/diversifying-staking-pool/issues](https://github.com/Narwallets/diversifying-staking-pool/issues)
+* If find a bug in the contract, report it here [github.com/Narwallets/diversifying-staking-pool/issues](https://github.com/Narwallets/diversifying-staking-pool/issues)
 
 #### Designing
 
-* Help by adding some beauty to our basic UI 
-* Migth be a popular vote if more than one UI design appears
+* Help by adding beauty to our basic UI 
+* More than one UI design, might be popular
 
 #### Analyzing
 
@@ -36,15 +36,15 @@ Yes, META (The governance token) will be awarded to collaborators. Your META wil
 
 ### What will be the value of a META on mainnet?
 
-It's not clear now. It depend on the final tokenomics, it depends on how much funds the div-pool attracts, and the future META demand.
+It's not clear now. It depend on the final tokenomics, it depends on the amount of funding the div-pool attracts, and the future $META demand.
 
 ### How do I participate on the birth of the first BIG DAO on NEAR?
 
 1. You need to install Narwallets' [chrome-extension wallet](https://chrome.google.com/webstore/detail/narwallets/bnbmlmjhaohpobnjfifeghjmamjfolnb)
-2. [Create an account on guildet](https://wallet.openshards.io/create)
-3. Open the wallet, choose "guildet" as network and import the account into the wallet
-4. Go to [narwallets.com/dapp/divpool](narwallets.com/dapp/divpool)
-5. Open the wallet, select your guildnet account and click "connect to web site"
+2. [Create an account on testnet](https://wallet.testnet.near.org)
+3. Open the wallet, choose "testnet" as network and import the account into the wallet
+4. Go to [www.narwallets.com/dapp/testnet/meta](http://www.narwallets.com/dapp/testnet/meta)
+5. Open the wallet, select your testnet account and click "connect to web site"
 6. Operate the Dapp, stake, sell stNEAR, add liquidity, find and squash bugs, help make it better and prettier, get rewards!
 
 ### Where are the repos
