@@ -4,6 +4,13 @@ use near_sdk::{near_bindgen, Balance, Promise};
 pub use crate::types::*;
 pub use crate::utils::*;
 
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => ({
+        env::log(format!($($arg)*).as_bytes());
+    });
+}
+
 /****************************/
 /* general Internal methods */
 /****************************/
@@ -41,13 +48,9 @@ impl DiversifiedPool {
 
         self.internal_update_account(&account_id, &account);
 
-        env::log(
-            format!(
-                "@{} deposited {}. New available balance is {}",
+        log!("@{} deposited {}. New available balance is {}",
                 account_id, amount, account.available
-            )
-            .as_bytes(),
-        );
+            );
     }
 
 
@@ -100,8 +103,8 @@ impl DiversifiedPool {
             "Not enough available balance to stake the requested amount"
         );
 
-        //use this operation to realize g-skash pending rewards
-        acc.stake_realize_g_skash(self);
+        //use this operation to realize meta pending rewards
+        acc.stake_realize_meta(self);
     
         // Calculate the number of "stake" shares that the account will receive for staking the given amount.
         let num_shares = self.stake_shares_from_amount(amount);
@@ -120,8 +123,8 @@ impl DiversifiedPool {
         self.internal_update_account(&account_id, &acc);
 
         //----------
-        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate skash in the LP by internal-clearing 
-        self.nslp_try_liquidate_skash_by_clearing();
+        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
+        self.nslp_try_liquidate_stnear_by_clearing();
 
     }
 
@@ -132,10 +135,10 @@ impl DiversifiedPool {
         let mut acc = self.internal_get_account(&account_id);
 
         let valued_shares = self.amount_from_stake_shares(acc.stake_shares);
-        assert!(valued_shares >= amount_requested, "Not enough skash");
+        assert!(valued_shares >= amount_requested, "Not enough stnear");
 
-        //use this operation to realize g-skash pending rewards
-        acc.stake_realize_g_skash(self);
+        //use this operation to realize meta pending rewards
+        acc.stake_realize_meta(self);
 
         let remains_staked = valued_shares - amount_requested;
         //if less than one near would remain, unstake all
@@ -173,12 +176,9 @@ impl DiversifiedPool {
         //--SAVE ACCOUNT--
         self.internal_update_account(&account_id, &acc);
 
-        env::log(
-            format!(
-                "@{} unstaked {}. Has now {} unstaked and {} skash. Epoch:{}",
+        log!(
+                "@{} unstaked {}. Has now {} unstaked and {} stnear. Epoch:{}",
                 account_id, amount_to_unstake, acc.unstaked, self.amount_from_stake_shares(acc.stake_shares), env::epoch_height()
-            )
-            .as_bytes(),
         );
         // env::log(
         //     format!(
@@ -238,10 +238,10 @@ impl DiversifiedPool {
     }
 
     //-----------------------------
-    // NSLP: NEAR/SKASH Liquidity Pool
+    // NSLP: NEAR/stNEAR Liquidity Pool
     //-----------------------------
 
-    // NSLP shares are trickier to compute since the NSLP itself can have SKASH
+    // NSLP shares are trickier to compute since the NSLP itself can have stNEAR
     pub(crate) fn nslp_shares_from_amount(&self, amount: u128, nslp_account: &Account) -> u128 {
         let total_pool_value: u128 = nslp_account.available
             + self.amount_from_stake_shares(nslp_account.stake_shares)
@@ -249,7 +249,7 @@ impl DiversifiedPool {
         return shares_from_amount(amount, total_pool_value, nslp_account.nslp_shares);
     }
 
-    // NSLP shares are trickier to compute since the NSLP itself can have SKASH
+    // NSLP shares are trickier to compute since the NSLP itself can have stNEAR
     pub(crate) fn amount_from_nslp_shares(&self, num_shares: u128, nslp_account: &Account) -> u128 {
         let total_pool_value: u128 = nslp_account.available
             + self.amount_from_stake_shares(nslp_account.stake_shares)
@@ -258,12 +258,12 @@ impl DiversifiedPool {
     }
 
     //----------------------------------
-    // The LP acquires skash providing the sell-skash service
-    // The LP needs to unstake the skash ASAP, to recover liquidity and to keep the fee low.
-    // The LP can use staking orders to fast-liquidate its skash by clearing.
-    // returns true if it uses the clearing to liquidate
+    // The LP acquires stnear providing the sell-stnear service
+    // The LP needs to unstake the stnear ASAP, to recover liquidity and to keep the fee low.
+    // The LP can use staking orders to fast-liquidate its stnear by clearing.
+    // returns true if it uses clearing to liquidate
     // ---------------------------------
-    pub(crate) fn nslp_try_liquidate_skash_by_clearing(&mut self) -> bool {
+    pub(crate) fn nslp_try_liquidate_stnear_by_clearing(&mut self) -> bool {
         if self.total_for_staking <= self.total_actually_staked {
             //nothing ordered to be actually staked
             return false;
@@ -271,7 +271,7 @@ impl DiversifiedPool {
         let amount_to_stake:u128 =  self.total_for_staking - self.total_actually_staked;
         let mut nslp_account = self.internal_get_nslp_account();
         if nslp_account.stake_shares > 0 {
-            //how much skash does the nslp have?
+            //how much stnear does the nslp have?
             let valued_stake_shares = self.amount_from_stake_shares(nslp_account.stake_shares);
             //how much can we liquidate?
             let (shares_to_liquidate, amount_to_liquidate) =
@@ -281,7 +281,8 @@ impl DiversifiedPool {
                 else { 
                     ( self.stake_shares_from_amount(amount_to_stake), amount_to_stake )
                 };
-            //nslp sells-skash directly, contract now needs to stake less
+            //nslp sells-stnear directly, contract now needs to stake less
+            log!("NSLP clearing {} {}",shares_to_liquidate, amount_to_liquidate);
             nslp_account.sub_stake_shares(shares_to_liquidate, amount_to_liquidate);
             self.total_stake_shares -= shares_to_liquidate;
             self.total_for_staking -= amount_to_liquidate; //nslp has burned shares, total_for_staking is less now
@@ -294,18 +295,15 @@ impl DiversifiedPool {
         return false;
     }
 
-    /// computes the disocunt_basis_points for NEAR/SKASH Swap based on NSLP Balance
+    /// computes the disocunt_basis_points for NEAR/stNEAR Swap based on NSLP Balance
     pub(crate) fn internal_get_discount_basis_points(
         &self,
         available_near: u128,
         max_nears_to_pay: u128,
     ) -> u16 {
-        env::log(
-            format!(
+        log!(
                 "get_discount_basis_points available_near={}  max_nears_to_pay={}",
                 available_near, max_nears_to_pay
-            )
-            .as_bytes(),
         );
 
         if available_near <= max_nears_to_pay {
@@ -331,18 +329,18 @@ impl DiversifiedPool {
         return discount_basis_points as u16;
     }
 
-    /// user method - NEAR/SKASH SWAP functions
-    /// return how much NEAR you can get by selling x SKASH
-    pub(crate) fn internal_get_near_amount_sell_skash(
+    /// user method - NEAR/stNEAR SWAP functions
+    /// return how much NEAR you can get by selling x stNEAR
+    pub(crate) fn internal_get_near_amount_sell_stnear(
         &self,
         available_near: u128,
-        skash_to_sell: u128,
+        stnear_to_sell: u128,
     ) -> u128 {
         let discount_basis_points =
-            self.internal_get_discount_basis_points(available_near, skash_to_sell);
+            self.internal_get_discount_basis_points(available_near, stnear_to_sell);
         assert!(discount_basis_points < 10000, "inconsistence d>1");
-        let discount = apply_pct(discount_basis_points, skash_to_sell);
-        return (skash_to_sell - discount).into(); //when SKASH is sold user gets a discounted value because the user skips the waiting period
+        let discount = apply_pct(discount_basis_points, stnear_to_sell);
+        return (stnear_to_sell - discount).into(); //when stNEAR is sold user gets a discounted value because the user skips the waiting period
 
         // env::log(
         //     format!(
@@ -467,19 +465,19 @@ impl DiversifiedPool {
                 sender_acc.available -= am;
                 receiver_acc.available += am;
             }
-            "SKASH" => {
-                let skash = self.amount_from_stake_shares(sender_acc.stake_shares);
-                assert!(skash >= am,"not enough SKASH at {}",sender_id);
+            "stNEAR" => {
+                let stnear = self.amount_from_stake_shares(sender_acc.stake_shares);
+                assert!(stnear >= am,"not enough stNEAR at {}",sender_id);
                 let shares = self.stake_shares_from_amount(am);
                 assert!(sender_acc.stake_shares <= shares,"IC");
                 sender_acc.stake_shares -= shares;
                 receiver_acc.stake_shares += shares;
             }
-            "G-SKASH" => {
-                sender_acc.stake_realize_g_skash(self);
-                assert!(sender_acc.realized_g_skash >= am,"not enough G-SKASH at {}",sender_id);
-                sender_acc.realized_g_skash -= am;
-                receiver_acc.realized_g_skash += am;
+            "META" => {
+                sender_acc.stake_realize_meta(self);
+                assert!(sender_acc.realized_meta >= am,"not enough META at {}",sender_id);
+                sender_acc.realized_meta -= am;
+                receiver_acc.realized_meta += am;
             }
             _ => panic!("invalid symbol")
         }

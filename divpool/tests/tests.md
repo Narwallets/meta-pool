@@ -7,7 +7,7 @@
 - [x]  complete classic unstake
 - [x]  distribute unstaking
 - [x]  add liquidity
-- [x]  sell skash
-- [ ]  get g-skash
+- [x]  sell stnear
+- [ ]  get meta
 - [ ]  remove liquidity
 

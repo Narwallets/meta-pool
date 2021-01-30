@@ -1,11 +1,25 @@
-export NODE_ENV=testnet
+set -e
+NETWORK=testnet
+OWNER=lucio.$NETWORK
+OPERATOR=$OWNER
+MASTER_ACC=pool.$NETWORK
+CONTRACT_ACC=diversifying.$MASTER_ACC
 
-#echo "Delete diversifying.pool.testnet? are you sure? Ctrl-C to cancel"
+divy --cliconf -c $CONTRACT_ACC -acc $OWNER
+
+export NODE_ENV=$NETWORK
+
+## delete acc
+#echo "Delete $CONTRACT_ACC? are you sure? Ctrl-C to cancel"
 #read input
-#near delete diversifying.pool.testnet pool.testnet --accountId pool.testnet
-#near create-account diversifying.pool.testnet --masterAccount pool.testnet
-#near deploy diversifying.pool.testnet ./res/diversifying_staking_pool.wasm new '{"owner_account_id":"dao.diversifying.pool.testnet", "treasury_account_id":"treasury.diversifying.pool.testnet", "operator_account_id":"lucio.testnet"}' --accountId pool.testnet
+#near delete $CONTRACT_ACC $MASTER_ACC
+#near create-account $CONTRACT_ACC --masterAccount $MASTER_ACC
+#divy deploy ./res/divpool.wasm
+#divy new { owner_account_id:$OWNER, treasury_account_id:treasury.$CONTRACT_ACC, operator_account_id:$OPERATOR } --accountId $MASTER_ACC
+## set params
+#divy set_params
+#divy default_pools_testnet
 
 ## redeploy code only
-near deploy diversifying.pool.testnet ./res/diversifying_staking_pool.wasm  --accountId pool.testnet
+divy deploy ./res/divpool.wasm  --accountId $MASTER_ACC
 

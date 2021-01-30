@@ -26,14 +26,12 @@ impl DiversifiedPool {
         // }
         // self.last_epoch_height = epoch_height;
 
-        env::log("1".as_bytes());
         //----------
-        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate skash in the LP by internal-clearing 
-        if self.nslp_try_liquidate_skash_by_clearing(){
+        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
+        if self.nslp_try_liquidate_stnear_by_clearing(){
             return true; //call again
         }
 
-        env::log("2".as_bytes());
         //do wo need to stake?
         if self.total_for_staking <= self.total_actually_staked {
             //no staking needed
@@ -45,7 +43,7 @@ impl DiversifiedPool {
         //-------------------------------------
         let total_amount_to_stake =  self.total_for_staking - self.total_actually_staked;
         let (sp_inx, mut amount_to_stake) = self.get_staking_pool_requiring_stake(total_amount_to_stake);
-        env::log(format!("{} {} {}",total_amount_to_stake,sp_inx, amount_to_stake).as_bytes());
+        log!("{} {} {}",total_amount_to_stake,sp_inx, amount_to_stake);
         if amount_to_stake > 0 {
             //most unbalanced pool found & available
             //launch async stake or deposit_and_stake on that pool
@@ -53,7 +51,6 @@ impl DiversifiedPool {
             let sp = &mut self.staking_pools[sp_inx];
             sp.busy_lock = true;
 
-            env::log("3".as_bytes());
             //case 1. pool has unstaked amount (we could be at the unstaking delay waiting period)
             if sp.unstaked > 0 {
                 //pool has unstaked amount
@@ -147,7 +144,7 @@ impl DiversifiedPool {
             }
             self.total_actually_staked -= amount; //undo preventive action considering the amount staked
         }
-        env::log(format!("Staking of {} at @{} {}", amount, sp.account_id, result).as_bytes());
+        log!("Staking of {} at @{} {}", amount, sp.account_id, result);
         return stake_succeeded;
     }
 
@@ -230,7 +227,7 @@ impl DiversifiedPool {
             self.total_unstaked_and_waiting -= amount; //undo preventive action considering the amount unstaked
         }
 
-        env::log(format!("Unstaking of {} at @{} {}", amount, sp.account_id, result).as_bytes());
+        log!("Unstaking of {} at @{} {}", amount, sp.account_id, result);
         return unstake_succeeded;
     }
 
@@ -263,12 +260,9 @@ impl DiversifiedPool {
             return;
         }
 
-        env::log(
-            format!(
+        log!(
                 "Fetching total balance from the staking pool @{}",
                 sp.account_id
-            )
-            .as_bytes(),
         );
 
         sp.busy_lock = true;
@@ -351,12 +345,9 @@ impl DiversifiedPool {
         new_staked_amount = total_balance.0;
 
         if new_staked_amount < sp.staked {
-            env::log(
-                format!(
+            log!(
                     "INCONSISTENCY @{} says total_balance < sp.staked",
                     sp.account_id
-                )
-                .as_bytes(),
             );
             rewards = 0;
         } else {
@@ -364,12 +355,9 @@ impl DiversifiedPool {
             rewards = new_staked_amount - sp.staked;
         }
 
-        env::log(
-            format!(
+        log!(
                 "sp:{} old_balance:{} new_balance:{} rewards:{}",
                 sp.account_id, sp.staked, new_staked_amount, rewards
-            )
-            .as_bytes(),
         );
 
         //updated accumulated_staked_rewards value for the contract
@@ -491,12 +479,9 @@ impl DiversifiedPool {
         else {
             result = "has failed";
         }
-        env::log(
-            format!(
+        log!(
                 "The withdrawal of {} from @{} {}",
                 amount, &sp.account_id, result
-            )
-            .as_bytes(),
         );
         return withdrew_amount;
     }

@@ -65,7 +65,7 @@ impl DiversifiedPool {
         self.internal_deposit();
     }
 
-    // deletes an account and transfer all balances to beneficiary_id. beneficiary_id must pre-exists if the account holds skash or G-SKASH
+    // deletes an account and transfer all balances to beneficiary_id. beneficiary_id must pre-exists if the account holds stnear or META
     // Notes: account_to_delete_id is superflous on purpose
     // assert!(`account_to_delete_id`==`predecessor_id`)
     pub fn delete_account(&mut self, account_to_delete_id: AccountId, beneficiary_id: AccountId) {
@@ -78,9 +78,9 @@ impl DiversifiedPool {
             beneficiary_acc.available+=acc.available;
             acc.available = 0;
         }
-        if acc.realized_g_skash>0 {
-            beneficiary_acc.realized_g_skash+=acc.realized_g_skash;
-            acc.realized_g_skash = 0;
+        if acc.realized_meta>0 {
+            beneficiary_acc.realized_meta+=acc.realized_meta;
+            acc.realized_meta = 0;
         }
         if acc.stake_shares>0 {
             beneficiary_acc.stake_shares+=acc.stake_shares;
@@ -155,16 +155,16 @@ impl DiversifiedPool {
                 reference:Some("near.org".into()),
             },
             SymbolInfo {
-                symbol:"SKASH".into(),
+                symbol:"stNEAR".into(),
                 name:"div-pool staked near".into(),
                 total_supply: Some(self.total_for_staking.into()),
                 owner_account_id: Some(env::current_account_id()),
                 reference: Some("www.narwallets.com".into()),
             },
             SymbolInfo {
-                symbol:"G-SKASH".into(),
+                symbol:"META".into(),
                 name:"div-pool governance token".into(),
-                total_supply: Some(self.total_g_skash.into()),
+                total_supply: Some(self.total_meta.into()),
                 owner_account_id: Some(env::current_account_id()),
                 reference: Some("www.narwallets.com".into()),
             },
@@ -174,7 +174,7 @@ impl DiversifiedPool {
     /// Returns info & total supply of tokens of a symbol
     pub fn get_symbol(&self, symbol:String) -> SymbolInfo {
         let inx:usize = match &symbol as &str {
-            "NEAR"=>0, "SKASH"=>1, "G-SKASH"=>2, _=>panic!("invalid symbol")
+            "NEAR"=>0, "stNEAR"=>1, "META"=>2, _=>panic!("invalid symbol")
         };
         return self.get_symbols()[inx].clone();
     }
@@ -189,8 +189,8 @@ impl DiversifiedPool {
         let acc = self.internal_get_account(&account_id);
         let amount:u128 = match &symbol as &str {
             "NEAR"=>acc.available ,
-            "SKASH"=>self.amount_from_stake_shares(acc.stake_shares), 
-            "G-SKASH"=>acc.total_g_skash(self), 
+            "stNEAR"=>self.amount_from_stake_shares(acc.stake_shares), 
+            "META"=>acc.total_meta(self), 
             _=>panic!("invalid symbol")
         };
         return amount.into();

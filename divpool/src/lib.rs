@@ -1,4 +1,4 @@
-//! A smart contract that allows diversified staking, SKASH and G-SKASH farming
+//! A smart contract that allows diversified staking, stNEAR and META farming
 //! this contract include parts of core-contracts/lockup-contract & core-contracts/staking-pool
 
 /********************************/
@@ -166,7 +166,7 @@ pub struct Account {
     /// Before someone stakes share-price is computed and shares are "sold" to the user so he only owns what he's staking and no rewards yet
     /// When a user reequest a transfer to other user, staked & shares from the origin are moved to staked & shares of the destination
     /// The share_price can be computed as total_for_staking/total_stake_shares
-    /// shares * share_price = SKASHs
+    /// shares * share_price = stNEARs
     stake_shares: u128,
 
     /// Incremented when the user asks for unstaking. The amount of unstaked near in the pools
@@ -176,28 +176,28 @@ pub struct Account {
     /// The fund will be locked for -AT LEAST- NUM_EPOCHS_TO_UNLOCK epochs
     pub unstaked_requested_unlock_epoch: EpochHeight,
 
-    //-- G-SKASH
-    ///realized G-SKASH, can be used to transfer G-SKASH from one user to another
-    // Total G-SKASH = realized_g_skash + staking_meter.mul_rewards(valued_stake_shares) + lp_meter.mul_rewards(valued_lp_shares)
-    // Every time the user operates on STAKE/UNSTAKE: we realize g-skash: realized_g_skash += staking_meter.mul_rewards(valued_staked_shares)
-    // Every time the user operates on ADD.LIQ/REM.LIQ.: we realize g-skash: realized_g_skash += lp_meter.mul_rewards(valued_lp_shares)
-    // if the user calls farm_g_skash() we perform both
-    pub realized_g_skash: u128,
-    ///Staking rewards meter (to mint skash for the user)
+    //-- META
+    ///realized META, can be used to transfer META from one user to another
+    // Total META = realized_meta + staking_meter.mul_rewards(valued_stake_shares) + lp_meter.mul_rewards(valued_lp_shares)
+    // Every time the user operates on STAKE/UNSTAKE: we realize meta: realized_meta += staking_meter.mul_rewards(valued_staked_shares)
+    // Every time the user operates on ADD.LIQ/REM.LIQ.: we realize meta: realized_meta += lp_meter.mul_rewards(valued_lp_shares)
+    // if the user calls farm_meta() we perform both
+    pub realized_meta: u128,
+    ///Staking rewards meter (to mint stnear for the user)
     pub staking_meter: RewardMeter,
-    ///LP fee gains meter (to mint g-skash for the user)
+    ///LP fee gains meter (to mint meta for the user)
     pub lp_meter: RewardMeter,
 
     //-- STATISTICAL DATA --
     // User's statistical data
     // This is the user-cotrolled staking rewards meter, it works as a car's "trip meter". The user can reset them to zero.
-    // to compute trip_rewards we start from current_skash, undo unstakes, undo stakes and finally subtract trip_start_skash
-    // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
+    // to compute trip_rewards we start from current_stnear, undo unstakes, undo stakes and finally subtract trip_start_stnear
+    // trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
     /// trip_start: (timpestamp in miliseconds) this field is set at account creation, so it will start metering rewards
     pub trip_start: Timestamp,
 
-    /// How much skashs the user had at "trip_start".
-    pub trip_start_skash: u128,
+    /// How much stnears the user had at "trip_start".
+    pub trip_start_stnear: u128,
     // how much skahs the staked since trip start. always incremented
     pub trip_accum_stakes: u128,
     // how much the user unstaked since trip start. always incremented
@@ -215,13 +215,13 @@ impl Default for Account {
             stake_shares: 0,
             unstaked: 0,
             unstaked_requested_unlock_epoch: 0,
-            //g-skash & reward-meters
-            realized_g_skash: 0,
+            //meta & reward-meters
+            realized_meta: 0,
             staking_meter: RewardMeter::default(),
             lp_meter: RewardMeter::default(),
             //trip-meter fields
             trip_start: env::block_timestamp() / 1_000_000, //converted from nanoseconds to miliseconds
-            trip_start_skash: 0,
+            trip_start_stnear: 0,
             trip_accum_stakes: 0,
             trip_accum_unstakes: 0,
             //NS liquidity pool
@@ -236,55 +236,55 @@ impl Account {
             && self.unstaked == 0
             && self.stake_shares == 0
             && self.nslp_shares == 0
-            && self.realized_g_skash == 0;
+            && self.realized_meta == 0;
     }
 
     #[inline]
     fn valued_nslp_shares(&self, main: &DiversifiedPool, nslp_account: &Account) -> u128 { main.amount_from_nslp_shares(self.nslp_shares, &nslp_account) }
 
-    /// return realized g_skash plus pending rewards
-    fn total_g_skash(&self, main: &DiversifiedPool) -> u128 {
+    /// return realized meta plus pending rewards
+    fn total_meta(&self, main: &DiversifiedPool) -> u128 {
         let valued_stake_shares = main.amount_from_stake_shares(self.stake_shares);
         let nslp_account = main.internal_get_nslp_account();
         let valued_lp_shares = self.valued_nslp_shares(main, &nslp_account);
-        debug!("self.realized_g_skash:{}, self.staking_meter.compute_rewards(valued_stake_shares):{} self.lp_meter.compute_rewards(valued_lp_shares):{}",
-            self.realized_g_skash, self.staking_meter.compute_rewards(valued_stake_shares), self.lp_meter.compute_rewards(valued_lp_shares));
-        return self.realized_g_skash
+        debug!("self.realized_meta:{}, self.staking_meter.compute_rewards(valued_stake_shares):{} self.lp_meter.compute_rewards(valued_lp_shares):{}",
+            self.realized_meta, self.staking_meter.compute_rewards(valued_stake_shares), self.lp_meter.compute_rewards(valued_lp_shares));
+        return self.realized_meta
             + self.staking_meter.compute_rewards(valued_stake_shares)
             + self.lp_meter.compute_rewards(valued_lp_shares);
     }
 
 
     //---------------------------------
-    fn stake_realize_g_skash(&mut self, main:&mut DiversifiedPool) {
-        //realize g-skash pending rewards on LP operation
+    fn stake_realize_meta(&mut self, main:&mut DiversifiedPool) {
+        //realize meta pending rewards on LP operation
         let valued_actual_shares = main.amount_from_stake_shares(self.stake_shares);
-        let pending_g_skash = self.staking_meter.realize(valued_actual_shares, main.staker_g_skash_mult_pct);
-        self.realized_g_skash += pending_g_skash;
-        main.total_g_skash += pending_g_skash;
+        let pending_meta = self.staking_meter.realize(valued_actual_shares, main.staker_meta_mult_pct);
+        self.realized_meta += pending_meta;
+        main.total_meta += pending_meta;
     }
 
-    fn nslp_realize_g_skash(&mut self, nslp_account:&Account, main:&mut DiversifiedPool)  {
-        //realize g-skash pending rewards on LP operation
+    fn nslp_realize_meta(&mut self, nslp_account:&Account, main:&mut DiversifiedPool)  {
+        //realize meta pending rewards on LP operation
         let valued_actual_shares = self.valued_nslp_shares(main, &nslp_account);
-        let pending_g_skash = self.lp_meter.realize(valued_actual_shares, main.lp_provider_g_skash_mult_pct);
-        self.realized_g_skash += pending_g_skash;
-        main.total_g_skash += pending_g_skash;
+        let pending_meta = self.lp_meter.realize(valued_actual_shares, main.lp_provider_meta_mult_pct);
+        self.realized_meta += pending_meta;
+        main.total_meta += pending_meta;
     }
 
     //----------------
-    fn add_stake_shares(&mut self, num_shares:u128, skash:u128){
+    fn add_stake_shares(&mut self, num_shares:u128, stnear:u128){
         self.stake_shares += num_shares;
-        //to buy skash is stake
-        self.trip_accum_stakes += skash;
-        self.staking_meter.stake(skash);
+        //to buy stnear is stake
+        self.trip_accum_stakes += stnear;
+        self.staking_meter.stake(stnear);
     }
-    fn sub_stake_shares(&mut self, num_shares:u128, skash:u128){
-        assert!(self.stake_shares>num_shares,"RSS-NES");
+    fn sub_stake_shares(&mut self, num_shares:u128, stnear:u128){
+        assert!(self.stake_shares>=num_shares,"sub_stake_shares self.stake_shares {} < num_shares {}",self.stake_shares,num_shares);
         self.stake_shares -= num_shares;
-        //to sell skash is to unstake
-        self.trip_accum_unstakes += skash;
-        self.staking_meter.unstake(skash);
+        //to sell stnear is to unstake
+        self.trip_accum_unstakes += stnear;
+        self.staking_meter.unstake(stnear);
     }
 
     /// user method
@@ -372,7 +372,7 @@ pub struct DiversifiedPool {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
 
-    /// if you're holding skash there's a min balance you must mantain to backup storage usage
+    /// if you're holding stnear there's a min balance you must mantain to backup storage usage
     /// can be adjusted down by keeping the required NEAR in the developers or operator account
     pub min_account_balance: u128,
 
@@ -402,8 +402,8 @@ pub struct DiversifiedPool {
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
     pub total_stake_shares: u128,
 
-    /// G-SKASH is the governance token. Total g-skash minted
-    pub total_g_skash: u128,
+    /// META is the governance token. Total meta minted
+    pub total_meta: u128,
 
     /// The total amount of tokens actually unstaked and in the waiting-delay (the tokens are in the staking pools)
     pub total_unstaked_and_waiting: u128,
@@ -428,22 +428,22 @@ pub struct DiversifiedPool {
     pub staking_pools: Vec<StakingPoolInfo>,
 
     //The next 3 values define the Liq.Provider fee curve
-    // NEAR/SKASH Liquidity pool fee curve params
-    // We assume this pool is always UNBALANCED, there should be more SKASH than NEAR 99% of the time
-    ///NEAR/SKASH Liquidity pool target
+    // NEAR/stNEAR Liquidity pool fee curve params
+    // We assume this pool is always UNBALANCED, there should be more stNEAR than NEAR 99% of the time
+    ///NEAR/stNEAR Liquidity pool target
     pub nslp_near_target: u128,
-    ///NEAR/SKASH Liquidity pool max fee
+    ///NEAR/stNEAR Liquidity pool max fee
     pub nslp_max_discount_basis_points: u16, //10%
-    ///NEAR/SKASH Liquidity pool min fee
+    ///NEAR/stNEAR Liquidity pool min fee
     pub nslp_min_discount_basis_points: u16, //0.1%
 
-    //The next 3 values define g-skash rewards multiplers %. (100 => 1x, 200 => 2x, ...)
-    ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
-    pub staker_g_skash_mult_pct: u16,
-    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
-    pub skash_sell_g_skash_mult_pct: u16,
-    ///for each SKASH paid as discount, reward LP providers  with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
-    pub lp_provider_g_skash_mult_pct: u16,
+    //The next 3 values define meta rewards multiplers %. (100 => 1x, 200 => 2x, ...)
+    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
+    pub staker_meta_mult_pct: u16,
+    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
+    pub stnear_sell_meta_mult_pct: u16,
+    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
+    pub lp_provider_meta_mult_pct: u16,
 
     /// Operator account ID (who's in charge to call distribute_xx() on a periodic basis)
     pub operator_account_id: String,
@@ -477,7 +477,7 @@ impl DiversifiedPool {
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts.
 
-    3. diversified-staking: these are the extensions to the standard staking pool (buy/sell skash, finish_unstake)
+    3. diversified-staking: these are the extensions to the standard staking pool (buy/sell stnear, finish_unstake)
 
     4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), tranfer_token(tok), transfer_token_to_contract(tok)
        A [NEP-xxx] manages multiple tokens
@@ -514,17 +514,17 @@ impl DiversifiedPool {
             total_actually_unstaked_and_retrieved: 0, // tracks unstaked AND retrieved amount (tokens are here)
             accumulated_staked_rewards: 0,
             total_stake_shares: 0,
-            total_g_skash: 0,
+            total_meta: 0,
             accounts: UnorderedMap::new("A".into()),
             nslp_near_target: ONE_NEAR * 1_000_000,
             nslp_max_discount_basis_points: 500, //5%
             nslp_min_discount_basis_points: 50,   //0.5%
-            ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
-            skash_sell_g_skash_mult_pct: 100, //1x
-            ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
-            staker_g_skash_mult_pct: 500, //5x
-            ///for each SKASH paid as discount, reward LPs with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
-            lp_provider_g_skash_mult_pct: 2000, //20x
+            ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
+            stnear_sell_meta_mult_pct: 100, //1x
+            ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
+            staker_meta_mult_pct: 500, //5x
+            ///for each stNEAR paid as discount, reward LPs with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
+            lp_provider_meta_mult_pct: 2000, //20x
 
             staking_pools: Vec::new(),
 
@@ -723,8 +723,8 @@ impl DiversifiedPool {
         );
     }
 
-    /// buy_skash_stake. Identical to stake, migth change in the future
-    pub fn buy_skash_stake(&mut self, amount: U128String) {
+    /// buy_stnear_stake. Identical to stake, migth change in the future
+    pub fn buy_stnear_stake(&mut self, amount: U128String) {
         self.internal_stake(amount.0);
     }
 
@@ -732,40 +732,49 @@ impl DiversifiedPool {
     // NSLP Methods
     //---------------------------
 
-    /// user method - NEAR/SKASH SWAP functions
-    /// return how much NEAR you can get by selling x SKASH
-    pub fn get_near_amount_sell_skash(&self, skash_to_sell: U128String) -> U128String {
+    /// user method - NEAR/stNEAR SWAP functions
+    /// return how much NEAR you can get by selling x stNEAR
+    pub fn get_near_amount_sell_stnear(&self, stnear_to_sell: U128String) -> U128String {
         let lp_account = self.internal_get_nslp_account();
-        return self.internal_get_near_amount_sell_skash(lp_account.available, skash_to_sell.0).into();
+        return self.internal_get_near_amount_sell_stnear(lp_account.available, stnear_to_sell.0).into();
     }
 
-    /// NEAR/SKASH Liquidity Pool
-    /// computes the discount_basis_points for NEAR/SKASH Swap based on NSLP Balance
-    /// If you want to sell x SKASH
-    pub fn nslp_get_discount_basis_points(&self, skash_to_sell: U128String) -> u16 {
+    /// NEAR/stNEAR Liquidity Pool
+    /// computes the discount_basis_points for NEAR/stNEAR Swap based on NSLP Balance
+    /// If you want to sell x stNEAR
+    pub fn nslp_get_discount_basis_points(&self, stnear_to_sell: U128String) -> u16 {
         let lp_account = self.internal_get_nslp_account();
-        return self.internal_get_discount_basis_points(lp_account.available, skash_to_sell.0);
+        return self.internal_get_discount_basis_points(lp_account.available, stnear_to_sell.0);
     }
 
     /// user method
-    /// Sells-skash at discount in the NLSP
+    /// Sells-stnear at discount in the NLSP
     /// returns near received
-    pub fn sell_skash(
+    pub fn sell_stnear(
         &mut self,
-        skash_to_sell: U128String,
+        stnear_to_sell: U128String,
         min_expected_near: U128String,
     ) -> U128String {
         let account_id = env::predecessor_account_id();
         let mut user_account = self.internal_get_account(&account_id);
 
-        let skash_owned = self.amount_from_stake_shares(user_account.stake_shares);
+        let stnear_owned = self.amount_from_stake_shares(user_account.stake_shares);
         assert!(
-            skash_owned >= skash_to_sell.0,
-            "Not enough skash in your account"
+            stnear_owned >= stnear_to_sell.0,
+            "Not enough stnear in your account"
         );
+        //cannot leave less than 1 NEAR
+        let to_sell = if stnear_owned - stnear_to_sell.0 < ONE_NEAR {
+            //if less than 1 near left, sell all
+            stnear_owned
+        }
+        else {
+            stnear_to_sell.0
+        };
+
         let mut nslp_account = self.internal_get_nslp_account();
         let near_to_receive =
-            self.internal_get_near_amount_sell_skash(nslp_account.available, skash_to_sell.0);
+            self.internal_get_near_amount_sell_stnear(nslp_account.available, to_sell);
         assert!(
             near_to_receive >= min_expected_near.0,
             "Price changed, your min results requirements {} not satisfied {}. Try again", min_expected_near.0, near_to_receive
@@ -775,7 +784,7 @@ impl DiversifiedPool {
             "available < near_to_receive"
         );
 
-        let stake_shares_sell = self.stake_shares_from_amount(skash_to_sell.0);
+        let stake_shares_sell = self.stake_shares_from_amount(to_sell);
         assert!(
             user_account.stake_shares >= stake_shares_sell,
             "account.stake_shares < stake_shares_sell"
@@ -785,65 +794,65 @@ impl DiversifiedPool {
         nslp_account.available -= near_to_receive;
         user_account.available += near_to_receive;
 
-        //the fee is the difference between skash sold and near received
-        assert!(near_to_receive < skash_to_sell.0);
-        let fee_in_skash = skash_to_sell.0 - near_to_receive;
+        //the fee is the difference between stnear sold and near received
+        assert!(near_to_receive < to_sell);
+        let fee_in_stnear = to_sell - near_to_receive;
         // compute how many shares the swap fee represent
-        let fee_in_shares = self.stake_shares_from_amount(fee_in_skash);
+        let fee_in_shares = self.stake_shares_from_amount(fee_in_stnear);
 
         // involved accounts
         let mut treasury_account = self.internal_get_account(&self.treasury_account_id);
         let mut operator_account = self.internal_get_account(&self.operator_account_id);
         let mut developers_account = self.internal_get_account(&DEVELOPERS_ACCOUNT_ID.into());
 
-        // The treasury cut in skash-shares (25% by default)
+        // The treasury cut in stnear-shares (25% by default)
         let treasury_stake_shares_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_shares);
-        let treasury_skash_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_skash);
-        treasury_account.add_stake_shares(treasury_stake_shares_cut,treasury_skash_cut);
+        let treasury_stnear_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_stnear);
+        treasury_account.add_stake_shares(treasury_stake_shares_cut,treasury_stnear_cut);
         
         // The cut that the contract owner (operator) takes. (3% of 1% normally)
         let operator_stake_shares_cut = apply_pct( self.operator_swap_cut_basis_points,fee_in_shares);
-        let operator_skash_cut = apply_pct( self.operator_swap_cut_basis_points, fee_in_skash);
-        operator_account.add_stake_shares(operator_stake_shares_cut,operator_skash_cut);
+        let operator_stnear_cut = apply_pct( self.operator_swap_cut_basis_points, fee_in_stnear);
+        operator_account.add_stake_shares(operator_stake_shares_cut,operator_stnear_cut);
 
         // The cut that the developers take. (2% of 1% normally)
         let developers_stake_shares_cut = apply_pct(DEVELOPERS_SWAP_CUT_BASIS_POINTS, fee_in_shares);
-        let developers_skash_cut = apply_pct(DEVELOPERS_SWAP_CUT_BASIS_POINTS, fee_in_skash);
-        developers_account.add_stake_shares(developers_stake_shares_cut,developers_skash_cut);
+        let developers_stnear_cut = apply_pct(DEVELOPERS_SWAP_CUT_BASIS_POINTS, fee_in_stnear);
+        developers_account.add_stake_shares(developers_stake_shares_cut,developers_stnear_cut);
 
-        // all the realized g-skash from non-liq.provider cuts (30%), send to operator & developers
-        let skash_non_lp_cut = treasury_skash_cut+operator_skash_cut+developers_skash_cut;
-        let g_skash_from_operation = apply_multiplier(skash_non_lp_cut, self.lp_provider_g_skash_mult_pct);
-        self.total_g_skash += g_skash_from_operation;
-        operator_account.realized_g_skash += g_skash_from_operation/2;
-        developers_account.realized_g_skash += g_skash_from_operation/2;
+        // all the realized meta from non-liq.provider cuts (30%), send to operator & developers
+        let stnear_non_lp_cut = treasury_stnear_cut+operator_stnear_cut+developers_stnear_cut;
+        let meta_from_operation = apply_multiplier(stnear_non_lp_cut, self.lp_provider_meta_mult_pct);
+        self.total_meta += meta_from_operation;
+        operator_account.realized_meta += meta_from_operation/2;
+        developers_account.realized_meta += meta_from_operation/2;
 
         debug!("treasury_stake_shares_cut:{} operator_stake_shares_cut:{} developers_stake_shares_cut:{} fee_in_stake_shares:{}",
             treasury_stake_shares_cut,operator_stake_shares_cut,developers_stake_shares_cut,fee_in_shares);
 
-        debug!("treasury_skash_cut:{} operator_skash_cut:{} developers_skash_cut:{} fee_in_skash:{} skash_non_lp_cut:{} ",
-            treasury_skash_cut,operator_skash_cut,developers_skash_cut,fee_in_skash,skash_non_lp_cut);
+        debug!("treasury_stnear_cut:{} operator_stnear_cut:{} developers_stnear_cut:{} fee_in_stnear:{} stnear_non_lp_cut:{} ",
+            treasury_stnear_cut,operator_stnear_cut,developers_stnear_cut,fee_in_stnear,stnear_non_lp_cut);
 
         assert!(fee_in_shares > treasury_stake_shares_cut + developers_stake_shares_cut + operator_stake_shares_cut);
 
-        // The rest of the skash sold goes into the LP. Because it is a larger number than NEAR removes, it will increase share value for all LP providers.
-        // Adding value to the pool via adding more skash than the near removed, will be counted as rewards for the nslp_meter, 
-        // so g-skash for LP providers will be created. G-skash for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_g_skash_from_lp()
+        // The rest of the stnear sold goes into the LP. Because it is a larger number than NEAR removes, it will increase share value for all LP providers.
+        // Adding value to the pool via adding more stnear than the near removed, will be counted as rewards for the nslp_meter, 
+        // so meta for LP providers will be created. G-stnear for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_meta_from_lp()
         debug!("nslp_account.add_stake_shares {} {}",
             stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
-            skash_to_sell.0 - (treasury_skash_cut + operator_skash_cut + developers_skash_cut));
+            to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut));
 
-        // major part of skash sold goes to the NSLP
+        // major part of stnear sold goes to the NSLP
         nslp_account.add_stake_shares( 
             stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
-            skash_to_sell.0 - (treasury_skash_cut + operator_skash_cut + developers_skash_cut ));
+            to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut ));
 
-        //complete the transfer, remove skash from the user (skash was transferred to the LP & others)
-        user_account.sub_stake_shares(stake_shares_sell, skash_to_sell.0);
-        { //give the selling user some g-skash too
-            let g_skash_to_seller = apply_multiplier(fee_in_skash, self.skash_sell_g_skash_mult_pct);
-            self.total_g_skash += g_skash_to_seller;
-            user_account.realized_g_skash += g_skash_to_seller;
+        //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
+        user_account.sub_stake_shares(stake_shares_sell, to_sell);
+        { //give the selling user some meta too
+            let meta_to_seller = apply_multiplier(fee_in_stnear, self.stnear_sell_meta_mult_pct);
+            self.total_meta += meta_to_seller;
+            user_account.realized_meta += meta_to_seller;
         }
 
         //Save involved accounts
@@ -856,8 +865,8 @@ impl DiversifiedPool {
 
         env::log(
             format!(
-                "@{} sold {} SKASH for {} NEAR",
-                account_id, skash_to_sell.0, near_to_receive
+                "@{} sold {} stNEAR for {} NEAR",
+                account_id, to_sell, near_to_receive
             )
             .as_bytes(),
         );
@@ -881,8 +890,8 @@ impl DiversifiedPool {
         //get NSLP account
         let mut nslp_account = self.internal_get_nslp_account();
 
-        //use this LP operation to realize g-skash pending rewards (same as nslp_harvest_g_skash)
-        acc.nslp_realize_g_skash(&nslp_account, self);
+        //use this LP operation to realize meta pending rewards (same as nslp_harvest_meta)
+        acc.nslp_realize_meta(&nslp_account, self);
 
         // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
         let num_shares = self.nslp_shares_from_amount(amount.0, &nslp_account);
@@ -910,8 +919,8 @@ impl DiversifiedPool {
         let mut acc = self.internal_get_account(&account_id);
         let mut nslp_account = self.internal_get_nslp_account();
 
-        //use this LP operation to realize g-skash pending rewards (same as nslp_harvest_g_skash)
-        acc.nslp_realize_g_skash(&nslp_account, self);
+        //use this LP operation to realize meta pending rewards (same as nslp_harvest_meta)
+        acc.nslp_realize_meta(&nslp_account, self);
 
         //how much does this user owns
         let valued_actual_shares = acc.valued_nslp_shares(self, &nslp_account);
@@ -935,14 +944,14 @@ impl DiversifiedPool {
             num_shares_to_burn = acc.nslp_shares;
         }
 
-        //compute proportionals SKASH/UNSTAKED/NEAR
-        //1st: SKASH
+        //compute proportionals stNEAR/UNSTAKED/NEAR
+        //1st: stNEAR
         let stake_shares_to_remove = proportional(
             nslp_account.stake_shares,
             num_shares_to_burn,
             nslp_account.nslp_shares,
         );
-        let skash_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
+        let stnear_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
         //2nd: unstaked in the pool, proportional to shares beign burned
         let unstaked_to_remove = proportional(
             nslp_account.unstaked,
@@ -951,20 +960,20 @@ impl DiversifiedPool {
         );
         //3rd: NEAR, by difference
         assert!(
-            to_remove >= skash_to_remove_from_pool + unstaked_to_remove,
+            to_remove >= stnear_to_remove_from_pool + unstaked_to_remove,
             "inconsistency NTR<STR+UTR"
         );
-        let near_to_remove = to_remove - skash_to_remove_from_pool - unstaked_to_remove;
+        let near_to_remove = to_remove - stnear_to_remove_from_pool - unstaked_to_remove;
 
         //update user account
-        //remove first from SKASH in the pool, proportional to shares beign burned
+        //remove first from stNEAR in the pool, proportional to shares beign burned
         acc.available += near_to_remove;
-        acc.add_stake_shares(stake_shares_to_remove, skash_to_remove_from_pool); //add skash to user acc
+        acc.add_stake_shares(stake_shares_to_remove, stnear_to_remove_from_pool); //add stnear to user acc
         acc.unstaked += unstaked_to_remove;
         acc.nslp_shares -= num_shares_to_burn; //shares this user burns
         //update NSLP account
         nslp_account.available -= near_to_remove;
-        nslp_account.sub_stake_shares(stake_shares_to_remove,skash_to_remove_from_pool); //remove skash from the pool
+        nslp_account.sub_stake_shares(stake_shares_to_remove,stnear_to_remove_from_pool); //remove stnear from the pool
         nslp_account.unstaked -= unstaked_to_remove;
         nslp_account.nslp_shares -= num_shares_to_burn; //burn from total nslp shares
 
@@ -975,26 +984,26 @@ impl DiversifiedPool {
 
 
     //------------------
-    // HARVEST G-SKASH
+    // HARVEST META
     //------------------
 
-    ///g-skash rewards for stakers are realized during stake(), unstake() or by calling harvest_g_skash_from_staking()
-    //realize pending g-skash rewards from staking
-    pub fn harvest_g_skash_from_staking(&mut self){
+    ///meta rewards for stakers are realized during stake(), unstake() or by calling harvest_meta_from_staking()
+    //realize pending meta rewards from staking
+    pub fn harvest_meta_from_staking(&mut self){
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        //realize and mint g-skash
-        acc.stake_realize_g_skash(self);
+        //realize and mint meta
+        acc.stake_realize_meta(self);
 
         //--SAVE ACCOUNT
         self.internal_update_account(&account_id, &acc);
     }
 
-    ///g-skash rewards for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_g_skash_from_lp()
-    ///realize pending g-skash rewards from LP
-    pub fn harvest_g_skash_from_lp(&mut self){
+    ///meta rewards for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_meta_from_lp()
+    ///realize pending meta rewards from LP
+    pub fn harvest_meta_from_lp(&mut self){
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
@@ -1002,8 +1011,8 @@ impl DiversifiedPool {
         //get NSLP account
         let nslp_account = self.internal_get_nslp_account();
         
-        //realize and mint g-skash
-        acc.nslp_realize_g_skash(&nslp_account, self);
+        //realize and mint meta
+        acc.nslp_realize_meta(&nslp_account, self);
         
         //--SAVE ACCOUNT
         self.internal_update_account(&account_id, &acc);
@@ -1074,19 +1083,19 @@ mod tests {
     //     assert_almost_eq(contract.get_owners_balance().0, to_yocto(TEST_INITIAL_BALANCE));
     // }
     #[test]
-    fn test_internal_get_near_amount_sell_skash() {
+    fn test_internal_get_near_amount_sell_stnear() {
         let (_context, contract) = contract_only_setup();
         let lp_balance_y: u128 = to_yocto(500_000);
-        let sell_skash_y: u128 = to_yocto(120);
-        let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_skash_y);
+        let sell_stnear_y: u128 = to_yocto(120);
+        let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_stnear_y);
         let near_amount_y =
-            contract.internal_get_near_amount_sell_skash(lp_balance_y, sell_skash_y);
-        assert!(near_amount_y <= sell_skash_y);
-        let discountedy = sell_skash_y - near_amount_y;
+            contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
+        assert!(near_amount_y <= sell_stnear_y);
+        let discountedy = sell_stnear_y - near_amount_y;
         let _discounted_display_n = ytof(discountedy);
-        let _sell_skash_display_n = ytof(sell_skash_y);
-        assert!(discountedy == apply_pct(discount_bp, sell_skash_y));
-        assert!(near_amount_y == sell_skash_y - discountedy);
+        let _sell_stnear_display_n = ytof(sell_stnear_y);
+        assert!(discountedy == apply_pct(discount_bp, sell_stnear_y));
+        assert!(near_amount_y == sell_stnear_y - discountedy);
     }
 */
 

@@ -24,9 +24,9 @@ impl DiversifiedPool {
     /// Returns JSON representation of the account for the given account ID.
     pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult {
         let acc = self.internal_get_account(&account_id);
-        let skash = self.amount_from_stake_shares(acc.stake_shares);
-        // trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
-        let trip_rewards = (skash + acc.trip_accum_unstakes).saturating_sub(acc.trip_accum_stakes + acc.trip_start_skash);
+        let stnear = self.amount_from_stake_shares(acc.stake_shares);
+        // trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
+        let trip_rewards = (stnear + acc.trip_accum_unstakes).saturating_sub(acc.trip_accum_stakes + acc.trip_start_stnear);
         //NLSP share value
         let mut nslp_share_value: u128 = 0;
         if acc.nslp_shares != 0 {
@@ -36,14 +36,14 @@ impl DiversifiedPool {
         return GetAccountInfoResult {
             account_id,
             available: acc.available.into(),
-            skash: skash.into(),
+            stnear: stnear.into(),
             unstaked: acc.unstaked.into(),
             unstaked_requested_unlock_epoch: acc.unstaked_requested_unlock_epoch.into(),
             can_withdraw: (env::epoch_height() >= acc.unstaked_requested_unlock_epoch),
-            total: (acc.available + skash + acc.unstaked).into(),
+            total: (acc.available + stnear + acc.unstaked).into(),
             //trip-meter
             trip_start: acc.trip_start.into(),
-            trip_start_skash: acc.trip_start_skash.into(),
+            trip_start_stnear: acc.trip_start_stnear.into(),
             trip_accum_stakes: acc.trip_accum_stakes.into(),
             trip_accum_unstakes: acc.trip_accum_unstakes.into(),
             trip_rewards: trip_rewards.into(),
@@ -51,7 +51,7 @@ impl DiversifiedPool {
             nslp_shares: acc.nslp_shares.into(),
             nslp_share_value: nslp_share_value.into(),
 
-            g_skash: acc.total_g_skash(self).into(),
+            meta: acc.total_meta(self).into(),
         };
     }
 
@@ -93,7 +93,7 @@ impl DiversifiedPool {
             total_unstaked_and_waiting: self.total_unstaked_and_waiting.into(),
             total_actually_unstaked_and_retrieved: self.total_actually_unstaked_and_retrieved.into(),
             total_stake_shares: self.total_stake_shares.into(),
-            total_g_skash: self.total_g_skash.into(),
+            total_meta: self.total_meta.into(),
             accounts_count: self.accounts.len().into(),
             staking_pools_count: self.staking_pools.len() as u16,
             nslp_liquidity: lp_account.available.into(),
@@ -111,9 +111,9 @@ impl DiversifiedPool {
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
             nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
 
-            staker_g_skash_mult_pct: self.staker_g_skash_mult_pct,
-            skash_sell_g_skash_mult_pct: self.skash_sell_g_skash_mult_pct,
-            lp_provider_g_skash_mult_pct: self.lp_provider_g_skash_mult_pct,
+            staker_meta_mult_pct: self.staker_meta_mult_pct,
+            stnear_sell_meta_mult_pct: self.stnear_sell_meta_mult_pct,
+            lp_provider_meta_mult_pct: self.lp_provider_meta_mult_pct,
                     
             operator_rewards_fee_basis_points: self.operator_rewards_fee_basis_points,
             operator_swap_cut_basis_points: self.operator_swap_cut_basis_points,
@@ -132,9 +132,9 @@ impl DiversifiedPool {
         self.nslp_max_discount_basis_points = params.nslp_max_discount_basis_points;
         self.nslp_min_discount_basis_points = params.nslp_min_discount_basis_points;
 
-        self.staker_g_skash_mult_pct = params.staker_g_skash_mult_pct;
-        self.skash_sell_g_skash_mult_pct = params.skash_sell_g_skash_mult_pct;
-        self.lp_provider_g_skash_mult_pct = params.lp_provider_g_skash_mult_pct;
+        self.staker_meta_mult_pct = params.staker_meta_mult_pct;
+        self.stnear_sell_meta_mult_pct = params.stnear_sell_meta_mult_pct;
+        self.lp_provider_meta_mult_pct = params.lp_provider_meta_mult_pct;
                     
         self.operator_rewards_fee_basis_points = params.operator_rewards_fee_basis_points;
         self.operator_swap_cut_basis_points = params.operator_swap_cut_basis_points;

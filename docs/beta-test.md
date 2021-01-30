@@ -22,7 +22,7 @@ See [here](https://narwallets.github.io/diversifying-staking-pool/)
 
 #### Analyzing
 
-* Help define Tokenomics for G-SKASH
+* Help define Tokenomics for META
 
 #### Coding
 
@@ -32,11 +32,11 @@ See [here](https://narwallets.github.io/diversifying-staking-pool/)
 
 ### Will contributors be rewarded?
 
-Yes, G-SKASH (The governance token) will be awarded to collaborators. Your G-SKASH will be awarded to your account during div-pool mainnet implementation.
+Yes, META (The governance token) will be awarded to collaborators. Your META will be awarded to your account during div-pool mainnet implementation.
 
-### What will be the value of a G-SKASH on mainnet?
+### What will be the value of a META on mainnet?
 
-It's not clear now. It depend on the final tokenomics, it depends on how much funds the div-pool attracts, and the future G-SKASH demand.
+It's not clear now. It depend on the final tokenomics, it depends on how much funds the div-pool attracts, and the future META demand.
 
 ### How do I participate on the birth of the first BIG DAO on NEAR?
 
@@ -45,7 +45,7 @@ It's not clear now. It depend on the final tokenomics, it depends on how much fu
 3. Open the wallet, choose "guildet" as network and import the account into the wallet
 4. Go to [narwallets.com/dapp/divpool](narwallets.com/dapp/divpool)
 5. Open the wallet, select your guildnet account and click "connect to web site"
-6. Operate the Dapp, stake, sell SKASH, add liquidity, find and squash bugs, help make it better and prettier, get rewards!
+6. Operate the Dapp, stake, sell stNEAR, add liquidity, find and squash bugs, help make it better and prettier, get rewards!
 
 ### Where are the repos
 

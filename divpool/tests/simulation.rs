@@ -385,7 +385,7 @@ fn simtest() {
   assert!(total_w_bp.unwrap_json_value() == 10000);
 
   //---- alice
-  //---- deposit & buy skash
+  //---- deposit & buy stnear
   let alice = sim.testnet.create_user("alice".to_string(), ntoy(500_000));
   let alice_dep_and_stake = ntoy(100_000);
   let ads_res = call!(alice,divpool.deposit_and_stake(), alice_dep_and_stake, 50*TGAS);
@@ -509,7 +509,7 @@ fn simtest() {
   //----------------------------------------------------------
   {
     println!("----------------------------------");
-    println!("------- bob sells skash (immediate unstake)");
+    println!("------- bob sells stnear (immediate unstake)");
 
     sim.show_account_info(&bob.account_id());
     sim.show_account_info(&carol.account_id());
@@ -527,17 +527,17 @@ fn simtest() {
     let dbp = view!(divpool.nslp_get_discount_basis_points(TO_SELL.into()));
     print_vecu8("divpool.nslp_get_discount_basis_points",&dbp.unwrap());
 
-    let bss_res = call!(bob,divpool.sell_skash(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), gas=100*TGAS);
+    let bss_res = call!(bob,divpool.sell_stnear(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), gas=100*TGAS);
     print_helper(&bss_res);
     let received = as_u128(&bss_res.unwrap_json_value());
-    assert!(received >= MIN_REQUESTED,"sell skash failed {} {}",MIN_REQUESTED,received);
+    assert!(received >= MIN_REQUESTED,"sell stnear failed {} {}",MIN_REQUESTED,received);
 
     let bob_info = sim.show_account_info(&bob.account_id());
     let carol_info =sim.show_account_info(&carol.account_id());
     let nslp_info = sim.show_account_info(NSLP_INTERNAL_ACCOUNT);
 
-    assert!(as_u128(&bob_info["g_skash"]) == 668*E24);
-    assert!(as_u128(&carol_info["g_skash"]) == 9_352*E24);
+    assert!(as_u128(&bob_info["meta"]) == 668*E24);
+    assert!(as_u128(&carol_info["meta"]) == 9_352*E24);
     
   }
 

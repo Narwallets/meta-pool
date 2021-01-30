@@ -101,8 +101,8 @@ pub struct GetAccountInfoResult {
     pub account_id: AccountId,
     /// The available balance that can be withdrawn
     pub available: U128,
-    /// The amount of SKASH owned (computed from the shares owned)
-    pub skash: U128,
+    /// The amount of stNEAR owned (computed from the shares owned)
+    pub stnear: U128,
     /// The amount unstaked waiting for withdraw
     pub unstaked: U128,
 
@@ -119,23 +119,23 @@ pub struct GetAccountInfoResult {
     // These fields works as a car's "trip meter". The user can reset them to zero.
     /// trip_start: (unix timpestamp) this field is set at account creation, so it will start metering rewards
     pub trip_start: U64,
-    /// How many skashs the user had at "trip_start". 
-    pub trip_start_skash: U128,
+    /// How many stnears the user had at "trip_start". 
+    pub trip_start_stnear: U128,
     /// how much the user staked since trip start. always incremented
     pub trip_accum_stakes: U128,
     /// how much the user unstaked since trip start. always incremented
     pub trip_accum_unstakes: U128,
-    /// to compute trip_rewards we start from current_skash, undo unstakes, undo stakes and finally subtract trip_start_skash
-    /// trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
-    /// trip_rewards = current_skash + trip_accum_unstakes - trip_accum_stakes - trip_start_skash;
+    /// to compute trip_rewards we start from current_stnear, undo unstakes, undo stakes and finally subtract trip_start_stnear
+    /// trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
+    /// trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
     pub trip_rewards: U128,
 
     //NLSP
     pub nslp_shares: U128,
     pub nslp_share_value: U128,
 
-    //G-SKASH owned (including pending rewards)
-    pub g_skash: U128,
+    //META owned (including pending rewards)
+    pub meta: U128,
 
 }
 
@@ -176,16 +176,16 @@ pub struct GetContractStateResult {
     /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
     pub total_actually_unstaked_and_retrieved: U128,
 
-    /// total g-skash minted
-    pub total_g_skash: U128, 
+    /// total meta minted
+    pub total_meta: U128, 
 
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulatred amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: U128, 
 
-    /// How much NEAR is available to immediate unstake (sell SKASH)
+    /// How much NEAR is available to immediate unstake (sell stNEAR)
     pub nslp_liquidity: U128,
-    /// Current discount for immediate unstake (sell SKASH)
+    /// Current discount for immediate unstake (sell stNEAR)
     pub nslp_current_discount_basis_points: u16,
 
     //how many accounts there are
@@ -209,20 +209,20 @@ pub struct ContractParamsJSON {
     /// adjustable min account available balance (to backup storage)
     pub min_account_balance: U128String,
 
-    ///NEAR/SKASH Liquidity pool target
+    ///NEAR/stNEAR Liquidity pool target
     pub nslp_near_target: U128String,
-    ///NEAR/SKASH Liquidity pool max fee
+    ///NEAR/stNEAR Liquidity pool max fee
     pub nslp_max_discount_basis_points: u16, //10%
-    ///NEAR/SKASH Liquidity pool min fee
+    ///NEAR/stNEAR Liquidity pool min fee
     pub nslp_min_discount_basis_points: u16, //0.1%
 
-    //The next 3 values define g-skash rewards multiplers %. (100 => 1x, 200 => 2x, ...)
-    ///for each SKASH paid staking reward, reward SKASH holders with g-SKASH. default:5x. reward G-SKASH = rewards * mult_pct / 100
-    pub staker_g_skash_mult_pct: u16,
-    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:1x. reward G-SKASH = discounted * mult_pct / 100
-    pub skash_sell_g_skash_mult_pct: u16,
-    ///for each SKASH paid as discount, reward SKASH sellers with g-SKASH. default:20x. reward G-SKASH = fee * mult_pct / 100
-    pub lp_provider_g_skash_mult_pct: u16,
+    //The next 3 values define meta rewards multiplers %. (100 => 1x, 200 => 2x, ...)
+    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
+    pub staker_meta_mult_pct: u16,
+    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
+    pub stnear_sell_meta_mult_pct: u16,
+    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
+    pub lp_provider_meta_mult_pct: u16,
 
     /// operator_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
     pub operator_rewards_fee_basis_points: u16,

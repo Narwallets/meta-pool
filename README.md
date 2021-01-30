@@ -18,24 +18,24 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 - Initial version based on core-contracts/lockup and core-contracts/staking-pool
 - Deposit, withdraw
 - Distributed stake/unstake
-- NEAR/SKASH liquidity pool, Add/Remove liquidity
-- G-SKASH Minting wtih rewards
+- NEAR/stNEAR liquidity pool, Add/Remove liquidity
+- META Minting wtih rewards
 
 ### TO DO & Help needded
 
 
 #### Smart Contract  
  - [x] Deposit/withdraw
- - [x] Buy Skash/Stake
- - [x] Sell SKASH/immediate unstake
+ - [x] Buy stNEAR/Stake
+ - [x] Sell stNEAR/immediate unstake
  - [x] Classic unstake-wait-finish-unstake
  - [x] User trip-meter, measure rewards
  - [x] distribute staking/unstaking
  - [x] retrieve unstaked and ready
- - [x] NEAR/SKASH Liquidity Pool, Add/Remove liquidity
+ - [x] NEAR/stNEAR Liquidity Pool, Add/Remove liquidity
  - [x] clearing mechanism on stake to restore liquidity in the NSLP
- - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token contract). Implement for NEAR, SKASH and G-SKASH
- - [ ] Dividends-pool SKASH/G-SKASH
+ - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token contract). Implement for NEAR, stNEAR and META
+ - [ ] Dividends-pool stNEAR/META
  - [ ] Staking-loans to whitelisted validators
  - [ ] Emergency Staking (from the nslp) to whitelisted validators
 
@@ -49,15 +49,15 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
  - [x] add a staking pool, set weight
 
 #### Governing
- - [x] Mint and distribute G-SKASH with rewards
+ - [x] Mint and distribute META with rewards
  - [ ] Phase II - Governing DAO
 
 #### Infrastructure
 - [ ] External chron to call distribute()
 - [ ] compute remainig epoch time
 - [ ] withelist pools before adding them
-- [ ] auto-unstake SKASH in the NSLP (when the clearing mechanism is not enough)
+- [ ] auto-unstake stNEAR in the NSLP (when the clearing mechanism is not enough)
 
 #### Expansions
 
-- [ ] USDN: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & SKASH as collateral
+- [ ] USDN: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & stNEAR as collateral
