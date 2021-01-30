@@ -1,4 +1,4 @@
-# Diversifying Staking Pool
+# Meta Staking Pool
 
 ## Overview
 
@@ -145,7 +145,7 @@ Periodic calls to `distribute_staking()/distribute_unstaking()/withdraw_from_a_p
 ## User stories:
 ### Alice
 Alice wants to stake her NEAR with low risk, and also help the community by promoting validators diversification. 
-Alice opens an account in the contract: diversifying.pool.near
+Alice opens an account in the contract: meta.pool.near
 
 Alice deposits 750_000 NEAR in her div-pool account. 
 Alice buys 750_000 stNEAR. Her 750_000 NEAR are distributed between the staking-pools by an automatic distribution mechanism to keep the validators balanced. 
@@ -154,7 +154,7 @@ She starts earning staking rewards on her stNEAR, she can track precisely her re
 By holding SKAHS she has the possibility to sell some of her stNEAR skipping the waiting period if the need arises.
 
 ### Bob
-Bob already has an account in the diversifying-pool contract. He has 10_000 stNEAR earning rewards. 
+Bob already has an account in the meta-pool contract. He has 10_000 stNEAR earning rewards. 
 
 Bob needs to unstake 5_000 NEAR to use in an emergency. He can’t wait 39-54hs to get his NEAR. 
 

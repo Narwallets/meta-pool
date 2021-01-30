@@ -6,9 +6,9 @@
 /********************************/
 // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
 // see also pub fn get_contract_info
-const CONTRACT_NAME: &str = "diversifying staking pool";
+const CONTRACT_NAME: &str = "Meta Staking Pool";
 const CONTRACT_VERSION: &str = "0.1.0";
-const DEFAULT_WEB_APP_URL: &str = "http://divpool.narwallets.com";
+const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -477,7 +477,7 @@ impl DiversifiedPool {
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts.
 
-    3. diversified-staking: these are the extensions to the standard staking pool (buy/sell stnear, finish_unstake)
+    3. meta-staking: these are the extensions to the standard staking pool (buy/sell stnear, finish_unstake)
 
     4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), tranfer_token(tok), transfer_token_to_contract(tok)
        A [NEP-xxx] manages multiple tokens

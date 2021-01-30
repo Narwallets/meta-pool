@@ -1,7 +1,7 @@
-# Diversifying Staking Pool
+# Meta Staking Pool
 
 ## Overview
-What is Div-Pool and other non-Technical Documentation
+What is Meta-Pool and other non-Technical Documentation
 
 [CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
 
