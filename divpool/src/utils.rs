@@ -1,6 +1,13 @@
 use near_sdk::{env, PromiseResult};
 pub use crate::types::*;
 
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => ({
+        env::log(format!($($arg)*).as_bytes());
+    });
+}
+
 
 pub fn assert_min_balance(amount:u128){
     assert!(amount > 0, "Amount should be positive");

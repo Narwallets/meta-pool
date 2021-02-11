@@ -24,11 +24,19 @@ pub struct SymbolInfo {
 /// Interface for recipient contract on multi-fungible-token transfers.
 #[ext_contract(ext_multifuntok_receiver)]
 pub trait ExtMultiFunTokReceiver {
+
+    //NEP-141 single fun token for the default token STNEAR
+    fn ft_on_transfer(&mut self, sender_id: AccountId,amount: U128String, _msg: String); 
+
     fn on_multifuntok_transfer(sender_id: AccountId, symbol:String, amount: U128String, memo:String);
 }
 /// Interface for callback after "on_multifuntok_transfer" to check if the receiving contract executed "on_multifuntok_transfer" ok
 #[ext_contract(ext_self_callback)]
 pub trait ExtMultiFunTokSelfCallback {
+
+    //NEP-141 single fun token, for the default token
+    fn after_ft_on_transfer(&mut self, sender_id:AccountId, contract_id: AccountId, amount: U128String);
+
     fn after_multifuntok_transfer(sender_id: AccountId, contract_id: AccountId, symbol:String, amount: U128String);
 }
 
@@ -98,6 +106,66 @@ impl DiversifiedPool {
         self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver_id, &symbol, amount.0);
     }
 
+    //NEP-141 for default token STNEAR, ft_transfer
+    /// Transfer `amount` of tokens from `predecessor_account_id` to another user `receiver_id`.
+    pub fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128String,  #[allow(unused_variables)] memo:Option<String>){
+        self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver_id, STNEAR, amount.0);
+    }
+
+    //NEP-141 for token STNEAR, ft_transfer_call
+    /// Transfer `amount` of tokens from the caller of the contract (`predecessor_id`) to a contract at `receiver_id`.
+    /// Requirements:
+    /// * receiver_id must be a contract and must respond to `ft_on_transfer(&mut self, sender_id: AccountId, amount: U128String, _msg: String ) -> u128`
+    /// * if receiver_id is not a contract or `ft_on_transfer` fails, the transfer is rolled-back
+    pub fn ft_transfer_call(&mut self, receiver_id: AccountId, amount: U128String, msg:String, #[allow(unused_variables)] memo:Option<String>){
+
+        self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver_id, STNEAR, amount.0);
+
+        ext_multifuntok_receiver::ft_on_transfer(
+            env::predecessor_account_id(),
+            amount,
+            msg,
+            //promise params:
+            &receiver_id, //contract
+            0, //attached native NEAR amount
+            100_000_000_000_000, //100TGAS
+        )
+        .then(ext_self_callback::after_ft_on_transfer(
+            env::predecessor_account_id(),
+            receiver_id,
+            amount,
+            //promise params:
+            &env::current_account_id(),//contract
+            0, //attached native NEAR amount
+            30_000_000_000_000, //30TGAS
+        ));
+
+    }
+    /// After Transfer `amount` of symbol tokens to a contract at `receiver_id`.
+    /// Check if the contract completed execution of on_multifuntok_transfer
+    /// and undo trasnfer if it failed
+    pub fn after_ft_on_transfer(&mut self, sender_id:AccountId, receiver_id: AccountId, amount: U128String, #[callback] unused_tokens: U128String){
+
+        assert_callback_calling();
+
+        let amt = amount.0;
+        if !is_promise_success() {
+            //call failed/panicked
+            //undo the transfer
+            log!("call failed transfer reverted");
+            self.internal_multifuntok_transfer( &receiver_id, &sender_id, &STNEAR, amt);
+        }
+        else {
+            if unused_tokens.0 > 0 {
+                //some tokens returned, max to undo is the amount trasnferred
+                let undo_amt = std::cmp::min(amt,unused_tokens.0);
+                //partially undo the transfer - max to undo is the amount trasnferred
+                self.internal_multifuntok_transfer( &receiver_id, &sender_id, &STNEAR, undo_amt);
+                log!("{} unused tokens returned", undo_amt);
+            }
+        }
+    }
+
     /// Transfer `amount` of symbol tokens from the caller of the contract (`predecessor_id`) to a contract at `receiver_id`.
     /// Requirements:
     /// * receiver_id must pre-exist
@@ -134,6 +202,9 @@ impl DiversifiedPool {
     /// Check if the contract completed execution of on_multifuntok_transfer
     /// and undo trasnfer if it failed
     pub fn after_multifuntok_transfer(&mut self, sender_id:AccountId, contract_id: AccountId, symbol:String, amount: U128String){
+
+        assert_callback_calling();
+
         if !is_promise_success() {
             //undo transfer
             self.internal_multifuntok_transfer( &contract_id, &sender_id, &symbol, amount.0);
@@ -155,7 +226,7 @@ impl DiversifiedPool {
                 reference:Some("near.org".into()),
             },
             SymbolInfo {
-                symbol:"stNEAR".into(),
+                symbol:STNEAR.into(),
                 name:"div-pool staked near".into(),
                 total_supply: Some(self.total_for_staking.into()),
                 owner_account_id: Some(env::current_account_id()),
@@ -174,7 +245,7 @@ impl DiversifiedPool {
     /// Returns info & total supply of tokens of a symbol
     pub fn get_symbol(&self, symbol:String) -> SymbolInfo {
         let inx:usize = match &symbol as &str {
-            "NEAR"=>0, "stNEAR"=>1, "META"=>2, _=>panic!("invalid symbol")
+            "NEAR"=>0, STNEAR=>1, "META"=>2, _=>panic!("invalid symbol")
         };
         return self.get_symbols()[inx].clone();
     }
@@ -189,7 +260,7 @@ impl DiversifiedPool {
         let acc = self.internal_get_account(&account_id);
         let amount:u128 = match &symbol as &str {
             "NEAR"=>acc.available ,
-            "stNEAR"=>self.amount_from_stake_shares(acc.stake_shares), 
+            STNEAR=>self.amount_from_stake_shares(acc.stake_shares), 
             "META"=>acc.total_meta(self), 
             _=>panic!("invalid symbol")
         };

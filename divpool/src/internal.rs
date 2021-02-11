@@ -1,15 +1,8 @@
 use crate::*;
-use near_sdk::{near_bindgen, Balance, Promise};
+use near_sdk::{Balance, Promise};
 
 pub use crate::types::*;
 pub use crate::utils::*;
-
-#[macro_export]
-macro_rules! log {
-    ($($arg:tt)*) => ({
-        env::log(format!($($arg)*).as_bytes());
-    });
-}
 
 /****************************/
 /* general Internal methods */
@@ -32,7 +25,6 @@ pub fn assert_min_amount(amount: u128) {
 /***************************************/
 /* Internal methods staking-pool trait */
 /***************************************/
-#[near_bindgen]
 impl DiversifiedPool {
 
     pub(crate) fn internal_deposit(&mut self) {
@@ -456,7 +448,7 @@ impl DiversifiedPool {
     /// Transfer `amount` of tok tokens from the caller of the contract (`predecessor_id`) to `receiver_id`.
     /// Requirements:
     /// * receiver_id must pre-exist
-    pub fn internal_multifuntok_transfer(&mut self, sender_id: &AccountId, receiver_id: &AccountId, symbol:&String, am: u128) {
+    pub fn internal_multifuntok_transfer(&mut self, sender_id: &AccountId, receiver_id: &AccountId, symbol:&str, am: u128) {
         let mut sender_acc = self.internal_get_account(&sender_id);
         let mut receiver_acc = self.internal_get_account(&receiver_id);
         match &symbol as &str {
@@ -465,13 +457,12 @@ impl DiversifiedPool {
                 sender_acc.available -= am;
                 receiver_acc.available += am;
             }
-            "stNEAR" => {
-                let stnear = self.amount_from_stake_shares(sender_acc.stake_shares);
-                assert!(stnear >= am,"not enough stNEAR at {}",sender_id);
+            STNEAR => {
+                let max_stnear = self.amount_from_stake_shares(sender_acc.stake_shares);
+                assert!( am <= max_stnear,"not enough stNEAR at {}",sender_id);
                 let shares = self.stake_shares_from_amount(am);
-                assert!(sender_acc.stake_shares <= shares,"IC");
-                sender_acc.stake_shares -= shares;
-                receiver_acc.stake_shares += shares;
+                sender_acc.sub_stake_shares(shares,am);
+                receiver_acc.add_stake_shares(shares,am);
             }
             "META" => {
                 sender_acc.stake_realize_meta(self);

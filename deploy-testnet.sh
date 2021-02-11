@@ -22,3 +22,6 @@ export NODE_ENV=$NETWORK
 ## redeploy code only
 meta deploy ./res/divpool.wasm  --accountId $MASTER_ACC
 
+#save last deployment  (to being able to recover state/tokens)
+cp ./res/divpool.wasm ./res/divpool.`date +%F.%T`.wasm
+date +%F.%T

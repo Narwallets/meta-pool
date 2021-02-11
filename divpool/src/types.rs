@@ -3,6 +3,9 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{AccountId};
 use uint::construct_uint;
 
+// default token
+pub const STNEAR:&str = "stNEAR";
+
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;

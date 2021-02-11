@@ -42,10 +42,11 @@ It's not clear now. It depend on the final tokenomics, it depends on the amount 
 
 1. You need to install Narwallets' [chrome-extension wallet](https://chrome.google.com/webstore/detail/narwallets/bnbmlmjhaohpobnjfifeghjmamjfolnb)
 2. [Create an account on testnet](https://wallet.testnet.near.org)
-3. Open the wallet, choose "testnet" as network and import the account into the wallet
-4. Go to [www.narwallets.com/dapp/testnet/meta](http://www.narwallets.com/dapp/testnet/meta)
-5. Open the wallet, select your testnet account and click "connect to web site"
-6. Operate the Dapp, stake, sell stNEAR, add liquidity, find and squash bugs, help make it better and prettier, get rewards!
+3. You can get testnet nears [here](https://near-examples.github.io/token-printer/)
+4. Open the wallet, choose "testnet" as network and import the account into the wallet
+5. Go to [www.narwallets.com/dapp/testnet/meta](http://www.narwallets.com/dapp/testnet/meta)
+6. Open the wallet, select your testnet account and click "connect to web site"
+7. Operate the Dapp, stake, sell stNEAR, add liquidity, find and squash bugs, help make it better and prettier, get rewards!
 
 ### Where are the repos
 
