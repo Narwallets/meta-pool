@@ -3,14 +3,14 @@
 ## Overview
 What is Meta-Pool and other non-Technical Documentation
 
-[CLICK HERE](https://narwallets.github.io/diversifying-staking-pool/)
+[CLICK HERE](https://narwallets.github.io/meta-pool/)
 
 ## Technical Documentation
-[Technical Notes](https://narwallets.github.io/diversifying-staking-pool/technical-notes)
+[Technical Notes](https://narwallets.github.io/meta-pool/technical-notes)
 
 ### Repositories 
 
-This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/dapp-diversifying-staking-pool.git
+This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/webapp-meta-pool.git
 
 ### Change Log
 #### `0.1.0`

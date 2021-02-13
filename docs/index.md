@@ -197,5 +197,5 @@ As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s nslp-shares val
 
 ## Technical Information, Change Log & TO-DO
 
-See the [smart contract github repository README](https://github.com/Narwallets/diversifying-staking-pool)
+See the [smart contract github repository README](https://github.com/Narwallets/meta-pool)
 

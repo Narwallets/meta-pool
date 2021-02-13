@@ -63,8 +63,8 @@ impl DiversifiedPool {
             dataVersion:1,
             name: CONTRACT_NAME.into(),
             version:CONTRACT_VERSION.into(),
-            source:"https://github.com/Narwallets/diversifying-staking-pool".into(), 
-            standards:vec!("NEP-129".into(),"NEP-138".into()),  
+            source:"https://github.com/Narwallets/meta-pool".into(), 
+            standards:vec!("NEP-138".into(),"NEP-141".into()),  
             webAppUrl:self.web_app_url.clone(),
             developersAccountId:DEVELOPERS_ACCOUNT_ID.into(),
             auditorAccountId: self.auditor_account_id.clone()
