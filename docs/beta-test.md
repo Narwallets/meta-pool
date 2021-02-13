@@ -40,7 +40,7 @@ It's not clear now. It depend son the final tokenomics, on the amount of staking
 
 ### How do I participate on the birth of the first BIG DAO on NEAR?
 
-1. You need to install latest/beta Narwallet chrome-extension wallet in **developer mode**. [Instructions here](https://github.com/Narwallets/beta-testing/README.md)
+1. You need to install latest/beta Narwallet chrome-extension wallet in **developer mode**. [Instructions here](https://github.com/Narwallets/beta-testing/blob/main/README.md)
 2. [Create an account on testnet](https://wallet.testnet.near.org)
 3. You can get testnet NEAR tokens here [here](https://near-examples.github.io/token-printer/)
 4. Open the wallet, choose "testnet" as network and import the account into the wallet
@@ -50,5 +50,5 @@ It's not clear now. It depend son the final tokenomics, on the amount of staking
 
 ### Where are the repos
 
-*  Web App: [github.com/Narwallets/dapp-meta-pool](https://github.com/Narwallets/dapp-meta-pool)
+*  Web App: [github.com/Narwallets/webapp-meta-pool](https://github.com/Narwallets/webapp-meta-pool)
 *  Smart Contract (rust): [github.com/Narwallets/meta-pool](https://github.com/Narwallets/meta-pool)
