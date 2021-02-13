@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "divpool",
+    "metapool",
     "rewards-register-contract",
     "test-staking-pool",
     "test-get-epoch-contract",

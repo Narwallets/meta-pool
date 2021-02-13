@@ -2,25 +2,25 @@
 
 ## Welcome to the beta-test launch of META-POOL, one of the first BIG DAOs on NEAR!
 
-The beta test period on TESTNET is starting, and we need a lot of help from the guild and the NEAR community.
+The beta test period on TESTNET is starting, and we need a lot of help from the guilds and the NEAR community.
 
 ### What's the meta-staking-pool?
 
-See [here](https://narwallets.github.io/diversifying-staking-pool/)
+See [here](https://narwallets.github.io/meta-pool/)
 
 ### What can I do?
 
 #### Testing
 
-* Test the web app, report bugs here [github.com/Narwallets/dapp-diversifying-staking-pool/issues](https://github.com/Narwallets/dapp-diversifying-staking-pool/issues)
-* If find a bug in the contract, report it here [github.com/Narwallets/diversifying-staking-pool/issues](https://github.com/Narwallets/diversifying-staking-pool/issues)
+* Test the web app, report bugs here [github.com/Narwallets/webapp-meta-pool/issues](https://github.com/Narwallets/dapp-meta-pool/issues)
+* If you find a bug in the contract, report it here [github.com/Narwallets/meta-pool/issues](https://github.com/Narwallets/meta-pool/issues)
 
-#### Designing
+#### Ideas & Design
 
-* Help by adding beauty to our basic UI 
+* A great idea for the launch?  A new integration? Tell us on [Narwallet's Discord](https://discord.com/invite/tG4XJzRtdQ)
 * More than one UI design, might be popular
 
-#### Analyzing
+#### Economics
 
 * Help define Tokenomics for META
 
@@ -32,17 +32,17 @@ See [here](https://narwallets.github.io/diversifying-staking-pool/)
 
 ### Will contributors be rewarded?
 
-Yes, META (The governance token) will be awarded to collaborators. Your META will be awarded to your account during div-pool mainnet implementation.
+Yes, $META (The governance token) will be awarded to collaborators. Your $META will be awarded after Meta-Staking mainnet implementation.
 
 ### What will be the value of a META on mainnet?
 
-It's not clear now. It depend on the final tokenomics, it depends on the amount of funding the div-pool attracts, and the future $META demand.
+It's not clear now. It depend son the final tokenomics, on the amount of staking the meta-pool attracts, and the future $META demand.
 
 ### How do I participate on the birth of the first BIG DAO on NEAR?
 
-1. You need to install Narwallets' [chrome-extension wallet](https://chrome.google.com/webstore/detail/narwallets/bnbmlmjhaohpobnjfifeghjmamjfolnb)
+1. You need to install latest/beta Narwallet chrome-extension wallet in **developer mode**. [Instructions here](https://github.com/Narwallets/beta-testing/README.md)
 2. [Create an account on testnet](https://wallet.testnet.near.org)
-3. You can get testnet nears [here](https://near-examples.github.io/token-printer/)
+3. You can get testnet NEAR tokens here [here](https://near-examples.github.io/token-printer/)
 4. Open the wallet, choose "testnet" as network and import the account into the wallet
 5. Go to [www.narwallets.com/dapp/testnet/meta](http://www.narwallets.com/dapp/testnet/meta)
 6. Open the wallet, select your testnet account and click "connect to web site"
@@ -50,5 +50,5 @@ It's not clear now. It depend on the final tokenomics, it depends on the amount 
 
 ### Where are the repos
 
-*  Web App: [github.com/Narwallets/dapp-diversifying-staking-pool](https://github.com/Narwallets/dapp-diversifying-staking-pool)
-*  Smart Contract (rust): [github.com/Narwallets/diversifying-staking-pool](https://github.com/Narwallets/diversifying-staking-pool)
+*  Web App: [github.com/Narwallets/dapp-meta-pool](https://github.com/Narwallets/dapp-meta-pool)
+*  Smart Contract (rust): [github.com/Narwallets/meta-pool](https://github.com/Narwallets/meta-pool)
