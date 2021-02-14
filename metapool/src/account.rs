@@ -93,10 +93,10 @@ impl Account {
     }
 
     #[inline]
-    pub fn valued_nslp_shares(&self, main: &DiversifiedPool, nslp_account: &Account) -> u128 { main.amount_from_nslp_shares(self.nslp_shares, &nslp_account) }
+    pub fn valued_nslp_shares(&self, main: &MetaPool, nslp_account: &Account) -> u128 { main.amount_from_nslp_shares(self.nslp_shares, &nslp_account) }
 
     /// return realized meta plus pending rewards
-    pub fn total_meta(&self, main: &DiversifiedPool) -> u128 {
+    pub fn total_meta(&self, main: &MetaPool) -> u128 {
         let valued_stake_shares = main.amount_from_stake_shares(self.stake_shares);
         let nslp_account = main.internal_get_nslp_account();
         let valued_lp_shares = self.valued_nslp_shares(main, &nslp_account);
@@ -109,7 +109,7 @@ impl Account {
 
 
     //---------------------------------
-    pub fn stake_realize_meta(&mut self, main:&mut DiversifiedPool) {
+    pub fn stake_realize_meta(&mut self, main:&mut MetaPool) {
         //realize meta pending rewards on LP operation
         let valued_actual_shares = main.amount_from_stake_shares(self.stake_shares);
         let pending_meta = self.staking_meter.realize(valued_actual_shares, main.staker_meta_mult_pct);
@@ -117,7 +117,7 @@ impl Account {
         main.total_meta += pending_meta;
     }
 
-    pub fn nslp_realize_meta(&mut self, nslp_account:&Account, main:&mut DiversifiedPool)  {
+    pub fn nslp_realize_meta(&mut self, nslp_account:&Account, main:&mut MetaPool)  {
         //realize meta pending rewards on LP operation
         let valued_actual_shares = self.valued_nslp_shares(main, &nslp_account);
         let pending_meta = self.lp_meter.realize(valued_actual_shares, main.lp_provider_meta_mult_pct);
@@ -142,7 +142,7 @@ impl Account {
 
     /// user method
     /// completes unstake action by moving from retreieved_from_the_pools to available
-    pub fn try_finish_unstaking(&mut self, main:&mut DiversifiedPool) {
+    pub fn try_finish_unstaking(&mut self, main:&mut MetaPool) {
 
         let amount = self.unstaked;
         assert!(amount > 0, "No unstaked balance");

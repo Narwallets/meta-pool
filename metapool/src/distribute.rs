@@ -2,7 +2,7 @@ use crate::*;
 use near_sdk::{near_bindgen, Promise};
 
 #[near_bindgen]
-impl DiversifiedPool {
+impl MetaPool {
 
         //----------------------------------
     // Heartbeat & Talking to the pools

@@ -156,7 +156,7 @@ impl StakingPoolInfo {
 //------------------------
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct DiversifiedPool {
+pub struct MetaPool {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
 
@@ -216,7 +216,7 @@ pub struct DiversifiedPool {
     pub staking_pools: Vec<StakingPoolInfo>,
 
     //validator's loan requests
-    //pub loan_requests: LookupMap<String, VLoanRequest>,
+    pub loan_requests: LookupMap<String, VLoanRequest>,
 
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
@@ -248,14 +248,14 @@ pub struct DiversifiedPool {
     pub treasury_swap_cut_basis_points: u16,
 }
 
-impl Default for DiversifiedPool {
+impl Default for MetaPool {
     fn default() -> Self {
         env::panic(b"The contract is not initialized.");
     }
 }
 
 #[near_bindgen]
-impl DiversifiedPool {
+impl MetaPool {
     /* NOTE
     This contract implements several traits
 
@@ -277,7 +277,7 @@ impl DiversifiedPool {
 
     /// Requires 25 TGas (1 * BASE_GAS)
     ///
-    /// Initializes DiversifiedPool contract.
+    /// Initializes MetaPool contract.
     /// - `owner_account_id` - the account ID of the owner.  Only this account can call owner's methods on this contract.
     #[init]
     pub fn new(
@@ -291,7 +291,7 @@ impl DiversifiedPool {
             owner_account_id,
             operator_account_id,
             treasury_account_id,
-            min_account_balance: ONE_NEAR,
+            min_account_balance: NEAR,
             web_app_url: Some(String::from(DEFAULT_WEB_APP_URL)),
             auditor_account_id: Some(String::from(DEFAULT_AUDITOR_ACCOUNT_ID)),
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
@@ -307,8 +307,8 @@ impl DiversifiedPool {
             total_stake_shares: 0,
             total_meta: 0,
             accounts: UnorderedMap::new("A".into()),
-            //loan_requests: LookupMap::new("L".into()),
-            nslp_near_target: ONE_NEAR * 1_000_000,
+            loan_requests: LookupMap::new("L".into()),
+            nslp_near_target: NEAR * 1_000_000,
             nslp_max_discount_basis_points: 500, //5%
             nslp_min_discount_basis_points: 50,   //0.5%
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
@@ -555,7 +555,7 @@ impl DiversifiedPool {
             "Not enough stnear in your account"
         );
         //cannot leave less than 1 NEAR
-        let to_sell = if stnear_owned - stnear_to_sell.0 < ONE_NEAR {
+        let to_sell = if stnear_owned - stnear_to_sell.0 < NEAR {
             //if less than 1 near left, sell all
             stnear_owned
         }
@@ -729,7 +729,7 @@ impl DiversifiedPool {
         assert!(num_shares_to_burn > 0);
 
         //cannot leave less than 1 NEAR
-        if valued_actual_shares - to_remove < ONE_NEAR {
+        if valued_actual_shares - to_remove < NEAR {
             //if less than 1 near left, remove all
             to_remove = valued_actual_shares;
             num_shares_to_burn = acc.nslp_shares;
@@ -842,11 +842,11 @@ mod tests {
         )
     }
 
-    fn new_contract() -> DiversifiedPool {
-        DiversifiedPool::new(account_owner(), account_owner(), account_owner())
+    fn new_contract() -> MetaPool {
+        MetaPool::new(account_owner(), account_owner(), account_owner())
     }
 
-    fn contract_only_setup() -> (VMContext, DiversifiedPool) {
+    fn contract_only_setup() -> (VMContext, MetaPool) {
         let context = basic_context();
         testing_env!(context.clone());
         let contract = new_contract();

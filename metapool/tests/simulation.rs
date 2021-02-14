@@ -43,7 +43,7 @@ fn init_simulator_and_contract(
   initial_balance: u128,
   deploy_to: &str,
 ) -> (
-  ContractAccount<DiversifiedPoolContract>,
+  ContractAccount<MetaPool>,
   UserAccount, // root
   UserAccount, // testnet suffix
   UserAccount, // deployer account
@@ -70,7 +70,7 @@ fn init_simulator_and_contract(
       bytes: &WASM_BYTES_DIV_POOL,
       // User deploying the contract
       signer_account: owner,
-      // DiversifiedPool.new(
+      // MetaPool.new(
         //   owner_account_id: AccountId,
         //   treasury_account_id: AccountId,
         //   operator_account_id: AccountId,
@@ -180,7 +180,7 @@ fn yton(yoctos:u128) -> String {
 }
 
 struct Simulation {
-  pub divpool: ContractAccount<DiversifiedPoolContract>,
+  pub divpool: ContractAccount<MetaPool>,
   pub master_account:UserAccount, // root
   pub testnet:UserAccount, // testnet suffix
   pub owner:UserAccount, // deployer account
@@ -214,7 +214,7 @@ impl Simulation {
       bytes: &WASM_BYTES_DIV_POOL,
       // User deploying the contract
       signer_account: &owner,
-      // DiversifiedPool.new(
+      // MetaPool.new(
         //   owner_account_id: AccountId,
         //   treasury_account_id: AccountId,
         //   operator_account_id: AccountId,

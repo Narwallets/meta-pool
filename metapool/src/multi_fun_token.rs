@@ -41,7 +41,7 @@ pub trait ExtMultiFunTokSelfCallback {
 }
 
 #[near_bindgen]
-impl DiversifiedPool {
+impl MetaPool {
 
 /// NEP-138 Multiple Fungible Tokens Contract
     

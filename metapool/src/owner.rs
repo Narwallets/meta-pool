@@ -2,7 +2,7 @@ use crate::*;
 use near_sdk::{near_bindgen, Promise, PublicKey};
 
 #[near_bindgen]
-impl DiversifiedPool {
+impl MetaPool {
     /// OWNER'S METHOD
     ///
     /// Requires 125 TGas (5 * BASE_GAS)

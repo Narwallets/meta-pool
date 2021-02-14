@@ -7,7 +7,7 @@ pub use crate::utils::*;
 /****************************/
 /* general Internal methods */
 /****************************/
-impl DiversifiedPool {
+impl MetaPool {
     /// Asserts that the method was called by the owner.
     pub fn assert_owner_calling(&self) {
         assert_eq!(
@@ -25,14 +25,17 @@ pub fn assert_min_amount(amount: u128) {
 /***************************************/
 /* Internal methods staking-pool trait */
 /***************************************/
-impl DiversifiedPool {
+impl MetaPool {
 
     pub(crate) fn internal_deposit(&mut self) {
+        assert_min_amount(env::attached_deposit());
+        self.internal_deposit_attached_near_into(env::predecessor_account_id());
+    }
+
+    pub(crate) fn internal_deposit_attached_near_into(&mut self, account_id:AccountId) {
 
         let amount = env::attached_deposit();
-        assert_min_amount(amount);
 
-        let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
 
         account.available += amount;
@@ -40,11 +43,11 @@ impl DiversifiedPool {
 
         self.internal_update_account(&account_id, &account);
 
-        log!("@{} deposited {}. New available balance is {}",
-                account_id, amount, account.available
+        log!("{} deposited into @{}'s account. New available balance is {}",
+            amount, account_id, account.available
             );
-    }
 
+    }
 
     //------------------------------
     pub(crate) fn internal_withdraw(&mut self, amount_requested: u128) {
@@ -66,14 +69,14 @@ impl DiversifiedPool {
         );
 
         let to_withdraw = 
-            if acc.available - amount_requested < ONE_NEAR_CENT/2  //small yotctos remain, withdraw all
+            if acc.available - amount_requested < NEAR_CENT/2  //small yotctos remain, withdraw all
                 { acc.available } 
                 else  { amount_requested };
 
         acc.available -= to_withdraw;
         assert!( !acc.is_empty() || acc.available >= self.min_account_balance,
             "The min balance for an open account is {} NEAR. You can remove all funds and close the account",
-            self.min_account_balance/ONE_NEAR);
+            self.min_account_balance/NEAR);
 
         self.internal_update_account(&account_id, &acc);
 
@@ -134,7 +137,7 @@ impl DiversifiedPool {
 
         let remains_staked = valued_shares - amount_requested;
         //if less than one near would remain, unstake all
-        let amount_to_unstake = if remains_staked > ONE_NEAR {
+        let amount_to_unstake = if remains_staked > NEAR {
             amount_requested
         }
         else {

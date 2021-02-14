@@ -8,13 +8,13 @@ pub const STNEAR:&str = "stNEAR";
 
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
-pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
-pub const ONE_NEAR_CENT: u128 = ONE_NEAR/100;
-pub const TWO_NEAR: u128 = 2 * ONE_NEAR;
-pub const FIVE_NEAR: u128 = 5 * ONE_NEAR;
-pub const TEN_NEAR: u128 = 10 * ONE_NEAR;
-pub const NEAR_1K: u128 = 1_000 * ONE_NEAR;
-pub const NEARS_PER_BATCH: u128 = 10*NEAR_1K; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches
+pub const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+pub const NEAR_CENT: u128 = NEAR/100;
+pub const TWO_NEAR: u128 = 2 * NEAR;
+pub const FIVE_NEAR: u128 = 5 * NEAR;
+pub const TEN_NEAR: u128 = 10 * NEAR;
+pub const K_NEAR: u128 = 1_000 * NEAR;
+pub const NEARS_PER_BATCH: u128 = 10*K_NEAR; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches
 pub const MAX_NEARS_SINGLE_MOVEMENT: u128 = NEARS_PER_BATCH + NEARS_PER_BATCH/2; //150K max movement, if you try to stake 151K, it will be split into 2 movs, 100K and 51K
 
 pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4; //0 for testing in guidlnet, 4 for mainnet & testnet;
@@ -23,7 +23,7 @@ pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4; //0 for testing in guidlnet, 4 
 /// contract code storage and some internal state.
 pub const MIN_BALANCE_FOR_STORAGE: u128 = 35_000_000_000_000_000_000_000_000;
 /// if the remainder falls below this amount, it's included in the current movement
-pub const MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT: u128 = 5*NEAR_1K;
+pub const MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT: u128 = 5*K_NEAR;
 
 //cut on swap fees
 pub const DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS : u16 = 2500; // 25% swap fees go to Treasury
