@@ -236,7 +236,7 @@ pub struct ContractParamsJSON {
     
 }
 
-// get_staking_pools_list returns StakingPoolJSONInfo[]
+// get_staking_pool_list returns StakingPoolJSONInfo[]
 #[derive(Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolJSONInfo {

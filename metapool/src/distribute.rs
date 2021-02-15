@@ -231,14 +231,15 @@ impl MetaPool {
         return unstake_succeeded;
     }
 
-    //-----------------------------------------------------------------------
-    //-- COMPUTE AND DISTRIBUTE STAKING REWARDS for a specifi staking-pool --
-    //-----------------------------------------------------------------------
+    //------------------------------------------------------------------------
+    //-- COMPUTE AND DISTRIBUTE STAKING REWARDS for a specific staking-pool --
+    //------------------------------------------------------------------------
     // Operator method, but open to anyone. Should be called once per epoch per sp, after sp rewards distribution (ping)
     /// Retrieves total balance from the staking pool and remembers it internally.
     /// Also computes and distributes rewards operator and delegators
     /// this fn queries the staking pool (makes a cross-contract call)
-    pub fn distribute_rewards(&mut self, sp_inx_i32: i32) {
+    pub fn distribute_rewards(&mut self, sp_inx_i32: i32) -> void {
+
         assert!(sp_inx_i32 > 0);
 
         //Note: In order to make this contract independent from the operator
@@ -418,7 +419,7 @@ impl MetaPool {
     //  WITHDRAW FROM ONE OF THE POOLS ONCE THE WAITING PERIOD HAS ELAPSED
     //----------------------------------------------------------------------
     /// launchs a withdrawal call
-    /// returns the amount withdrew
+    /// returns the amount withdrawn
     pub fn retrieve_funds_from_a_pool(&mut self, inx:u16) -> Promise {
 
         //Note: In order to make fund-recovering independent from the operator
@@ -465,7 +466,7 @@ impl MetaPool {
         let amount = sp.unstaked; //we retrieved all
 
         let withdraw_succeeded = is_promise_success();
-        let mut withdrew_amount:u128=0;
+        let mut withdrawn_amount:u128=0;
 
         let result: &str;
         if withdraw_succeeded {
@@ -474,7 +475,7 @@ impl MetaPool {
             //move from total_unstaked_and_waiting to total_actually_unstaked_and_retrieved
             self.total_unstaked_and_waiting = self.total_unstaked_and_waiting.saturating_sub(amount);
             self.total_actually_unstaked_and_retrieved += amount; //the amount stays in "total_actually_unstaked_and_retrieved" until the user calls finish_unstaking
-            withdrew_amount = amount;
+            withdrawn_amount = amount;
         } 
         else {
             result = "has failed";
@@ -483,7 +484,7 @@ impl MetaPool {
                 "The withdrawal of {} from @{} {}",
                 amount, &sp.account_id, result
         );
-        return withdrew_amount;
+        return withdrawn_amount;
     }
 
 }

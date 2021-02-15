@@ -93,7 +93,6 @@ impl Default for VLoanRequest {
     }
 }
 
-// get_staking_pools_list returns StakingPoolJSONInfo[]
 #[derive(Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct VLoanRequestInfo {
