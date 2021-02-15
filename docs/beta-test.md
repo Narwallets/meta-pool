@@ -52,3 +52,7 @@ It's not clear now. It depend son the final tokenomics, on the amount of staking
 
 *  Web App: [github.com/Narwallets/webapp-meta-pool](https://github.com/Narwallets/webapp-meta-pool)
 *  Smart Contract (rust): [github.com/Narwallets/meta-pool](https://github.com/Narwallets/meta-pool)
+
+### Where is beta-test app hosted?
+
+Here: [www.narwallets.com/dapp/testnet/meta](http://www.narwallets.com/dapp/testnet/meta)
