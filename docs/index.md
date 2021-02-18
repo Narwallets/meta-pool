@@ -14,7 +14,7 @@ This contract provides the following value items for the NEAR community:
 * This contract helps decentralization by distributing it's delegated funds to several validators. If you own a lockup-contract with considerable funds, you can greatly contribute to the decentralization of the network and reduce your risk. Your funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
 
 #### Creates new Liquidity Pools
-* This contract includes several liquidity pools and the opportunity for liquidity providers to earn fees. The main pool is the NEAR/stNEAR pool that provides immediate unstake (sell stNEAR) for a fee 0.5-10%. There will be other pools like the stNEAR/META for the the governance tokens.
+* This contract includes several liquidity pools and the opportunity for liquidity providers to earn fees. The main pool is the NEAR/stNEAR pool that provides immediate unstake (sell stNEAR) for a fee 0.5-10%. There will be other pools like the stNEAR/$META for the the governance tokens.
 
 #### Creates a safety-net to avoid losing validators on the seat-price cliff 
 * This contract will allow struggling validators to keep a seat and keep validating in case of sudden rises in seat-price. There will be staking-loans available for whitelisted validators and also emergencys stakes from the liquidity pool. Pools requiring staking will have to pay 8-epoch rewards in advance. All fees wil be distributed as rewards between the stNEAR holders or the Liquidity providers.
@@ -56,7 +56,8 @@ The contract pools all users' funds and keeps a balanced distribution of those f
 
 Staking and unstaking distribution is done by periodically calling `distribute_staking()/distribute_unstaking()`, so actual staking and unstaking are delayed. 
 
-Users can choose to "sell" some of their SKAHS (stake_shares) to Liquidity Providers for a fee. Liquidity Providers get the stNEAR+fee and deliver NEAR. No stake/unstake is performed at that point.
+Users can choose to "sell" some of their stNEAR to Liquidity Providers for a fee. Liquidity Providers get the stNEAR+fee and deliver NEAR. No stake/unstake is performed at that point.
+
 ### Guarantees
 
 (To verify)
@@ -75,7 +76,7 @@ stNEAR: one stNEAR represents one staked NEAR. A stNEAR is a virtual token compu
 
 **To buy stNEAR and to stake are the same operation for the user.**
 
-In order to stake the user buys SKAHS tokens. Buy stNEAR/Stake are the same operation. When buying stNEAR the price is always fixed: 1 NEAR = 1 stNEAR
+In order to stake the user buys stNEAR tokens. Buy stNEAR/Stake are the same operation. When buying stNEAR the price is always fixed: 1 NEAR = 1 stNEAR
 
 **To sell stNEAR and to un-stake are similar.**
 
@@ -92,7 +93,7 @@ This operations are reflected in the UI in two steps that the user must complete
 
 In order to provide immediate unstake (sell stNEAR) a Liquidity Pool and a SELL stNEAR mechanism are provided by the contract:
 
-* TO SELL stNEAR: The seller enters the amount of stNEAR they want to sell and the contract replies with the amount of NEAR they will receive, normally with a discount 1%-5%, depending on the NEAR balance of the liquidity pool and the fee curve parameters.
+* TO SELL stNEAR: The seller enters the amount of stNEAR they want to sell and the contract replies with the amount of NEAR they will receive, normally with a discount 1%-5%, depending on the liquidity pool NEAR balance and the fee curve parameters.
 
 
 ## Treasury
@@ -100,46 +101,46 @@ Part of the NEAR/stNEAR LP fees goes to the DAO Treasury. Treasury funds are alw
 
 * DAO Maintenance
 * DAO Expansion
-* META holders dividends
+* $META holders dividends
 
 ## Maintenance
 
-The contract has a configurable parameter `dev_maintenance_amount`, initially 2500 stNEAR, to be transferred monthly to the account `developers.near`. By DAO governance, this value can be increased and META gov-token holders can also re-direct up to 50% of maintenance funds to other maintainers and contributors.
+The contract has a configurable parameter `dev_maintenance_amount`, initially 2500 stNEAR, to be transferred monthly to the account `developers.near`. By DAO governance, this value can be increased and $META token holders can also re-direct up to 50% of maintenance funds to other maintainers and contributors.
 
 ## Governance
 
 (When Phase II - DAO Governance is implemented)
 
-META holders can vote on:
+$META holders can vote on:
 * Diversification: Validator distribution list, and how much NEAR to distribute to each one.
 * Fee curve parameters for the NEAR/stNEAR Liquidity Pool (min fee, max fee, slope)
 * How to use treasury funds for DAO expansion
 * Operational costs fee
 * Maintenance funds redirections
-* Move treasury funds in/out of the META dividends-pool
-* META mint reward multiplier for:
-  * stNEAR-sellers/immediate unstake (default 1 META per each discounted NEAR)
-  * Stakers (default 5 META per each stNEAR of staking reward)
-  * LP-providers (default 20 META per each stNEAR fee received)
+* Move treasury funds in/out of the $META dividends-pool
+* $META mint reward multiplier for:
+  * stNEAR-sellers/immediate unstake (default 1 $META per each discounted NEAR)
+  * Stakers (default 5 $META per each stNEAR of staking reward)
+  * LP-providers (default 20 $META per each stNEAR fee received)
 * Approve stake-loans to struggling validators
 
 Half of treasury funds must be used for DAO expansion and maintenance. The other 50% can be user for expansion by presenting proposals, or can be moved to the dividends-pool (once a month). 
 
-The Dividends-pool is a stNEAR/META liquidity pool allowing META owners to burn META to obtain stNEAR. This pool sets a base-price for META tokens. When users vote to add stNEAR to the dividends-pool, META base-price is incremented. Users can also vote to remove stNEAR from the dividends-pool back to the treasury, lowering the META base price.
+The Dividends-pool is a stNEAR/$META liquidity pool allowing $META owners to burn $META to obtain stNEAR. This pool sets a base-price for $META tokens. When users vote to add stNEAR to the dividends-pool, $META base-price is incremented. Users can also vote to remove stNEAR from the dividends-pool back to the treasury, lowering the $META base price.
 
-Users get META tokens minted for them when:
+Users get $META tokens minted for them when:
 * They sell stNEAR (immediate unstaking) (default 1x multiplier)
 * They receive rewards for holding stNEAR (default 5x multiplier)
 * They receive fees in the NEAR/stNEAR Liquidity pool (default 20x multiplier)
 
-META governance tokens are minted and distributed to:
+$META governance tokens are minted and distributed to:
 * users holding stNEAR and 
 * users providing liquidity.
 * users paying immediate unstaking fees
 
 ## Operational costs
 
-Periodic calls to `distribute_staking()/distribute_unstaking()/withdraw_from_a_pool()` are required for this contract operation. This calls consume considerable amounts of gas that is paid by the operator account. To fund this operational cost, a operator's fee percentage (0.3% by default) is taken from rewards distributions. It can be adjusted by META governance token holders.
+Periodic calls to `distribute_staking()/distribute_unstaking()/withdraw_from_a_pool()` are required for this contract operation. This calls consume considerable amounts of gas that is paid by the operator account. To fund this operational cost, a operator's fee percentage (0.3% by default) is taken from rewards distributions. It can be adjusted by $META governance token holders.
 
 
 ## User stories:
@@ -150,8 +151,8 @@ Alice opens an account in the contract: meta.pool.near
 Alice deposits 750_000 NEAR in her div-pool account. 
 Alice buys 750_000 stNEAR. Her 750_000 NEAR are distributed between the staking-pools by an automatic distribution mechanism to keep the validators balanced. 
 
-She starts earning staking rewards on her stNEAR, she can track precisely her rewards. She will also get META gov tokens.
-By holding SKAHS she has the possibility to sell some of her stNEAR skipping the waiting period if the need arises.
+She starts earning staking rewards on her stNEAR, she can track precisely her rewards. She will also get $META tokens.
+By holding stNEAR she has the possibility to sell some of her stNEAR skipping the waiting period if the need arises.
 
 ### Bob
 Bob already has an account in the meta-pool contract. He has 10_000 stNEAR earning rewards. 
@@ -184,7 +185,7 @@ Eve swaps 50_500 stNEAR for 50_000 NEAR. She sells at a 1% discounted price to g
 The N/S-liq-pool delivers 50_000 NEAR to Eve and acquires 50_500 stNEAR from Eve.
 The liquidity pool has now a low amount of NEAR now. After a few minutes, the liquidity pool automatically unstakes stNEAR. The LP can use a clearing mechanism to acquire NEAR and restore liquidity automatically. After unstaking all, the pool will have 100_500 NEAR.
 
-As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s nslp-shares value. With each operation META tokens are also minted, and Dave and the other providers get META tokens besides the fees.
+As the N/S-liq-pool operates, the NEAR amount grows, as Dave’s nslp-shares value. With each operation $META tokens are also minted, and Dave and the other providers get $META tokens besides the fees.
 
 -------------------------
 
