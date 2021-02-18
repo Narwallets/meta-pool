@@ -14,7 +14,7 @@ This contract provides the following value items for the NEAR community:
 * This contract helps decentralization by distributing it's delegated funds to several validators. If you own a lockup-contract with considerable funds, you can greatly contribute to the decentralization of the network and reduce your risk. Your funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
 
 #### Creates new Liquidity Pools
-* This contract includes several liquidity pools and the opportunity for liquidity providers to earn fees. The main pool is the NEAR/stNEAR pool that provides immediate unstake (sell stNEAR) for a fee 0.5-10%. There will be other pools (on Phase II) like the stNEAR/$META for the governance tokens.
+* This contract includes several liquidity pools and the opportunity for liquidity providers to earn fees. The main pool is the NEAR/stNEAR pool that provides immediate unstake (sell stNEAR) for a fee 0.5-5%. There will be other pools (on Phase II) like the stNEAR/$META for the governance tokens.
 
 #### Creates a safety-net to avoid losing validators on the seat-price cliff 
 * This contract will allow struggling validators to keep a seat and keep validating in case of sudden rises in seat-price. There will be staking-loans available for whitelisted validators and also emergencies stakes from the liquidity pool. Pools requiring staking will have to pay 8-epoch rewards in advance. All fees will be distributed as rewards between the stNEAR holders or the Liquidity providers.
@@ -33,7 +33,7 @@ In the Liquidity Pool:
  * Users providing liquidity can earn fees on each sell
  * Users wanting to unstake without the waiting period can do so for a fee.
 
-The *NEAR/stNEAR Liquidity Pool* is a one-sided Liquidity pool. Liquidity providers add only NEAR to the Liq. Pool. The Liq. Pool allows other users to SELL stNEAR for NEAR (unstake) at a discounted price. The discount represents how much users value skipping the 39-52hs waiting period to receive their funds. The discount varies with the amount of NEAR in the Liquidity Pool, but the curve is capped at the extremes. By default, discount fees are in the range 0.5-5%, but the curve parameters can be adjusted by DAO governance (by the vote of $META governance token holders).
+The *NEAR/stNEAR Liquidity Pool* is a one-sided Liquidity pool. Liquidity providers add only NEAR to the Liq. Pool. The Liq. Pool allows other users to SELL stNEAR for NEAR (unstake) at a discounted price. The discount represents how much users value skipping the 39-52hs waiting period to receive their funds. The discount varies with the amount of NEAR in the Liquidity Pool, but the curve is capped at the extremes. By default, discount fees are in the range 5%-0.5%, but the curve parameters can be adjusted by DAO governance (by the vote of $META governance token holders).
 
 ![example-fee-curve](images/example-fee-curve.png)
 

@@ -220,7 +220,7 @@ impl MetaPool {
             staking_paused: self.staking_paused,
             min_account_balance: self.min_account_balance.into(),
 
-            nslp_near_target: self.nslp_near_target.into(),
+            nslp_near_one_percent_target: self.nslp_near_one_percent_target.into(),
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
             nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
 
@@ -241,7 +241,7 @@ impl MetaPool {
 
         self.min_account_balance = params.min_account_balance.0;
 
-        self.nslp_near_target = params.nslp_near_target.0;
+        self.nslp_near_one_percent_target = params.nslp_near_one_percent_target.0;
         self.nslp_max_discount_basis_points = params.nslp_max_discount_basis_points;
         self.nslp_min_discount_basis_points = params.nslp_min_discount_basis_points;
 
