@@ -12,8 +12,10 @@ See [here](https://narwallets.github.io/meta-pool/)
 
 #### Testing
 
-* Test the web app, report bugs here [github.com/Narwallets/webapp-meta-pool/issues](https://github.com/Narwallets/dapp-meta-pool/issues)
-* If you find a bug in the contract, report it here [github.com/Narwallets/meta-pool/issues](https://github.com/Narwallets/meta-pool/issues)
+* Ask for support, join us at [Narwallet's Discord](https://discord.gg/a7db8FaQCZ)
+* Test the Web App, report bugs at Narwallet's discord channels.
+* Found a bug in the Web App you might want to solve yourself? create an issue here [github.com/Narwallets/webapp-meta-pool/issues](https://github.com/Narwallets/webapp-meta-pool/issues)
+* If you track a bug into the contract, report it here [github.com/Narwallets/meta-pool/issues](https://github.com/Narwallets/meta-pool/issues)
 
 #### Ideas & Design
 

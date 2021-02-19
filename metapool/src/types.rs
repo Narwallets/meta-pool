@@ -212,8 +212,8 @@ pub struct ContractParamsJSON {
     /// adjustable min account available balance (to backup storage)
     pub min_account_balance: U128String,
 
-    ///NEAR/stNEAR Liquidity pool target
-    pub nslp_near_target: U128String,
+    ///NEAR/stNEAR Liquidity pool 1% fee target. If Liquidity=target, fee is 1%
+    pub nslp_near_one_percent_target: U128String,
     ///NEAR/stNEAR Liquidity pool max fee
     pub nslp_max_discount_basis_points: u16, //10%
     ///NEAR/stNEAR Liquidity pool min fee

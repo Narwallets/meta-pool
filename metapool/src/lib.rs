@@ -221,12 +221,12 @@ pub struct MetaPool {
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
     // We assume this pool is always UNBALANCED, there should be more stNEAR than NEAR 99% of the time
-    ///NEAR/stNEAR Liquidity pool target
-    pub nslp_near_target: u128,
+    ///NEAR/stNEAR 1% fee Liquidity target. If the Liquidity reach this amount, the fee is 1%
+    pub nslp_near_one_percent_target: u128, // 150_000*NEAR initially
     ///NEAR/stNEAR Liquidity pool max fee
-    pub nslp_max_discount_basis_points: u16, //10%
+    pub nslp_max_discount_basis_points: u16, //5% initially
     ///NEAR/stNEAR Liquidity pool min fee
-    pub nslp_min_discount_basis_points: u16, //0.1%
+    pub nslp_min_discount_basis_points: u16, //0.5% initially
 
     //The next 3 values define meta rewards multiplers %. (100 => 1x, 200 => 2x, ...)
     ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
@@ -308,7 +308,7 @@ impl MetaPool {
             total_meta: 0,
             accounts: UnorderedMap::new("A".into()),
             loan_requests: LookupMap::new("L".into()),
-            nslp_near_target: NEAR * 1_000_000,
+            nslp_near_one_percent_target: 150_000*NEAR,
             nslp_max_discount_basis_points: 500, //5%
             nslp_min_discount_basis_points: 50,   //0.5%
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100

@@ -308,13 +308,13 @@ impl MetaPool {
 
         let near_after = available_near - max_nears_to_pay;
 
-        if near_after < self.nslp_near_target / 20 {
-            return self.nslp_max_discount_basis_points; // 1/20 (5%) target, discount capped at max%
+        if near_after < self.nslp_near_one_percent_target / 100 { // low amount
+            return self.nslp_max_discount_basis_points; // discount capped at max%
         } 
 
-        let discount_basis_plus_100 = self.nslp_near_target * 100 / near_after;
+        let discount_basis_plus_100 = self.nslp_near_one_percent_target * 100 / near_after;
         if discount_basis_plus_100 <= 100 + u128::from(self.nslp_min_discount_basis_points) {
-            return self.nslp_min_discount_basis_points; // target reached or surpassed
+            return self.nslp_min_discount_basis_points; // lower than min, return min
         } 
 
         let discount_basis_points = discount_basis_plus_100 - 100;
