@@ -265,6 +265,7 @@ impl MetaPool {
         }
         let amount_to_stake:u128 =  self.total_for_staking - self.total_actually_staked;
         let mut nslp_account = self.internal_get_nslp_account();
+        log!("nslp_try_liquidate_stnear_by_clearing nslp_account.stake_shares {}",nslp_account.stake_shares);
         if nslp_account.stake_shares > 0 {
             //how much stnear does the nslp have?
             let valued_stake_shares = self.amount_from_stake_shares(nslp_account.stake_shares);

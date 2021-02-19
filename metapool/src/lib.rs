@@ -93,7 +93,7 @@ pub trait ExtMetaStakingPoolOwnerCallbacks {
 
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
-    fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
+    fn on_get_sp_total_balance(&mut self, sp_inx: usize, mode:u8,  #[callback] total_balance: U128String);
 
 }
 

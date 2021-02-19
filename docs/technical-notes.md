@@ -14,7 +14,7 @@ There are 3 "heartbeat()" functions:
 
 This fn does staking if needed, according to staking-pool weight (% of the pool)
 
-This fns should be called preferently before the epoch ends. Leaving NEAR unstaked is benefical for the NSLP clearing
+This fns should be called preferently before the epoch ends. Leaving NEAR unstaked is beneficial for the NSLP clearing
 so this function should not be called when not necessary.
 
 Once called, if distribute_staking() returns "true", the operator should call it again until it returns "false"

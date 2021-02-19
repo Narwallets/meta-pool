@@ -1,6 +1,9 @@
 use crate::*;
 use near_sdk::{near_bindgen, Promise};
 
+const MODE_DISTRIBUTE:u8=0;
+const MODE_REBUILD:u8=1;
+
 #[near_bindgen]
 impl MetaPool {
 
@@ -34,7 +37,7 @@ impl MetaPool {
 
         //do wo need to stake?
         if self.total_for_staking <= self.total_actually_staked {
-            //no staking needed
+            log!("no staking needed");
             return false;
         }
 
@@ -238,32 +241,46 @@ impl MetaPool {
     /// Retrieves total balance from the staking pool and remembers it internally.
     /// Also computes and distributes rewards operator and delegators
     /// this fn queries the staking pool (makes a cross-contract call)
-    pub fn distribute_rewards(&mut self, sp_inx_i32: i32) -> void {
+    pub fn distribute_rewards(&mut self, sp_inx: u16) {
+        self.query_current_stake(sp_inx,MODE_DISTRIBUTE)
+    }
+    
+    //utility to rebuild stake information by asking the pool
+    pub fn rebuild_stake_from_pool_information(&mut self, sp_inx: u16) {
+        assert!(&env::predecessor_account_id()==&self.owner_account_id || &env::predecessor_account_id()==&self.operator_account_id,
+            "Can only be called by the operator or the owner"
+        );
+        self.query_current_stake(sp_inx,MODE_REBUILD)
+    }
 
-        assert!(sp_inx_i32 > 0);
 
+    fn query_current_stake(&mut self, sp_inx: u16, mode:u8) {
         //Note: In order to make this contract independent from the operator
         //this fn is open to be called by anyone
         //self.assert_owner_calling();
 
-        let sp_inx = sp_inx_i32 as usize;
-        assert!(sp_inx < self.staking_pools.len());
+        let inx = sp_inx as usize;
+        assert!(inx < self.staking_pools.len());
 
-        let sp = &mut self.staking_pools[sp_inx];
+        let sp = &mut self.staking_pools[inx];
         assert!(!sp.busy_lock, "sp is busy");
 
-        if sp.staked == 0 {
-            return;
-        }
-
         let epoch_height = env::epoch_height();
-        if sp.last_asked_rewards_epoch_height == epoch_height {
-            return;
+
+        if mode==MODE_DISTRIBUTE {
+
+            if  sp.staked == 0 && sp.unstaked == 0 {
+                return;
+            }
+
+            if sp.last_asked_rewards_epoch_height == epoch_height {
+                return;
+            }
         }
 
         log!(
-                "Fetching total balance from the staking pool @{}",
-                sp.account_id
+            "Fetching total balance from the staking pool @{}",
+            sp.account_id
         );
 
         sp.busy_lock = true;
@@ -277,7 +294,8 @@ impl MetaPool {
             gas::staking_pool::GET_ACCOUNT_TOTAL_BALANCE,
         )
         .then(ext_self_owner::on_get_sp_total_balance(
-            sp_inx,
+            inx,
+            mode,
             //promise params
             &env::current_account_id(),
             NO_DEPOSIT,
@@ -326,6 +344,7 @@ impl MetaPool {
     pub fn on_get_sp_total_balance(
         &mut self,
         sp_inx: usize,
+        mode: u8,
         #[callback] total_balance: U128String,
     ) {
         //we enter here after asking the staking-pool how much do we have staked (plus rewards)
@@ -345,6 +364,15 @@ impl MetaPool {
 
         new_staked_amount = total_balance.0;
 
+        if mode==MODE_REBUILD {
+            log!(
+                "REBUILD sp:{} staked:{}",
+                sp.account_id, new_staked_amount
+            );
+            sp.staked = new_staked_amount;
+            return; //***************
+        }
+        
         if new_staked_amount < sp.staked {
             log!(
                     "INCONSISTENCY @{} says total_balance < sp.staked",
@@ -357,8 +385,8 @@ impl MetaPool {
         }
 
         log!(
-                "sp:{} old_balance:{} new_balance:{} rewards:{}",
-                sp.account_id, sp.staked, new_staked_amount, rewards
+            "sp:{} old_balance:{} new_balance:{} rewards:{}",
+            sp.account_id, sp.staked, new_staked_amount, rewards
         );
 
         //updated accumulated_staked_rewards value for the contract
@@ -387,6 +415,8 @@ impl MetaPool {
         }
     }
 
+    //----------------------------------------------------------------------
+    // Operator method, but open to anyone
     //----------------------------------------------------------------------
     /// finds a pool with the unstake delay completed
     /// withdraws. Returns pol index or:
@@ -420,6 +450,8 @@ impl MetaPool {
     //----------------------------------------------------------------------
     /// launchs a withdrawal call
     /// returns the amount withdrawn
+    /// call get_staking_pool_requiring_retrieve first
+    /// 
     pub fn retrieve_funds_from_a_pool(&mut self, inx:u16) -> Promise {
 
         //Note: In order to make fund-recovering independent from the operator

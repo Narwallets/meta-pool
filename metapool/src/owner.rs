@@ -50,6 +50,11 @@ impl MetaPool {
         return result;
     }
 
+    // get env::epoch_height() to comapre with the fields in the staking-pool-list
+    pub fn get_env_epoch_height(&self) -> U64String {
+        return env::epoch_height().into()
+    }
+
     ///remove staking pool from list *if it's empty*
     pub fn remove_staking_pool(&mut self, inx:u16 ){
 
@@ -119,9 +124,9 @@ impl MetaPool {
     pub fn get_operator_account_id(&self) -> AccountId {
         return self.operator_account_id.clone();
     }
-    pub fn set_operator_account_id(&self, account_id:AccountId) {
-        assert_owner_calling();
-        assert(is_valid_account_id(account_id));
+    pub fn set_operator_account_id(&mut self, account_id:AccountId) {
+        assert!(env::is_valid_account_id(account_id.as_bytes()));
+        self.assert_owner_calling();
         self.operator_account_id = account_id;
     }
 
