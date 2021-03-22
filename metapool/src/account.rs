@@ -13,20 +13,22 @@ pub struct Account {
     /// withdrawals from the pools can include rewards
     /// since statking is delayed and in batches it only eventually matches env::balance()
     /// total = available + staked + unstaked
+    /// Note: In the simplified user-UI, the basic-user always does deposit-and-stake and sell/unstake that goes directly to their wallet
+    /// so the only users of this field are lockup-contracts and advanced-users when they perform "Classic Unstakes"
     pub available: u128,
 
     /// The amount of shares of the total staked balance in the pool(s) this user owns.
     /// Before someone stakes share-price is computed and shares are "sold" to the user so he only owns what he's staking and no rewards yet
-    /// When a user reequest a transfer to other user, staked & shares from the origin are moved to staked & shares of the destination
+    /// When a user request a transfer to other user, shares from the origin are moved to shares of the destination
     /// The share_price can be computed as total_for_staking/total_stake_shares
     /// shares * share_price = stNEARs
     pub stake_shares: u128,
 
-    /// Incremented when the user asks for unstaking. The amount of unstaked near in the pools
+    /// Incremented when the user asks for Classic-Unstaking. The amount of unstaked near in the pools
     pub unstaked: u128,
 
     /// The epoch height when the unstaked will be available
-    /// The fund will be locked for -AT LEAST- NUM_EPOCHS_TO_UNLOCK epochs
+    /// The funds will be locked for -AT LEAST- NUM_EPOCHS_TO_UNLOCK epochs
     pub unstaked_requested_unlock_epoch: EpochHeight,
 
     //-- META

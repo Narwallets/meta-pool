@@ -592,8 +592,11 @@ impl MetaPool {
         let fee_in_shares = self.stake_shares_from_amount(fee_in_stnear);
 
         // involved accounts
+        assert!(&account_id!=&self.treasury_account_id,"can't use treasury account");
         let mut treasury_account = self.internal_get_account(&self.treasury_account_id);
+        assert!(&account_id!=&self.operator_account_id,"can't use operator account");
         let mut operator_account = self.internal_get_account(&self.operator_account_id);
+        assert!(&account_id!=&DEVELOPERS_ACCOUNT_ID,"can't use developers account");
         let mut developers_account = self.internal_get_account(&DEVELOPERS_ACCOUNT_ID.into());
 
         // The treasury cut in stnear-shares (25% by default)
@@ -663,6 +666,8 @@ impl MetaPool {
         );
 
         return near_to_receive.into();
+
+        //TODO: Simplified UI. Transfer NEAR to the user account (Promise::Transfer)
     }
 
 
@@ -771,6 +776,8 @@ impl MetaPool {
         //--SAVE ACCOUNTS
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
+
+        //TODO: Simplified UI. Transfer NEAR to the user account (Promise::Transfer)
     }
 
 
@@ -778,8 +785,8 @@ impl MetaPool {
     // HARVEST META
     //------------------
 
-    ///meta rewards for stakers are realized during stake(), unstake() or by calling harvest_meta_from_staking()
-    //realize pending meta rewards from staking
+    ///META rewards for stakers are realized during stake(), unstake() or by calling harvest_meta_from_staking()
+    //Realize pending meta rewards from staking
     pub fn harvest_meta_from_staking(&mut self){
 
         let account_id = env::predecessor_account_id();
@@ -815,6 +822,10 @@ impl MetaPool {
 
 }
 
+//---------------
+//TODO Unit tests. 
+//Note: Most tests are in /tests and are simulation-testing
+//---------------
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {

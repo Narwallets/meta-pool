@@ -3,7 +3,7 @@
 //
 
 use crate::*;
-use near_sdk::{near_bindgen};
+use near_sdk::{near_bindgen, PromiseResult};
 use near_sdk::serde::{Deserialize, Serialize};
 
 pub use crate::types::*;
@@ -26,7 +26,7 @@ pub struct SymbolInfo {
 pub trait ExtMultiFunTokReceiver {
 
     //NEP-141 single fun token for the default token STNEAR
-    fn ft_on_transfer(&mut self, sender_id: AccountId,amount: U128String, _msg: String); 
+    fn ft_on_transfer(&mut self, sender_id: AccountId,amount: U128String, msg: String) -> PromiseOrValue<U128>; 
 
     fn on_multifuntok_transfer(sender_id: AccountId, symbol:String, amount: U128String, memo:String);
 }
@@ -115,7 +115,7 @@ impl MetaPool {
     //NEP-141 for token STNEAR, ft_transfer_call
     /// Transfer `amount` of tokens from the caller of the contract (`predecessor_id`) to a contract at `receiver_id`.
     /// Requirements:
-    /// * receiver_id must be a contract and must respond to `ft_on_transfer(&mut self, sender_id: AccountId, amount: U128String, _msg: String ) -> u128`
+    /// * receiver_id must be a contract and must respond to `ft_on_transfer(&mut self, sender_id: AccountId, amount: U128String, _msg: String ) -> PromiseOrValue<U128>`
     /// * if receiver_id is not a contract or `ft_on_transfer` fails, the transfer is rolled-back
     pub fn ft_transfer_call(&mut self, receiver_id: AccountId, amount: U128String, msg:String, #[allow(unused_variables)] memo:Option<String>){
 
@@ -144,26 +144,36 @@ impl MetaPool {
     /// After Transfer `amount` of symbol tokens to a contract at `receiver_id`.
     /// Check if the contract completed execution of on_multifuntok_transfer
     /// and undo trasnfer if it failed
-    pub fn after_ft_on_transfer(&mut self, sender_id:AccountId, receiver_id: AccountId, amount: U128String, #[callback] unused_tokens: U128String){
+    pub fn after_ft_on_transfer(&mut self, sender_id:AccountId, receiver_id: AccountId, amount: U128String) -> U128String {
 
         assert_callback_calling();
 
-        let amt = amount.0;
-        if !is_promise_success() {
-            //call failed/panicked
-            //undo the transfer
-            log!("call failed transfer reverted");
-            self.internal_multifuntok_transfer( &receiver_id, &sender_id, &STNEAR, amt);
-        }
-        else {
-            if unused_tokens.0 > 0 {
-                //some tokens returned, max to undo is the amount trasnferred
-                let undo_amt = std::cmp::min(amt,unused_tokens.0);
-                //partially undo the transfer - max to undo is the amount trasnferred
-                self.internal_multifuntok_transfer( &receiver_id, &sender_id, &STNEAR, undo_amt);
-                log!("{} unused tokens returned", undo_amt);
+        let amount_transferred = amount.into();
+
+        // Get the unused amount from PromiseOrValue result `ft_on_transfer() -> **PromiseOrValue<U128String>**`
+        let unused_tokens = match env::promise_result(0) {
+            PromiseResult::NotReady => unreachable!(),
+            PromiseResult::Successful(value) => {
+                if let Ok(returned_amount) = near_sdk::serde_json::from_slice::<U128String>(&value) {
+                    //max to return is the amount transferred
+                    std::cmp::min(amount_transferred, returned_amount.0)
+                } else {
+                    amount_transferred
+                }
             }
+            PromiseResult::Failed => {
+                log!("call failed. reversing transfer");
+                amount_transferred
+            },
+        };
+
+        if unused_tokens > 0 {
+            //some tokens returned / call failed, undo (partially) the transfer 
+            self.internal_multifuntok_transfer( &receiver_id, &sender_id, &STNEAR, unused_tokens);
+            log!("{} unused tokens returned", unused_tokens);
         }
+
+        return unused_tokens.into();
     }
 
     /// Transfer `amount` of symbol tokens from the caller of the contract (`predecessor_id`) to a contract at `receiver_id`.
