@@ -22,6 +22,10 @@ pub fn assert_callback_calling() {
     assert_eq!(env::predecessor_account_id(), env::current_account_id());
 }
 
+pub fn assert_one_yocto() {
+    assert_eq!(env::attached_deposit(), 1, "the function requires 1 yocto attachment");
+}
+
 pub fn is_promise_success() -> bool {
     assert_eq!(
         env::promise_results_count(),

@@ -17,13 +17,12 @@ use near_sdk_sim::{
   ViewResult
 };
 
-
-// //Note: the struct xxxxxxContract is created by #[near_bindgen] (near_skd_rs~2.0.4)
-use divpool::*;
+// //Note: &refcreated by #[near_bindgen] (near_skd_rs~2.0.4)
+use metapool::*;
 
 // Load contracts' bytes.
 near_sdk_sim::lazy_static! {
-  static ref WASM_BYTES_DIV_POOL: &'static [u8] = include_bytes!("../../res/divpool.wasm").as_ref();
+  static ref WASM_BYTES_META_POOL: &'static [u8] = include_bytes!("../../res/metapool.wasm").as_ref();
   static ref WASM_BYTES_SP: &'static [u8] = include_bytes!("../../res/staking_pool.wasm").as_ref();
   static ref WASM_BYTES_GET_EPOCH: &'static [u8] = include_bytes!("../../res/get_epoch_contract.wasm").as_ref();
 }
@@ -34,8 +33,8 @@ const E24: u128 = NEAR;
 
 const SP_INITIAL_BALANCE:u128 = 100*NEAR;
 
-/// Deploy the contract(s) and create some divpool accounts. Returns:
-/// - The divpool Contract
+/// Deploy the contract(s) and create some metapool accounts. Returns:
+/// - The metapool Contract
 /// - Root Account
 /// - Testnet Account (utility suffix for building other addresses)
 /// - A deployer account address
@@ -43,7 +42,7 @@ fn init_simulator_and_contract(
   initial_balance: u128,
   deploy_to: &str,
 ) -> (
-  ContractAccount<MetaPool>,
+  ContractAccount<MetaPoolContract>,
   UserAccount, // root
   UserAccount, // testnet suffix
   UserAccount, // deployer account
@@ -64,10 +63,29 @@ fn init_simulator_and_contract(
   let treasury = testnet.create_user("treasury".to_string(), ntoy(1_000_000));
   let operator = testnet.create_user("operator".to_string(), ntoy(1_000_000));
 
-  let divpool_contract = deploy!(
-      contract: DiversifiedPoolContract,
-      contract_id: "divpool",
-      bytes: &WASM_BYTES_DIV_POOL,
+  //-- NO MACROS
+  // let metapool_contract = master_account.deploy(&WASM_BYTES_META_POOL, account_id: "metapool", STORAGE_AMOUNT);
+  
+  // metapool_contract.call(
+  //   "metapool",
+  //   "new",
+  //   &json!({
+  //       "owner_account_id": owner.account_id(), 
+  //       "treasury_account_id": treasury.account_id(), 
+  //       "operator_account_id": operator.account_id(),
+  //   })
+  //   .to_string()
+  //   .into_bytes(),
+  //   DEFAULT_GAS / 2,
+  //   0, // attached deposit
+  // )
+  // .assert_success();
+  //-- END NO MACROS
+  
+  let metapool_contract = deploy!(
+      contract: MetaPoolContract,
+      contract_id: "metapool",
+      bytes: &WASM_BYTES_META_POOL,
       // User deploying the contract
       signer_account: owner,
       // MetaPool.new(
@@ -79,7 +97,7 @@ fn init_simulator_and_contract(
       init_method:new(owner.account_id(), treasury.account_id(), operator.account_id())
       );
 
-  return (divpool_contract, master_account, testnet, owner, treasury, operator)
+  return (metapool_contract, master_account, testnet, owner, treasury, operator)
 }
 
 //----------------------
@@ -180,7 +198,7 @@ fn yton(yoctos:u128) -> String {
 }
 
 struct Simulation {
-  pub divpool: ContractAccount<MetaPool>,
+  pub metapool: ContractAccount<MetaPoolContract>,
   pub master_account:UserAccount, // root
   pub testnet:UserAccount, // testnet suffix
   pub owner:UserAccount, // deployer account
@@ -207,11 +225,31 @@ impl Simulation {
     let treasury = testnet.create_user("treasury".into(), ntoy(1_000_000));
     let operator = testnet.create_user("operator".into(), ntoy(1_000_000));
 
+    // NO MACROS -------------
     //create acc, deploy & init the main contract
-    let divpool = deploy!(
-      contract: DiversifiedPoolContract,
-      contract_id: "divpool",
-      bytes: &WASM_BYTES_DIV_POOL,
+    // let metapool_contract = master_account.deploy(&WASM_BYTES_META_POOL, account_id: "metapool", STORAGE_AMOUNT);
+  
+    // metapool_contract.call(
+    //   "metapool",
+    //   "new",
+    //   &json!({
+    //       "owner_account_id": owner.account_id(), 
+    //       "treasury_account_id": treasury.account_id(), 
+    //       "operator_account_id": operator.account_id(),
+    //   })
+    //   .to_string()
+    //   .into_bytes(),
+    //   DEFAULT_GAS / 2,
+    //   0, // attached deposit
+    // )
+    // .assert_success();
+    // END NO MACROS -------------
+
+    //create acc, deploy & init the main contract
+    let metapool = deploy!(
+      contract: MetaPoolContract,
+      contract_id: "metapool",
+      bytes: &WASM_BYTES_META_POOL,
       // User deploying the contract
       signer_account: &owner,
       // MetaPool.new(
@@ -233,14 +271,14 @@ impl Simulation {
 
     return Self {
 
+      metapool,
+
       master_account,
 
       testnet,
       owner,
       treasury,
       operator,
-
-      divpool,
 
       sp,
 
@@ -264,8 +302,8 @@ impl Simulation {
 
   //----------------
   fn show_account_info(&self, acc:&str) -> Value {
-    let divpool = &self.divpool;
-    let result = view!(divpool.get_account_info(acc.into()));
+    let metapool = &self.metapool;
+    let result = view!(metapool.get_account_info(acc.into()));
     print_vecu8(acc,&result.unwrap());
     //println!("Result: {:#?}", result.unwrap_json_value());
     return serde_json::from_str(std::str::from_utf8(&result.unwrap()).unwrap()).unwrap();
@@ -350,16 +388,16 @@ fn simtest() {
   
   let sim = Simulation::new();
 
-  let divpool = &sim.divpool;
+  let metapool = &sim.metapool;
 
-  let view_results = view!(divpool.get_contract_info());
+  let view_results = view!(metapool.get_contract_info());
   print_vecu8("contract_info",&view_results.unwrap());
 
 
   //Example transfer to account
   // let transaction = master_account
   //   .create_transaction("sp1".to_string());  
-    //["sp1",".", &divpool_contract.user_account.account_id()].concat());
+    //["sp1",".", &metapool_contract.user_account.account_id()].concat());
   //let res = transaction.transfer(ntoy(1)).submit();
   //print_helper(res);
 
@@ -376,37 +414,37 @@ fn simtest() {
 
   //println!("treasury amount: {}", sim.treasury.amount());
 
-  //---- register staking pools in the divpool contract
+  //---- register staking pools in the metapool contract
   let weight_basis_points_vec = vec!(15,40,25,20);
   for n in 0..sim.sp.len() {
-    call!(sim.owner, divpool.set_staking_pool(sim.sp[n].account_id(),weight_basis_points_vec[n]*100), gas=25*TGAS);
+    call!(sim.owner, metapool.set_staking_pool(sim.sp[n].account_id(),weight_basis_points_vec[n]*100), gas=25*TGAS);
   }
-  let total_w_bp = view!(divpool.sum_staking_pool_list_weight_basis_points());
+  let total_w_bp = view!(metapool.sum_staking_pool_list_weight_basis_points());
   assert!(total_w_bp.unwrap_json_value() == 10000);
 
   //---- alice
   //---- deposit & buy stnear
   let alice = sim.testnet.create_user("alice".to_string(), ntoy(500_000));
   let alice_dep_and_stake = ntoy(100_000);
-  let ads_res = call!(alice,divpool.deposit_and_stake(), alice_dep_and_stake, 50*TGAS);
+  let ads_res = call!(alice,metapool.deposit_and_stake(), alice_dep_and_stake, 50*TGAS);
   //print_helper(&ads_res);
-  assert!(divpool.user_account.amount()>=alice_dep_and_stake);
+  assert!(metapool.user_account.amount()>=alice_dep_and_stake);
 
   //---- bob
   let bob = sim.testnet.create_user("bob".to_string(), ntoy(500_000));
   let bob_dep_and_stake = ntoy(200_000);
-  let bds_res = call!(bob,divpool.deposit_and_stake(), bob_dep_and_stake, 50*TGAS);
+  let bds_res = call!(bob,metapool.deposit_and_stake(), bob_dep_and_stake, 50*TGAS);
 
   //---- carol
   let carol = sim.testnet.create_user("carol".to_string(), ntoy(500_000));
   let carol_deposit = ntoy(250_000);
-  let cd_res = call!(carol,divpool.deposit(), carol_deposit, 50*TGAS);
+  //let cd_res = call!(carol,metapool.deposit(), carol_deposit, 50*TGAS);
   println!("----------------------------------");
   println!("------- carol adds liquidiy --");
-  let cal_res = call!(carol,divpool.nslp_add_liquidity(U128::from(carol_deposit)), gas=50*TGAS);
+  let cal_res = call!(carol,metapool.nslp_add_liquidity(), carol_deposit, 50*TGAS );
 
   //contract state
-  let view_results = view!(divpool.get_contract_state());
+  let view_results = view!(metapool.get_contract_state());
   print_vecu8("contract_state",&view_results.unwrap());
 
   //---- test distribute_staking
@@ -415,7 +453,7 @@ fn simtest() {
   println!("------- test distribute_staking --");
   for n in 0..4 {
     println!("------- call #{} to distribute_staking",n);
-    let dres = call!(sim.operator, divpool.distribute_staking(), gas=125*TGAS );
+    let dres = call!(sim.operator, metapool.distribute_staking(), gas=125*TGAS );
     //print_helper_profile(&dres);
     sim.show_sps_balance();
   }
@@ -440,7 +478,7 @@ fn simtest() {
   println!("----------------------------------");
   println!("------- alice unstakes --");
   let alice_unstaking = ntoy(6_000);
-  let ads_res = call!(alice,divpool.unstake(U128::from(alice_unstaking)), gas=50*TGAS);
+  let ads_res = call!(alice,metapool.unstake(U128::from(alice_unstaking)), gas=50*TGAS);
   print_helper(&ads_res);
 
   //----------------------------------------------------------
@@ -452,7 +490,7 @@ fn simtest() {
   println!("------- test distribute_unstaking --");
   for n in 0..20 {
     println!("------- call #{} to distribute_unstaking",n);
-    let dres = call!(sim.operator, divpool.distribute_unstaking(), gas=125*TGAS );
+    let dres = call!(sim.operator, metapool.distribute_unstaking(), gas=125*TGAS );
     print_helper_profile(&dres);
     sim.show_sps_balance();
     if &dres.unwrap_json_value()==false { break };
@@ -477,14 +515,14 @@ fn simtest() {
     println!("epoch {}",view(&get_epoch_acc,"get_epoch_height","{}"));
 
     println!("------- call #{} to get_staking_pool_requiring_retrieve()",n);
-    let dres = view!(divpool.get_staking_pool_requiring_retrieve());
+    let dres = view!(metapool.get_staking_pool_requiring_retrieve());
     let inx = dres.unwrap_json_value().as_i64().unwrap();
     println!("------- result {}",inx);
 
     if inx>=0 {
       println!("------- pool #{} requires retrieve",inx);
       sim.show_sps_balance();
-      let dres2 = call!(sim.operator, divpool.retrieve_funds_from_a_pool(inx as u16), gas=125*TGAS );
+      let dres2 = call!(sim.operator, metapool.retrieve_funds_from_a_pool(inx as u16), gas=125*TGAS );
       print_helper_promise(&dres2);
     }
     else if inx==-3 { //no more funds unstaked
@@ -500,7 +538,7 @@ fn simtest() {
     println!("----------------------------------");
     println!("------- alice completes unstaking: withdraws --");
     let previous = alice.amount();
-    let ads_res = call!(alice,divpool.withdraw(U128::from(alice_unstaking)), gas=50*TGAS);
+    let ads_res = call!(alice,metapool.withdraw(U128::from(alice_unstaking)), gas=50*TGAS);
     print_helper(&ads_res);
     assert!(alice.amount()==previous+alice_unstaking,"withdraw failed {} {} {}",alice.amount(),previous,alice_unstaking);
   }
@@ -514,9 +552,9 @@ fn simtest() {
     sim.show_account_info(&bob.account_id());
     sim.show_account_info(&carol.account_id());
     sim.show_account_info(NSLP_INTERNAL_ACCOUNT);
-    let vr1 = view!(divpool.get_contract_state());
+    let vr1 = view!(metapool.get_contract_state());
     print_vecu8("contract_state",&vr1.unwrap());
-    let vr2 = view!(divpool.get_contract_params());
+    let vr2 = view!(metapool.get_contract_params());
     print_vecu8("contract_params",&vr2.unwrap());
     
 
@@ -524,10 +562,10 @@ fn simtest() {
     const TO_SELL:u128 = 20_000*NEAR;
     const MIN_REQUESTED:u128 = 19_300*NEAR; //7% discount
     
-    let dbp = view!(divpool.nslp_get_discount_basis_points(TO_SELL.into()));
-    print_vecu8("divpool.nslp_get_discount_basis_points",&dbp.unwrap());
+    let dbp = view!(metapool.nslp_get_discount_basis_points(TO_SELL.into()));
+    print_vecu8("metapool.nslp_get_discount_basis_points",&dbp.unwrap());
 
-    let bss_res = call!(bob,divpool.sell_stnear(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), gas=100*TGAS);
+    let bss_res = call!(bob,metapool.sell_stnear(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), 1, 100*TGAS);
     print_helper(&bss_res);
     let received = as_u128(&bss_res.unwrap_json_value());
     assert!(received >= MIN_REQUESTED,"sell stnear failed {} {}",MIN_REQUESTED,received);
@@ -536,8 +574,8 @@ fn simtest() {
     let carol_info =sim.show_account_info(&carol.account_id());
     let nslp_info = sim.show_account_info(NSLP_INTERNAL_ACCOUNT);
 
-    assert!(as_u128(&bob_info["meta"]) == 668*E24);
-    assert!(as_u128(&carol_info["meta"]) == 9_352*E24);
+    assert!(as_u128(&bob_info["meta"]) == 50*E24);
+    assert!(as_u128(&carol_info["meta"]) == 700*E24);
     
   }
 
@@ -546,7 +584,7 @@ fn simtest() {
     println!("----------------------------------");
     const AMOUNT:u128 = 100_000*NEAR;
     println!("------- carol removes liquidity");
-    let res = call!(carol,divpool.nslp_remove_liquidity(U128::from(AMOUNT)), gas=100*TGAS);
+    let res = call!(carol,metapool.nslp_remove_liquidity(U128::from(AMOUNT)), gas=100*TGAS);
     print_helper(&res);
     let carol_info =sim.show_account_info(&carol.account_id());
     assert!(as_u128(&carol_info["total"]) == AMOUNT);
