@@ -19,7 +19,7 @@ impl MetaPool {
 }
 
 pub fn assert_min_amount(amount: u128) {
-    assert!(amount >= FIVE_NEAR, "minimun amount is 5N");
+    assert!(amount >= NEAR, "minimum amount is 1N");
 }
 
 /***************************************/
@@ -182,6 +182,43 @@ impl MetaPool {
         //     )
         //     .as_bytes(),
         // );
+    }
+
+    //--------------------------------------------------
+    /// adds liquidity from deposited amount
+    pub(crate) fn internal_nslp_add_liquidity(&mut self, amount: u128) {
+
+        let account_id = env::predecessor_account_id();
+        let mut acc = self.internal_get_account(&account_id);
+
+        assert!(
+            acc.available >= amount,
+            "Not enough available balance to add the requested amount to the NSLP"
+        );
+
+        //get NSLP account
+        let mut nslp_account = self.internal_get_nslp_account();
+
+        //use this LP operation to realize meta pending rewards (same as nslp_harvest_meta)
+        acc.nslp_realize_meta(&nslp_account, self);
+
+        // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
+        let num_shares = self.nslp_shares_from_amount(amount, &nslp_account);
+        assert!(num_shares > 0);
+
+        //register added liquidity to compute rewards correctly
+        acc.lp_meter.stake(amount);
+
+        //update user account
+        acc.available -= amount;
+        acc.nslp_shares += num_shares;
+        //update NSLP account
+        nslp_account.available += amount;
+        nslp_account.nslp_shares += num_shares; //total nslp shares
+
+        //--SAVE ACCOUNTS
+        self.internal_update_account(&account_id, &acc);
+        self.internal_save_nslp_account(&nslp_account);
     }
 
     //--------------------------------------------------

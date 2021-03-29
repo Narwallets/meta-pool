@@ -220,7 +220,7 @@ pub struct MetaPool {
 
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
-    // We assume this pool is always UNBALANCED, there should be more stNEAR than NEAR 99% of the time
+    // We assume this pool is always UNBALANCED, there should be more NEAR than stNEAR 99% of the time
     ///NEAR/stNEAR 1% fee Liquidity target. If the Liquidity reach this amount, the fee is 1%
     pub nslp_near_one_percent_target: u128, // 150_000*NEAR initially
     ///NEAR/stNEAR Liquidity pool max fee
@@ -287,6 +287,15 @@ impl MetaPool {
     ) -> Self {
         assert!(!env::state_exists(), "The contract is already initialized");
 
+        //all accounts must be different 
+        // not all combinations testesd, we assume the one deploying the contract has some knowledge
+        // it does not make sense to burn fees checking all combinations
+        assert!(&owner_account_id!=&treasury_account_id);
+        assert!(&owner_account_id!=&DEVELOPERS_ACCOUNT_ID);
+        assert!(&operator_account_id!=&owner_account_id);
+        assert!(&operator_account_id!=&DEVELOPERS_ACCOUNT_ID);
+        assert!(&treasury_account_id!=&operator_account_id);
+
         return Self {
             owner_account_id,
             operator_account_id,
@@ -308,9 +317,9 @@ impl MetaPool {
             total_meta: 0,
             accounts: UnorderedMap::new("A".into()),
             loan_requests: LookupMap::new("L".into()),
-            nslp_near_one_percent_target: 150_000*NEAR,
-            nslp_max_discount_basis_points: 500, //5%
-            nslp_min_discount_basis_points: 50,   //0.5%
+            nslp_near_one_percent_target: 20_000*NEAR,
+            nslp_max_discount_basis_points: 180, //1.8%
+            nslp_min_discount_basis_points: 25,   //0.25%
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
             stnear_sell_meta_mult_pct: 100, //1x
             ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
@@ -515,7 +524,9 @@ impl MetaPool {
     }
 
     /// buy_stnear_stake. Identical to stake, migth change in the future
+    #[payable]
     pub fn buy_stnear_stake(&mut self, amount: U128String) {
+        assert_one_yocto();
         self.internal_stake(amount.0);
     }
 
@@ -541,11 +552,15 @@ impl MetaPool {
     /// user method
     /// Sells-stnear at discount in the NLSP
     /// returns near received
+    #[payable]
     pub fn sell_stnear(
         &mut self,
         stnear_to_sell: U128String,
         min_expected_near: U128String,
     ) -> U128String {
+
+        assert_one_yocto();
+
         let account_id = env::predecessor_account_id();
         let mut user_account = self.internal_get_account(&account_id);
 
@@ -671,42 +686,14 @@ impl MetaPool {
     }
 
 
-    /// add liquidity from deposited funds
-    pub fn nslp_add_liquidity(&mut self, amount: U128String) {
-        assert_min_amount(amount.0);
-
-        let account_id = env::predecessor_account_id();
-        let mut acc = self.internal_get_account(&account_id);
-
-        assert!(
-            acc.available >= amount.0,
-            "Not enough available balance to add the requested amount to the NSLP"
-        );
-
-        //get NSLP account
-        let mut nslp_account = self.internal_get_nslp_account();
-
-        //use this LP operation to realize meta pending rewards (same as nslp_harvest_meta)
-        acc.nslp_realize_meta(&nslp_account, self);
-
-        // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
-        let num_shares = self.nslp_shares_from_amount(amount.0, &nslp_account);
-        assert!(num_shares > 0);
-
-        //register added liquidity to compute rewards correctly
-        acc.lp_meter.stake(amount.0);
-
-        //update user account
-        acc.available -= amount.0;
-        acc.nslp_shares += num_shares;
-        //update NSLP account
-        nslp_account.available += amount.0;
-        nslp_account.nslp_shares += num_shares; //total nslp shares
-
-        //--SAVE ACCOUNTS
-        self.internal_update_account(&account_id, &acc);
-        self.internal_save_nslp_account(&nslp_account);
+    /// add liquidity - payable
+    #[payable]
+    pub fn nslp_add_liquidity(&mut self) {
+        assert_min_amount(env::attached_deposit());
+        self.internal_deposit();
+        self.internal_nslp_add_liquidity(env::attached_deposit());
     }
+
 
     /// remove liquidity from deposited funds
     pub fn nslp_remove_liquidity(&mut self, amount: U128String) {
@@ -815,10 +802,6 @@ impl MetaPool {
         //--SAVE ACCOUNT
         self.internal_update_account(&account_id, &acc);
     }
-
-
-
-
 
 }
 
