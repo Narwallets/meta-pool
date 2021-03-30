@@ -188,8 +188,11 @@ pub struct GetContractStateResult {
 
     /// How much NEAR is available to immediate unstake (sell stNEAR)
     pub nslp_liquidity: U128,
+    pub nslp_target: U128,
     /// Current discount for immediate unstake (sell stNEAR)
     pub nslp_current_discount_basis_points: u16,
+    pub nslp_min_discount_basis_points: u16,
+    pub nslp_max_discount_basis_points: u16,
 
     //how many accounts there are
     pub accounts_count: U64,
@@ -213,7 +216,7 @@ pub struct ContractParamsJSON {
     pub min_account_balance: U128String,
 
     ///NEAR/stNEAR Liquidity pool 1% fee target. If Liquidity=target, fee is 1%
-    pub nslp_near_one_percent_target: U128String,
+    pub nslp_liquidity_target: U128String,
     ///NEAR/stNEAR Liquidity pool max fee
     pub nslp_max_discount_basis_points: u16, //10%
     ///NEAR/stNEAR Liquidity pool min fee

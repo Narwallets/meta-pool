@@ -11,7 +11,6 @@ use internal::*;
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
-// const ONE_NEAR:u128 = 1_000_000_000_000_000_000_000_000;
 // const ONE_NEAR_CENT:u128 = ONE_NEAR/100;
 // const DEPOSIT_FOR_REQUEST: u128 = ONE_NEAR_CENT; // amount that clients have to attach to make a request to the api
 // const GAS_FOR_REQUEST: Gas = 50_000_000_000_000;
@@ -151,17 +150,20 @@ impl RewardsRegisterContract {
 /* Unit tests */
 /**************/
 
+/*
 #[cfg(test)]
 mod tests {
     use near_sdk::MockedBlockchain;
     use near_sdk::{testing_env, VMContext};
 
+    const ONE_NEAR:u128 = 1_000_000_000_000_000_000_000_000;
 
     /// Set the contract context
-    pub fn initialize() {
-        let context = get_context(String::from("client.testnet"), 10);                    
-        testing_env!(context); 
-    }
+    // pub fn initialize() -> &VMContext {
+    //     let context = get_context(String::from("client.testnet"), 10);                    
+    //     testing_env!(context); 
+    //     return &context;
+    // }
 
     /// Defines the context for the contract
     fn get_context(predecessor_account_id: String, storage_usage: u64) -> VMContext {
@@ -185,14 +187,17 @@ mod tests {
         }
     }
 
-    ///Test get_id and set_id methods
-    #[test]
-    fn test_id() {
-        initialize();
-        /* Initialize contract */
-        let mut contract = super::RewardsRegisterContract::new(String::from("developers.near"));
-        let handle = String::from("narwallets");
-        contract.set_github_handle(handle.clone());
-        assert_eq!(contract.get_github_handle(), handle.clone(), "handle is different from the expected");
-    }
+    //Test get_id and set_id methods
+    // #[test]
+    // fn test_id() {
+    //     let mut context = get_context(String::from("client.testnet"), 10);                    
+    //     testing_env!(context); 
+    //     /* Initialize contract */
+    //     let mut contract = super::RewardsRegisterContract::new(String::from("developers.near"));
+    //     let handle = String::from("narwallets");
+    //     context.attached_deposit = ONE_NEAR;
+    //     contract.set_github_handle(handle.clone());
+    //     assert_eq!(contract.get_github_handle(), handle.clone(), "handle is different from the expected");
+    // }
 }
+*/

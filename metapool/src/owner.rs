@@ -215,7 +215,10 @@ impl MetaPool {
             accounts_count: self.accounts.len().into(),
             staking_pools_count: self.staking_pools.len() as u16,
             nslp_liquidity: lp_account.available.into(),
-            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(lp_account.available, TEN_NEAR)
+            nslp_target: self.nslp_liquidity_target.into(),
+            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(lp_account.available, TEN_NEAR),
+            nslp_min_discount_basis_points:self.nslp_min_discount_basis_points,
+            nslp_max_discount_basis_points:self.nslp_max_discount_basis_points,
         };
     }
 
@@ -225,7 +228,7 @@ impl MetaPool {
             staking_paused: self.staking_paused,
             min_account_balance: self.min_account_balance.into(),
 
-            nslp_near_one_percent_target: self.nslp_near_one_percent_target.into(),
+            nslp_liquidity_target: self.nslp_liquidity_target.into(),
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
             nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
 
@@ -243,10 +246,11 @@ impl MetaPool {
     pub fn set_contract_params(&mut self, params:ContractParamsJSON) {
 
         self.assert_owner_calling();
+        assert!(params.nslp_max_discount_basis_points>params.nslp_min_discount_basis_points);
 
         self.min_account_balance = params.min_account_balance.0;
 
-        self.nslp_near_one_percent_target = params.nslp_near_one_percent_target.0;
+        self.nslp_liquidity_target = params.nslp_liquidity_target.0;
         self.nslp_max_discount_basis_points = params.nslp_max_discount_basis_points;
         self.nslp_min_discount_basis_points = params.nslp_min_discount_basis_points;
 

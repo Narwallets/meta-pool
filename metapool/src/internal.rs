@@ -328,38 +328,34 @@ impl MetaPool {
         return false;
     }
 
-    /// computes the disocunt_basis_points for NEAR/stNEAR Swap based on NSLP Balance
+    /// computes discount_basis_points for NEAR/stNEAR Swap based on NSLP Balance
     pub(crate) fn internal_get_discount_basis_points(
         &self,
         available_near: u128,
         max_nears_to_pay: u128,
     ) -> u16 {
         log!(
-                "get_discount_basis_points available_near={}  max_nears_to_pay={}",
-                available_near, max_nears_to_pay
+            "get_discount_basis_points available_near={}  max_nears_to_pay={}",
+            available_near, max_nears_to_pay
         );
 
         if available_near <= max_nears_to_pay {
             return self.nslp_max_discount_basis_points;
         }
-
+        //amount after the swap
         let near_after = available_near - max_nears_to_pay;
+        if near_after >= self.nslp_liquidity_target {
+            //still >= target
+            return self.nslp_min_discount_basis_points;
+        }
 
-        if near_after < self.nslp_near_one_percent_target / 100 { // low amount
-            return self.nslp_max_discount_basis_points; // discount capped at max%
-        } 
+        //linear curve from max to min on target
+        let range  = self.nslp_max_discount_basis_points - self.nslp_min_discount_basis_points;
+        //here 0<near_after<self.nslp_liquidity_target, so 0<proportional_bp<range
+        let proportional_bp = proportional(range as u128, near_after, self.nslp_liquidity_target);
 
-        let discount_basis_plus_100 = self.nslp_near_one_percent_target * 100 / near_after;
-        if discount_basis_plus_100 <= 100 + u128::from(self.nslp_min_discount_basis_points) {
-            return self.nslp_min_discount_basis_points; // lower than min, return min
-        } 
+        return self.nslp_max_discount_basis_points - proportional_bp as u16;
 
-        let discount_basis_points = discount_basis_plus_100 - 100;
-        if discount_basis_points > u128::from(self.nslp_max_discount_basis_points) {
-            return self.nslp_max_discount_basis_points; //capped at max%
-        } 
-
-        return discount_basis_points as u16;
     }
 
     /// user method - NEAR/stNEAR SWAP functions

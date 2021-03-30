@@ -11,7 +11,7 @@ const CONTRACT_VERSION: &str = "0.1.0";
 const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
-use near_sdk::{env, ext_contract, near_bindgen, AccountId};
+use near_sdk::{env, ext_contract, near_bindgen, AccountId, Promise};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::collections::{UnorderedMap,LookupMap};
@@ -46,11 +46,14 @@ static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INI
 
 pub const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
 
+#[cfg(not(prod))]
 macro_rules! debug {
     ($($arg:tt)*) => ({
         env::log(format!($($arg)*).as_bytes());
     });
 }
+#[cfg(prod)]
+macro_rules! debug { }
 
 
 #[ext_contract(ext_staking_pool)]
@@ -222,7 +225,7 @@ pub struct MetaPool {
     // NEAR/stNEAR Liquidity pool fee curve params
     // We assume this pool is always UNBALANCED, there should be more NEAR than stNEAR 99% of the time
     ///NEAR/stNEAR 1% fee Liquidity target. If the Liquidity reach this amount, the fee is 1%
-    pub nslp_near_one_percent_target: u128, // 150_000*NEAR initially
+    pub nslp_liquidity_target: u128, // 150_000*NEAR initially
     ///NEAR/stNEAR Liquidity pool max fee
     pub nslp_max_discount_basis_points: u16, //5% initially
     ///NEAR/stNEAR Liquidity pool min fee
@@ -317,7 +320,7 @@ impl MetaPool {
             total_meta: 0,
             accounts: UnorderedMap::new("A".into()),
             loan_requests: LookupMap::new("L".into()),
-            nslp_near_one_percent_target: 20_000*NEAR,
+            nslp_liquidity_target: 10_000*NEAR,
             nslp_max_discount_basis_points: 180, //1.8%
             nslp_min_discount_basis_points: 25,   //0.25%
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
@@ -551,7 +554,7 @@ impl MetaPool {
 
     /// user method
     /// Sells-stnear at discount in the NLSP
-    /// returns near received
+    /// returns near transferred
     #[payable]
     pub fn sell_stnear(
         &mut self,
@@ -583,7 +586,7 @@ impl MetaPool {
             self.internal_get_near_amount_sell_stnear(nslp_account.available, to_sell);
         assert!(
             near_to_receive >= min_expected_near.0,
-            "Price changed, your min results requirements {} not satisfied {}. Try again", min_expected_near.0, near_to_receive
+            "Price changed, your min amount {} is not satisfied {}. Try again", min_expected_near.0, near_to_receive
         );
         assert!(
             nslp_account.available >= near_to_receive,
@@ -668,14 +671,21 @@ impl MetaPool {
         self.internal_update_account(&self.treasury_account_id.clone(), &treasury_account);
         self.internal_update_account(&self.operator_account_id.clone(), &operator_account);
         self.internal_update_account(&DEVELOPERS_ACCOUNT_ID.into(), &developers_account);
-        //Save user and nslp accounts
-        self.internal_update_account(&account_id, &user_account);
+        //Save nslp accounts
         self.internal_save_nslp_account(&nslp_account);
+
+        //simplify user-flow
+        //direct transfer to user (instead of leaving it in-contract, "available")
+        Promise::new(account_id.clone()).transfer(near_to_receive);
+        user_account.available-=near_to_receive;
+
+        //Save user accounts
+        self.internal_update_account(&account_id, &user_account);
 
         env::log(
             format!(
                 "@{} sold {} stNEAR for {} NEAR",
-                account_id, to_sell, near_to_receive
+                &account_id, to_sell, near_to_receive
             )
             .as_bytes(),
         );
@@ -814,7 +824,7 @@ impl MetaPool {
 mod tests {
     //use std::convert::TryInto;
 
-/*    use near_sdk::{testing_env, MockedBlockchain,  VMContext}; //PromiseResult,
+    use near_sdk::{testing_env, MockedBlockchain,  VMContext}; //PromiseResult,
 
     use test_utils::*;
 
@@ -829,7 +839,7 @@ mod tests {
     fn basic_context() -> VMContext {
         get_context(
             system_account(),
-            to_yocto(TEST_INITIAL_BALANCE),
+            ntoy(TEST_INITIAL_BALANCE),
             0,
             to_ts(GENESIS_TIME_IN_DAYS),
             false,
@@ -837,7 +847,7 @@ mod tests {
     }
 
     fn new_contract() -> MetaPool {
-        MetaPool::new(account_owner(), account_owner(), account_owner())
+        MetaPool::new(owner_account(), treasury_account(), operator_account())
     }
 
     fn contract_only_setup() -> (VMContext, MetaPool) {
@@ -846,6 +856,51 @@ mod tests {
         let contract = new_contract();
         return (context, contract);
     }
+
+    #[test]
+    fn test_internal_fee_curve() {
+        let (_context, contract) = contract_only_setup();
+
+        assert!( contract.internal_get_discount_basis_points(ntoy(10), ntoy(10)) == contract.nslp_max_discount_basis_points);
+
+        assert!( contract.internal_get_discount_basis_points(contract.nslp_liquidity_target+ntoy(100), ntoy(100)) == contract.nslp_min_discount_basis_points);
+
+
+        println!("target {} min {} max {} ", yton(contract.nslp_liquidity_target), contract.nslp_min_discount_basis_points, contract.nslp_max_discount_basis_points);
+        for n in 0..24 {
+            let liquidity = (contract.nslp_liquidity_target + ntoy(2000)).saturating_sub(ntoy(n*1000));
+            let sell = ntoy(1000);
+            let low = contract.internal_get_discount_basis_points(liquidity, sell);
+            println!("liquidity {}, sell {}, fee {}%", yton(liquidity), yton(sell), low as f64/100.0);
+        }
+
+        //assert!( low  > contract.nslp_min_discount_basis_points);
+        assert!( contract.internal_get_discount_basis_points(ntoy(17_000), ntoy(1_000)) == 56);
+        assert!( contract.internal_get_discount_basis_points(ntoy(12_000), ntoy(1_000)) == 95);
+        assert!( contract.internal_get_discount_basis_points(ntoy(4_000), ntoy(1_000)) == 157);
+        //assert!(false);
+
+    }
+
+    #[test]
+    fn test_internal_get_near_amount_sell_stnear() {
+        let (_context, contract) = contract_only_setup();
+        let lp_balance_y: u128 = ntoy(500_000);
+        let sell_stnear_y: u128 = ntoy(120);
+        
+        let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_stnear_y);
+        
+        let near_amount_y =contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
+
+        assert!(near_amount_y <= sell_stnear_y);
+        let discountedy = sell_stnear_y - near_amount_y;
+        let _discounted_display_n = ytof(discountedy);
+        let _sell_stnear_display_n = ytof(sell_stnear_y);
+        assert!(discountedy == apply_pct(discount_bp, sell_stnear_y));
+        assert!(near_amount_y == sell_stnear_y - discountedy);
+    }
+
+
 
     // #[test]
     // fn test_gfme_only_basic() {
@@ -867,22 +922,6 @@ mod tests {
 
     //     assert_almost_eq(contract.get_owners_balance().0, to_yocto(TEST_INITIAL_BALANCE));
     // }
-    #[test]
-    fn test_internal_get_near_amount_sell_stnear() {
-        let (_context, contract) = contract_only_setup();
-        let lp_balance_y: u128 = to_yocto(500_000);
-        let sell_stnear_y: u128 = to_yocto(120);
-        let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_stnear_y);
-        let near_amount_y =
-            contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
-        assert!(near_amount_y <= sell_stnear_y);
-        let discountedy = sell_stnear_y - near_amount_y;
-        let _discounted_display_n = ytof(discountedy);
-        let _sell_stnear_display_n = ytof(sell_stnear_y);
-        assert!(discountedy == apply_pct(discount_bp, sell_stnear_y));
-        assert!(near_amount_y == sell_stnear_y - discountedy);
-    }
-*/
 
     /*
     #[test]
