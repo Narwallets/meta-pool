@@ -77,7 +77,6 @@ impl MetaPool {
             panic!(b"sp is busy")
         }
         sp.weight_basis_points = weight_basis_points;
-        self.check_staking_pool_list_consistency();
     }
     
     ///add a new staking pool or update existing weight_basis_points
@@ -95,11 +94,6 @@ impl MetaPool {
         }
         //not found, it's a new pool
         self.staking_pools.push(  StakingPoolInfo::new(account_id, weight_basis_points) );
-        self.check_staking_pool_list_consistency();
-    }
-
-    fn check_staking_pool_list_consistency(&self) {
-        assert!(self.sum_staking_pool_list_weight_basis_points()<=10000,"sum(staking_pools.weight) can not be GT 100%");
     }
 
     pub fn sum_staking_pool_list_weight_basis_points(&self) -> u16 {
