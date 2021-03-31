@@ -407,9 +407,8 @@ impl MetaPool {
             &self.add_amount_and_shares_preserve_share_price(self.operator_account_id.clone(),owner_fee);
             &self.add_amount_and_shares_preserve_share_price(DEVELOPERS_ACCOUNT_ID.into(), developers_fee);
 
-            // rest of rewards go into total_actually_staked increasing share value
+            // rest of rewards go into total_actually_staked increasing share value for all stNEAR holders
             assert!(rewards > developers_fee + owner_fee);
-            //add rest of rewards increasing share value for all stakers
             self.total_for_staking += rewards - developers_fee - owner_fee; //increase share price for everybody
 
         }

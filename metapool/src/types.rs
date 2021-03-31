@@ -243,6 +243,7 @@ pub struct ContractParamsJSON {
 #[derive(Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolJSONInfo {
+    pub inx: u16,
     pub account_id: String,
     pub weight_basis_points: u16,
     pub staked: U128String,

@@ -34,7 +34,7 @@ impl RewardMeter {
         if self.delta_staked<0 || valued_shares <= (self.delta_staked as u128) { return 0; }
 
         assert!( valued_shares < ((i128::MAX - self.delta_staked) as u128), "TB");
-        // TO-DO remove the i128, make it with 2 fields, it's hard to read and to audit, prone to errors
+        // TO-DO remove the i128, make it with 2 fields, it's hard to read and to audit, error prone
         // assert!(
         //     self.delta_staked < 0 || valued_shares >= (self.delta_staked as u128),
         //     "valued_shares:{} .LT. self.delta_staked:{}",valued_shares,self.delta_staked

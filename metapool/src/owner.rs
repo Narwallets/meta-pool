@@ -37,8 +37,10 @@ impl MetaPool {
     /// get the current list of pools
     pub fn get_staking_pool_list(&self) -> Vec<StakingPoolJSONInfo> {
         let mut result = Vec::with_capacity(self.staking_pools.len());
-        for elem in self.staking_pools.iter(){
+        for inx in 0.. self.staking_pools.len() {
+            let elem = &self.staking_pools[inx];
             result.push(StakingPoolJSONInfo{
+                inx: inx as u16,
                 account_id: elem.account_id.clone(),
                 weight_basis_points: elem.weight_basis_points,
                 staked: elem.staked.into(),
@@ -260,18 +262,15 @@ impl MetaPool {
     
     /// get sp (staking-pool) info
     /// Returns JSON representation of sp recorded state
-    pub fn get_sp_info(&self, sp_inx_i32: i32) -> StakingPoolJSONInfo {
+    pub fn get_sp_info(&self, inx: u16) -> StakingPoolJSONInfo {
 
-        assert!(sp_inx_i32 > 0);
-
-        let sp_inx = sp_inx_i32 as usize;
-        assert!(sp_inx < self.staking_pools.len());
-
-        let sp = &self.staking_pools[sp_inx];
+        assert!((inx as usize) < self.staking_pools.len());
+        let sp = &self.staking_pools[inx as usize];
 
         return StakingPoolJSONInfo {
+            inx,
             account_id: sp.account_id.clone(),
-            weight_basis_points: sp.weight_basis_points,
+            weight_basis_points: sp.weight_basis_points.clone(),
             staked: sp.staked.into(),
             unstaked: sp.unstaked.into(),
             unstaked_requested_epoch_height: sp.unstk_req_epoch_height.into(),
