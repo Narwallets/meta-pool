@@ -87,7 +87,7 @@ impl RewardsRegisterContract {
         assert!(account.deposited>=1*NEAR, "send at least ONE NEAR to register you account. You'll get back your NEAR when closing the account");
         self.internal_update_account(&account_id, &account);
    
-        log!("@{} registered {} as githun_handle",account_id, github_handle);
+        log!("@{} registered {} as github_handle",account_id, github_handle);
     }
 
     pub fn get_github_handle(&self)-> String {

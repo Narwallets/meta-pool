@@ -112,7 +112,7 @@ impl MetaPool {
     }
 
     //prev fn continues here
-    /// Called after amount is staked from the sp's unstaked balance (all into  the staking pool contract).
+    /// Called after amount is staked into a staking-pool
     /// This method needs to update staking pool status.
     pub fn on_staking_pool_stake_maybe_deposit(
         &mut self,
@@ -142,8 +142,8 @@ impl MetaPool {
         else {
             //STAKE FAILED
             result = "has failed";
-            if !included_deposit { //was staking from "wating for unstake"
-                self.total_unstaked_and_waiting += amount; //undo preventive action considering the amount taken from wating for unstake
+            if !included_deposit { //was staking from "waiting for unstake"
+                self.total_unstaked_and_waiting += amount; //undo preventive action considering the amount taken from waiting for unstake
             }
             self.total_actually_staked -= amount; //undo preventive action considering the amount staked
         }
@@ -239,7 +239,7 @@ impl MetaPool {
     //------------------------------------------------------------------------
     // Operator method, but open to anyone. Should be called once per epoch per sp, after sp rewards distribution (ping)
     /// Retrieves total balance from the staking pool and remembers it internally.
-    /// Also computes and distributes rewards operator and delegators
+    /// Also computes and distributes rewards for operator and stakers
     /// this fn queries the staking pool (makes a cross-contract call)
     pub fn distribute_rewards(&mut self, sp_inx: u16) {
         self.query_current_stake(sp_inx,MODE_DISTRIBUTE)
@@ -305,7 +305,7 @@ impl MetaPool {
 
     /// prev fn continues here
     /*
-    Note: what does the tag #[callback] applied to a fn in paramter do?
+    Note: what does the tag #[callback] applied to a fn in parameter do?
     #[callback] parses the previous promise's result into the param
         Check out https://nomicon.io/RuntimeSpec/Components/BindingsSpec/PromisesAPI.html
         1. check promise_results_count() == 1
@@ -427,7 +427,7 @@ impl MetaPool {
         let mut result:i32 = -3;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
-            // if the pool is not busy, has stake, and has not unstaked blanace waiting for withdrawal
+            // if the pool is not busy, has stake, and has not unstaked balance waiting for withdrawal
             if sp.unstaked > 0  {
                 if result == -3 { result = -2};
                 if sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= env::epoch_height() {
@@ -447,7 +447,7 @@ impl MetaPool {
     //----------------------------------------------------------------------
     //  WITHDRAW FROM ONE OF THE POOLS ONCE THE WAITING PERIOD HAS ELAPSED
     //----------------------------------------------------------------------
-    /// launchs a withdrawal call
+    /// launches a withdrawal call
     /// returns the amount withdrawn
     /// call get_staking_pool_requiring_retrieve first
     /// 

@@ -69,7 +69,7 @@ impl MetaPool {
         );
 
         let to_withdraw = 
-            if acc.available - amount_requested < NEAR_CENT/2  //small yotctos remain, withdraw all
+            if acc.available - amount_requested < NEAR_CENT/2  //small yoctoNEARS remain, withdraw all
                 { acc.available } 
                 else  { amount_requested };
 
@@ -186,7 +186,7 @@ impl MetaPool {
 
     //--------------------------------------------------
     /// adds liquidity from deposited amount
-    pub(crate) fn internal_nslp_add_liquidity(&mut self, amount: u128) {
+    pub(crate) fn internal_nslp_add_liquidity(&mut self, amount: u128) -> u16 {
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
@@ -216,9 +216,14 @@ impl MetaPool {
         nslp_account.available += amount;
         nslp_account.nslp_shares += num_shares; //total nslp shares
 
+        //compute the % the user now owns of the Liquidity Pool (in basis points)
+        let result_bp = proportional(10_000, acc.nslp_shares, nslp_account.nslp_shares) as u16;
+
         //--SAVE ACCOUNTS
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
+
+        return result_bp;
     }
 
     //--------------------------------------------------
@@ -367,7 +372,7 @@ impl MetaPool {
     ) -> u128 {
         let discount_basis_points =
             self.internal_get_discount_basis_points(available_near, stnear_to_sell);
-        assert!(discount_basis_points < 10000, "inconsistence d>1");
+        assert!(discount_basis_points < 10000, "inconsistency d>1");
         let discount = apply_pct(discount_basis_points, stnear_to_sell);
         return (stnear_to_sell - discount).into(); //when stNEAR is sold user gets a discounted value because the user skips the waiting period
 
@@ -442,7 +447,7 @@ impl MetaPool {
         return (selected_sp_inx, selected_to_stake_amount);
     }
 
-    /// finds a staking pool requireing some stake to get balanced
+    /// finds a staking pool requiring some stake to get balanced
     /// WARN: returns (0,0) if no pool requires staking/all are busy
     pub(crate) fn get_staking_pool_requiring_unstake(&self, total_to_unstake:u128) -> (usize,u128) {
         let mut selected_to_unstake_amount: u128 = 0;
@@ -450,7 +455,7 @@ impl MetaPool {
         let mut selected_sp_inx: usize = 0;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
-            // if the pool is not busy, has stake, and has not unstaked blanace waiting for withdrawal
+            // if the pool is not busy, has stake, and has not unstaked balance waiting for withdrawal
             if !sp.busy_lock && sp.staked > 0 && sp.unstaked == 0 {
                 // if this pool has an unbalance requiring un-staking
                 let should_have = apply_pct(sp.weight_basis_points, self.total_for_staking);
@@ -472,7 +477,7 @@ impl MetaPool {
             if selected_to_unstake_amount > total_to_unstake { 
                 selected_to_unstake_amount = total_to_unstake 
             };
-            //to avoid moving small amounts, if the remainder is less than 5K and this pool can accomodate the unstaking, increase amount
+            //to avoid moving small amounts, if the remainder is less than 5K and this pool can accommodate the unstaking, increase amount
             let remainder = total_to_unstake - selected_to_unstake_amount;
             if remainder <= MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT && selected_stake > selected_to_unstake_amount+remainder+2*MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT { 
                 selected_to_unstake_amount += remainder 

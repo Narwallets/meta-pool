@@ -52,7 +52,7 @@ impl MetaPool {
         return result;
     }
 
-    // get env::epoch_height() to comapre with the fields in the staking-pool-list
+    // get env::epoch_height() to compare with the fields in the staking-pool-list
     pub fn get_env_epoch_height(&self) -> U64String {
         return env::epoch_height().into()
     }
@@ -141,7 +141,7 @@ impl MetaPool {
         let stnear = self.amount_from_stake_shares(acc.stake_shares);
         // trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
         let trip_rewards = (stnear + acc.trip_accum_unstakes).saturating_sub(acc.trip_accum_stakes + acc.trip_start_stnear);
-        //NLSP share value
+        //Liquidity Pool share value
         let mut nslp_share_value: u128 = 0;
         if acc.nslp_shares != 0 {
             let nslp_account = self.internal_get_nslp_account();
@@ -185,8 +185,8 @@ impl MetaPool {
         }
     }
 
-    /// sets confirgurable contract info [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    // Note: params are not Option<String> so the user can not inadvertely set null to data by not including the argument
+    /// sets configurable contract info [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    // Note: params are not Option<String> so the user can not inadvertently set null to data by not including the argument
     pub fn set_contract_info(&mut self, web_app_url:String, auditor_account_id:String) {
         self.assert_owner_calling();
         self.web_app_url = if web_app_url.len()>0 { Some(web_app_url) } else { None };

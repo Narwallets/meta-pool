@@ -74,7 +74,7 @@ impl MetaPool {
     }
 
     // deletes an account and transfer all balances to beneficiary_id. beneficiary_id must pre-exists if the account holds stnear or META
-    // Notes: account_to_delete_id is superflous on purpose
+    // Notes: account_to_delete_id is superfluous on purpose
     // assert!(`account_to_delete_id`==`predecessor_id`)
     pub fn delete_account(&mut self, account_to_delete_id: AccountId, beneficiary_id: AccountId) {
         assert!(env::predecessor_account_id()==account_to_delete_id, "only {} can delete this account",account_to_delete_id.clone());
@@ -128,7 +128,7 @@ impl MetaPool {
             //promise params:
             &receiver_id, //contract
             0, //attached native NEAR amount
-            100_000_000_000_000, //100TGAS
+            100_000_000_000_000, //100 TGAS
         )
         .then(ext_self_callback::after_ft_on_transfer(
             env::predecessor_account_id(),
@@ -143,7 +143,7 @@ impl MetaPool {
     }
     /// After Transfer `amount` of symbol tokens to a contract at `receiver_id`.
     /// Check if the contract completed execution of on_multifuntok_transfer
-    /// and undo trasnfer if it failed
+    /// and undo transfer if it failed
     pub fn after_ft_on_transfer(&mut self, sender_id:AccountId, receiver_id: AccountId, amount: U128String) -> U128String {
 
         assert_callback_calling();
@@ -210,7 +210,7 @@ impl MetaPool {
 
     /// After Transfer `amount` of symbol tokens to a contract at `receiver_id`.
     /// Check if the contract completed execution of on_multifuntok_transfer
-    /// and undo trasnfer if it failed
+    /// and undo transfer if it failed
     pub fn after_multifuntok_transfer(&mut self, sender_id:AccountId, contract_id: AccountId, symbol:String, amount: U128String){
 
         assert_callback_calling();

@@ -11,7 +11,7 @@ pub struct Account {
     /// This amount increments with deposits and decrements with for_staking
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
-    /// since statking is delayed and in batches it only eventually matches env::balance()
+    /// since staking is delayed and in batches it only eventually matches env::balance()
     /// total = available + staked + unstaked
     /// Note: In the simplified user-UI, the basic-user always does deposit-and-stake and sell/unstake that goes directly to their wallet
     /// so the only users of this field are lockup-contracts and advanced-users when they perform "Classic Unstakes"
@@ -38,22 +38,22 @@ pub struct Account {
     // Every time the user operates on ADD.LIQ/REM.LIQ.: we realize meta: realized_meta += lp_meter.mul_rewards(valued_lp_shares)
     // if the user calls farm_meta() we perform both
     pub realized_meta: u128,
-    ///Staking rewards meter (to mint stnear for the user)
+    ///Staking rewards meter (to mint stNEAR for the user)
     pub staking_meter: RewardMeter,
     ///LP fee gains meter (to mint meta for the user)
     pub lp_meter: RewardMeter,
 
     //-- STATISTICAL DATA --
     // User's statistical data
-    // This is the user-cotrolled staking rewards meter, it works as a car's "trip meter". The user can reset them to zero.
+    // This is the user-controlled staking rewards meter, it works as a car's "trip meter". The user can reset them to zero.
     // to compute trip_rewards we start from current_stnear, undo unstakes, undo stakes and finally subtract trip_start_stnear
     // trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
-    /// trip_start: (timpestamp in miliseconds) this field is set at account creation, so it will start metering rewards
+    /// trip_start: (timestamp in milliseconds) this field is set at account creation, so it will start metering rewards
     pub trip_start: Timestamp,
 
-    /// How much stnears the user had at "trip_start".
+    /// How much stnear the user had at "trip_start".
     pub trip_start_stnear: u128,
-    // how much skahs the staked since trip start. always incremented
+    // how much stnear the staked since trip start. always incremented
     pub trip_accum_stakes: u128,
     // how much the user unstaked since trip start. always incremented
     pub trip_accum_unstakes: u128,
@@ -75,7 +75,7 @@ impl Default for Account {
             staking_meter: RewardMeter::default(),
             lp_meter: RewardMeter::default(),
             //trip-meter fields
-            trip_start: env::block_timestamp() / 1_000_000, //converted from nanoseconds to miliseconds
+            trip_start: env::block_timestamp() / 1_000_000, //converted from nanoseconds to milliseconds
             trip_start_stnear: 0,
             trip_accum_stakes: 0,
             trip_accum_unstakes: 0,
@@ -143,7 +143,7 @@ impl Account {
     }
 
     /// user method
-    /// completes unstake action by moving from retreieved_from_the_pools to available
+    /// completes unstake action by moving from retrieved_from_the_pools to available
     pub fn try_finish_unstaking(&mut self, main:&mut MetaPool) {
 
         let amount = self.unstaked;

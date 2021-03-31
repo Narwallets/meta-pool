@@ -9,7 +9,7 @@ pub use crate::utils::*;
 #[derive(BorshDeserialize, BorshSerialize, Debug, PartialEq)]
 pub struct RewardMeter {
     ///added with staking
-    ///subtracted on unstaking. WARN: Since unstaking can inlude rewards, delta_staked *CAN BECOME NEGATIVE*
+    ///subtracted on unstaking. WARN: Since unstaking can include rewards, delta_staked *CAN BECOME NEGATIVE*
     pub delta_staked: i128,
     /// (pct: 100 => x1, 200 => x2)
     pub last_multiplier_pct: u16,
@@ -63,7 +63,7 @@ impl RewardMeter {
     pub fn realize(&mut self, valued_shares: u128, new_multiplier_pct: u16) -> u128 {
         let result = self.compute_rewards(valued_shares);
         self.delta_staked = valued_shares as i128; // reset meter to Zero
-        self.last_multiplier_pct = new_multiplier_pct; //maybe changed, start aplying new multiplier
+        self.last_multiplier_pct = new_multiplier_pct; //maybe changed, start applying new multiplier
         return result;
     }
 }

@@ -14,10 +14,8 @@ pub const TWO_NEAR: u128 = 2 * NEAR;
 pub const FIVE_NEAR: u128 = 5 * NEAR;
 pub const TEN_NEAR: u128 = 10 * NEAR;
 pub const K_NEAR: u128 = 1_000 * NEAR;
-pub const NEARS_PER_BATCH: u128 = 10*K_NEAR; // if amount>MAX_NEARS_SINGLE_MOVEMENT then it's splited in NEARS_PER_BATCH batches
-pub const MAX_NEARS_SINGLE_MOVEMENT: u128 = NEARS_PER_BATCH + NEARS_PER_BATCH/2; //150K max movement, if you try to stake 151K, it will be split into 2 movs, 100K and 51K
 
-pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4; //0 for testing in guidlnet, 4 for mainnet & testnet;
+pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4; //0 for testing in guild-net, 4 for mainnet & testnet;
 
 /// The contract keeps at least 35 NEAR in the account to avoid being transferred out to cover
 /// contract code storage and some internal state.
@@ -29,7 +27,7 @@ pub const MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT: u128 = 5*K_NEAR;
 pub const DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS : u16 = 2500; // 25% swap fees go to Treasury
 pub const DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS : u16 = 300; // 3% swap fees go to operator
 //Fee on staking rewards
-pub const DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS : u16 = 50; // 0.5% -- CANT BE HIGER THAN 1000 / 10%
+pub const DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS : u16 = 50; // 0.5% -- CANT BE HIGHER THAN 1000 / 10%
 
 //Note: Licence forbids you to change the following 3 constants and/or the developer's distribution mechanism
 pub const DEVELOPERS_ACCOUNT_ID: &str = "developers.near"; 
@@ -44,7 +42,7 @@ construct_uint! {
 
 /// Raw type for duration in nanoseconds
 pub type Duration = u64;
-/// Raw type for timestamp in nanoseconds or Unix Ts in miliseconds
+/// Raw type for timestamp in nanoseconds or Unix Ts in milliseconds
 pub type Timestamp = u64;
 
 /// Balance wrapped into a struct for JSON serialization as a string.
@@ -120,9 +118,9 @@ pub struct GetAccountInfoResult {
     //-- STATISTICAL DATA --
     // User's statistical data
     // These fields works as a car's "trip meter". The user can reset them to zero.
-    /// trip_start: (unix timpestamp) this field is set at account creation, so it will start metering rewards
+    /// trip_start: (unix timestamp) this field is set at account creation, so it will start metering rewards
     pub trip_start: U64,
-    /// How many stnears the user had at "trip_start". 
+    /// How many stnear the user had at "trip_start". 
     pub trip_start_stnear: U128,
     /// how much the user staked since trip start. always incremented
     pub trip_accum_stakes: U128,
@@ -133,7 +131,7 @@ pub struct GetAccountInfoResult {
     /// trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
     pub trip_rewards: U128,
 
-    //NLSP
+    //Liquidity Pool
     pub nslp_shares: U128,
     pub nslp_share_value: U128,
 
@@ -164,7 +162,7 @@ pub struct GetContractStateResult {
     /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets unstaked in 100kN batches
     pub total_actually_staked: U128,
 
-    // how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
+    // how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
@@ -183,7 +181,7 @@ pub struct GetContractStateResult {
     pub total_meta: U128, 
 
     /// the staking pools will add rewards to the staked amount on each epoch
-    /// here we store the accumulatred amount only for stats purposes. This amount can only grow
+    /// here we store the accumulated amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: U128, 
 
     /// How much NEAR is available to immediate unstake (sell stNEAR)
@@ -222,7 +220,7 @@ pub struct ContractParamsJSON {
     ///NEAR/stNEAR Liquidity pool min fee
     pub nslp_min_discount_basis_points: u16, //0.1%
 
-    //The next 3 values define meta rewards multiplers %. (100 => 1x, 200 => 2x, ...)
+    //The next 3 values define meta rewards multipliers %. (100 => 1x, 200 => 2x, ...)
     ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
     pub staker_meta_mult_pct: u16,
     ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100

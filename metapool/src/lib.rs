@@ -163,7 +163,7 @@ pub struct MetaPool {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
 
-    /// if you're holding stnear there's a min balance you must mantain to backup storage usage
+    /// if you're holding stnear there's a min balance you must maintain to backup storage usage
     /// can be adjusted down by keeping the required NEAR in the developers or operator account
     pub min_account_balance: u128,
 
@@ -186,7 +186,7 @@ pub struct MetaPool {
     // During distribute_unstaking(), If total_actually_staked>total_for_staking, then the difference gets unstaked from the pools
     pub total_actually_staked: u128,
 
-    /// how many "shares" were minted. Everytime someone "stakes" he "buys pool shares" with the staked amount
+    /// how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the buy share price is computed so if she "sells" the shares on that moment she recovers the same near amount
     // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards 
     // share_price = total_for_staking/total_shares
@@ -206,7 +206,7 @@ pub struct MetaPool {
     pub total_actually_unstaked_and_retrieved: u128,
 
     /// the staking pools will add rewards to the staked amount on each epoch
-    /// here we store the accumulatred amount only for stats purposes. This amount can only grow
+    /// here we store the accumulated amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: u128,
 
     /// no auto-staking. true while changing staking pools
@@ -218,7 +218,7 @@ pub struct MetaPool {
     //list of pools to diversify in
     pub staking_pools: Vec<StakingPoolInfo>,
 
-    //validator's loan requests
+    //validator loan request
     pub loan_requests: LookupMap<String, VLoanRequest>,
 
     //The next 3 values define the Liq.Provider fee curve
@@ -231,7 +231,7 @@ pub struct MetaPool {
     ///NEAR/stNEAR Liquidity pool min fee
     pub nslp_min_discount_basis_points: u16, //0.5% initially
 
-    //The next 3 values define meta rewards multiplers %. (100 => 1x, 200 => 2x, ...)
+    //The next 3 values define meta rewards multipliers %. (100 => 1x, 200 => 2x, ...)
     ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
     pub staker_meta_mult_pct: u16,
     ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
@@ -243,11 +243,11 @@ pub struct MetaPool {
     pub operator_account_id: String,
     /// operator_rewards_fee_basis_points. (0.2% default) 100 basis point => 1%. E.g.: owner_fee_basis_points=30 => 0.3% owner's fee
     pub operator_rewards_fee_basis_points: u16,
-    /// owner's cut on SHKASH Sell fee (3% default)
+    /// owner's cut on Liquid Unstake fee (3% default)
     pub operator_swap_cut_basis_points: u16,
     /// Treasury account ID (it will be controlled by a DAO on phase II)
     pub treasury_account_id: String,
-    /// treasury cut on SHKASH Sell cut (25% default)
+    /// treasury cut on Liquid Unstake (25% from the fees by default)
     pub treasury_swap_cut_basis_points: u16,
 }
 
@@ -266,14 +266,14 @@ impl MetaPool {
        A [NEP-xxx] contract creates an account on deposit and allows you to withdraw later under certain conditions. Deletes the account on withdraw_all
 
     2. staking-pool [NEP-xxx]: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users.
-        This means implmenting: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
+        This means implementing: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
         and view methods: get_account_unstaked_balance, get_account_staked_balance, get_account_total_balance, is_account_unstaked_balance_available,
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts.
 
     3. meta-staking: these are the extensions to the standard staking pool (buy/sell stnear, finish_unstake)
 
-    4. multitoken (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), tranfer_token(tok), transfer_token_to_contract(tok)
+    4. multi-token (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), transfer_token(tok), transfer_token_to_contract(tok)
        A [NEP-xxx] manages multiple tokens
 
     */
@@ -291,7 +291,7 @@ impl MetaPool {
         assert!(!env::state_exists(), "The contract is already initialized");
 
         //all accounts must be different 
-        // not all combinations testesd, we assume the one deploying the contract has some knowledge
+        // not all combinations tested, we assume the one deploying the contract has some knowledge
         // it does not make sense to burn fees checking all combinations
         assert!(&owner_account_id!=&treasury_account_id);
         assert!(&owner_account_id!=&DEVELOPERS_ACCOUNT_ID);
@@ -313,7 +313,7 @@ impl MetaPool {
             total_available: 0,
             total_for_staking: 0,
             total_actually_staked: 0, //amount actually sent to the staking_pool and staked
-            total_unstaked_and_waiting: 0, // tracks unstaked amount from the staking_pool (toekns are in the pool)
+            total_unstaked_and_waiting: 0, // tracks unstaked amount from the staking_pool (tokens are in the pool)
             total_actually_unstaked_and_retrieved: 0, // tracks unstaked AND retrieved amount (tokens are here)
             accumulated_staked_rewards: 0,
             total_stake_shares: 0,
@@ -463,7 +463,7 @@ impl MetaPool {
         return self.staking_paused;
     }
 
-    /// to implement the Staking-pool inteface, get_account returns the same as the staking-pool returns
+    /// to implement the Staking-pool interface, get_account returns the same as the staking-pool returns
     /// full account info can be obtained by calling: pub fn get_account_info(&self, account_id: AccountId) -> GetAccountInfoResult
     /// Returns human readable representation of the account for the given account ID.
     //warning: self.get_account is public and gets HumanReadableAccount .- do not confuse with self.internal_get_account
@@ -493,7 +493,7 @@ impl MetaPool {
 
     //----------------------------------
     //----------------------------------
-    // DIVERISIFYING-STAKING-POOL trait
+    // META-STAKING-POOL trait
     //----------------------------------
     //----------------------------------
 
@@ -507,7 +507,7 @@ impl MetaPool {
 
 
     /// user method
-    /// completes unstake action by moving from retreieved_from_the_pools to available
+    /// completes unstake action by moving from retrieved_from_the_pools to available
     pub fn finish_unstaking(&mut self) {
 
         let account_id = env::predecessor_account_id();
@@ -526,7 +526,7 @@ impl MetaPool {
         );
     }
 
-    /// buy_stnear_stake. Identical to stake, migth change in the future
+    /// buy_stnear_stake. Identical to stake, might change in the future
     #[payable]
     pub fn buy_stnear_stake(&mut self, amount: U128String) {
         assert_one_yocto();
@@ -553,7 +553,7 @@ impl MetaPool {
     }
 
     /// user method
-    /// Sells-stnear at discount in the NLSP
+    /// Sells-stnear at discount in the Liquidity Pool
     /// returns near transferred
     #[payable]
     pub fn sell_stnear(
@@ -649,7 +649,7 @@ impl MetaPool {
 
         // The rest of the stnear sold goes into the LP. Because it is a larger number than NEAR removes, it will increase share value for all LP providers.
         // Adding value to the pool via adding more stnear than the near removed, will be counted as rewards for the nslp_meter, 
-        // so meta for LP providers will be created. G-stnear for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_meta_from_lp()
+        // so meta for LP providers will be created. G-stnear for LP providers are realized during add_liquidity(), remove_liquidity() or by calling harvest_meta_from_lp()
         debug!("nslp_account.add_stake_shares {} {}",
             stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
             to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut));
@@ -698,10 +698,10 @@ impl MetaPool {
 
     /// add liquidity - payable
     #[payable]
-    pub fn nslp_add_liquidity(&mut self) {
+    pub fn nslp_add_liquidity(&mut self) -> u16{
         assert_min_amount(env::attached_deposit());
         self.internal_deposit();
-        self.internal_nslp_add_liquidity(env::attached_deposit());
+        return self.internal_nslp_add_liquidity(env::attached_deposit());
     }
 
 
@@ -745,7 +745,7 @@ impl MetaPool {
             nslp_account.nslp_shares,
         );
         let stnear_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
-        //2nd: unstaked in the pool, proportional to shares beign burned
+        //2nd: unstaked in the pool, proportional to shares being burned
         let unstaked_to_remove = proportional(
             nslp_account.unstaked,
             num_shares_to_burn,
@@ -759,7 +759,7 @@ impl MetaPool {
         let near_to_remove = to_remove - stnear_to_remove_from_pool - unstaked_to_remove;
 
         //update user account
-        //remove first from stNEAR in the pool, proportional to shares beign burned
+        //remove first from stNEAR in the pool, proportional to shares being burned
         acc.available += near_to_remove;
         acc.add_stake_shares(stake_shares_to_remove, stnear_to_remove_from_pool); //add stnear to user acc
         acc.unstaked += unstaked_to_remove;
@@ -796,7 +796,7 @@ impl MetaPool {
         self.internal_update_account(&account_id, &acc);
     }
 
-    ///meta rewards for LP providers are realized during add_liquidit(), remove_liquidity() or by calling harvest_meta_from_lp()
+    ///meta rewards for LP providers are realized during add_liquidity(), remove_liquidity() or by calling harvest_meta_from_lp()
     ///realize pending meta rewards from LP
     pub fn harvest_meta_from_lp(&mut self){
 
@@ -893,17 +893,17 @@ mod tests {
         let near_amount_y =contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
 
         assert!(near_amount_y <= sell_stnear_y);
-        let discountedy = sell_stnear_y - near_amount_y;
-        let _discounted_display_n = ytof(discountedy);
+        let discounted_y = sell_stnear_y - near_amount_y;
+        let _discounted_display_n = ytof(discounted_y);
         let _sell_stnear_display_n = ytof(sell_stnear_y);
-        assert!(discountedy == apply_pct(discount_bp, sell_stnear_y));
-        assert!(near_amount_y == sell_stnear_y - discountedy);
+        assert!(discounted_y == apply_pct(discount_bp, sell_stnear_y));
+        assert!(near_amount_y == sell_stnear_y - discounted_y);
     }
 
 
 
     // #[test]
-    // fn test_gfme_only_basic() {
+    // fn test_only_basic() {
     //     let (mut context, contract) = contract_only_setup();
     //     // Checking initial values at genesis time
     //     context.is_view = true;
@@ -916,7 +916,7 @@ mod tests {
 
     //     assert_eq!(contract.get_owners_balance().0, 0);
 
-    //     // Checking values next day after gfme timestamp
+    //     // Checking values next day after timestamp
     //     context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR + 1);
     //     testing_env!(context.clone());
 
@@ -950,7 +950,7 @@ mod tests {
 
 
     #[test]
-    fn test_gfme_only_transfer_call_by_owner() {
+    fn test_only_transfer_call_by_owner() {
         let (mut context, mut contract) = contract_only_setup();
         context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR + 1);
         context.is_view = true;
@@ -1007,7 +1007,7 @@ mod tests {
         context.account_balance = env::account_balance();
         assert_eq!(context.account_balance, to_yocto(TEST_INITIAL_BALANCE) - amount);
 
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_staking_pool_deposit(amount.into());
         context.is_view = true;
@@ -1020,7 +1020,7 @@ mod tests {
         testing_env!(context.clone());
         contract.stake(amount.into());
 
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_staking_pool_stake(amount.into());
 
@@ -1030,7 +1030,7 @@ mod tests {
         testing_env!(context.clone());
         contract.unstake(unstake_amount.into());
 
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_staking_pool_unstake(unstake_amount.into());
 
@@ -1040,7 +1040,7 @@ mod tests {
         contract.withdraw_from_staking_pool(unstake_amount.into());
         context.account_balance += unstake_amount;
 
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_staking_pool_withdraw(unstake_amount.into());
         context.is_view = true;
@@ -1075,7 +1075,7 @@ mod tests {
         context.account_balance = env::account_balance();
         assert_eq!(context.account_balance, to_yocto(TEST_INITIAL_BALANCE) - amount);
 
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_staking_pool_deposit(amount.into());
 
@@ -1084,7 +1084,7 @@ mod tests {
         testing_env!(context.clone());
         contract.stake(amount.into());
 
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_staking_pool_stake(amount.into());
 
@@ -1102,7 +1102,7 @@ mod tests {
         contract.refresh_staking_pool_balance();
 
         // In unit tests, the following call ignores the promise value, because it's passed directly.
-        context.predecessor_account_id = gfme_account();
+        context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
         contract.on_get_sp_total_balance(sp_account, total_balance.into());
 
@@ -1170,10 +1170,10 @@ mod tests {
         context.signer_account_pk = public_key(2).try_into().unwrap();
         context.block_timestamp = to_ts(GENESIS_TIME_IN_DAYS + YEAR + 1);
 
-        let gfme_amount = to_yocto(TEST_INITIAL_BALANCE);
+        let this_amount = to_yocto(TEST_INITIAL_BALANCE);
         context.is_view = true;
         testing_env!(context.clone());
-        assert_eq!(contract.get_owners_balance().0, gfme_amount);
+        assert_eq!(contract.get_owners_balance().0, this_amount);
         context.is_view = false;
 
         // Selecting staking pool
@@ -1190,18 +1190,18 @@ mod tests {
             testing_env!(context.clone());
             contract.deposit_to_staking_pool(amount.into());
             context.account_balance = env::account_balance();
-            assert_eq!(context.account_balance, gfme_amount - total_amount);
+            assert_eq!(context.account_balance, this_amount - total_amount);
 
-            context.predecessor_account_id = gfme_account();
+            context.predecessor_account_id = this_account();
             testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
             contract.on_staking_pool_deposit(amount.into());
             context.is_view = true;
             testing_env!(context.clone());
             assert_eq!(contract.get_known_deposited_balance().0, total_amount);
-            assert_eq!(contract.get_owners_balance().0, gfme_amount);
+            assert_eq!(contract.get_owners_balance().0, this_amount);
             assert_eq!(
                 contract.get_liquid_owners_balance().0,
-                gfme_amount - total_amount - MIN_BALANCE_FOR_STORAGE
+                this_amount - total_amount - MIN_BALANCE_FOR_STORAGE
             );
             context.is_view = false;
         }
@@ -1216,10 +1216,10 @@ mod tests {
             context.account_balance += amount;
             assert_eq!(
                 context.account_balance,
-                gfme_amount - total_amount + total_withdrawn_amount
+                this_amount - total_amount + total_withdrawn_amount
             );
 
-            context.predecessor_account_id = gfme_account();
+            context.predecessor_account_id = this_account();
             testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
             contract.on_staking_pool_withdraw(amount.into());
             context.is_view = true;
@@ -1230,11 +1230,11 @@ mod tests {
             );
             assert_eq!(
                 contract.get_owners_balance().0,
-                gfme_amount + total_withdrawn_amount.saturating_sub(total_amount)
+                this_amount + total_withdrawn_amount.saturating_sub(total_amount)
             );
             assert_eq!(
                 contract.get_liquid_owners_balance().0,
-                gfme_amount - total_amount + total_withdrawn_amount - MIN_BALANCE_FOR_STORAGE
+                this_amount - total_amount + total_withdrawn_amount - MIN_BALANCE_FOR_STORAGE
             );
             context.is_view = false;
         }
