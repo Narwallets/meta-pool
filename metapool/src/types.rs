@@ -109,6 +109,8 @@ pub struct GetAccountInfoResult {
 
     /// The epoch height when the unstaked will be available
     pub unstaked_requested_unlock_epoch: U64,
+    /// How many full-epochs we still have to wait until unstaked_requested_unlock_epoch
+    pub unstake_full_epochs_wait_left: u16,
     ///if env::epoch_height()>=unstaked_requested_unlock_epoch
     pub can_withdraw: bool,
     
@@ -134,6 +136,7 @@ pub struct GetAccountInfoResult {
     //Liquidity Pool
     pub nslp_shares: U128,
     pub nslp_share_value: U128,
+    pub nslp_share_bp: u16, //basis points, % user owned
 
     //META owned (including pending rewards)
     pub meta: U128,
@@ -147,6 +150,8 @@ pub struct GetAccountInfoResult {
 #[derive(Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GetContractStateResult {
+    //current env::epoch_height() .- to check gainst unstake-delay end epoch
+    pub env_epoch_height: U64,
     /// This amount increments with deposits and decrements when users stake
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
@@ -187,6 +192,7 @@ pub struct GetContractStateResult {
     /// How much NEAR is available to immediate unstake (sell stNEAR)
     pub nslp_liquidity: U128,
     pub nslp_target: U128,
+    pub nslp_stnear_balance: U128,
     /// Current discount for immediate unstake (sell stNEAR)
     pub nslp_current_discount_basis_points: u16,
     pub nslp_min_discount_basis_points: u16,
@@ -235,6 +241,21 @@ pub struct ContractParamsJSON {
     /// treasury_cut_basis_points. 
     pub treasury_swap_cut_basis_points: u16,
     
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RemoveLiquidityResult {
+    pub near: U128String,
+    pub st_near: U128String
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct LiquidUnstakeResult {
+    pub near: U128String,
+    pub fee: U128String,
+    pub meta: U128String,
 }
 
 // get_staking_pool_list returns StakingPoolJSONInfo[]

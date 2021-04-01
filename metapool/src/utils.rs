@@ -23,7 +23,7 @@ pub fn assert_callback_calling() {
 }
 
 pub fn assert_one_yocto() {
-    assert_eq!(env::attached_deposit(), 1, "the function requires 1 yocto attachment");
+    assert!(env::attached_deposit()==1, "the function requires 1 yocto attachment");
 }
 
 pub fn is_promise_success() -> bool {
@@ -41,8 +41,8 @@ pub fn is_promise_success() -> bool {
 pub fn apply_pct(basis_points:u16, amount:u128) -> u128 {
     return (U256::from(basis_points) * U256::from(amount) / U256::from(10_000)).as_u128() ;
 }
-pub fn apply_multiplier(amount:u128, basis_points:u16) -> u128 {
-    return (U256::from(amount) * U256::from(basis_points) / U256::from(100)).as_u128() ;
+pub fn apply_multiplier(amount:u128, percentage:u16) -> u128 {
+    return (U256::from(amount) * U256::from(percentage) / U256::from(100)).as_u128() ;
 }
 
 

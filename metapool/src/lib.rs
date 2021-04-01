@@ -323,12 +323,12 @@ impl MetaPool {
             nslp_liquidity_target: 10_000*NEAR,
             nslp_max_discount_basis_points: 180, //1.8%
             nslp_min_discount_basis_points: 25,   //0.25%
-            ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
-            stnear_sell_meta_mult_pct: 100, //1x
-            ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
-            staker_meta_mult_pct: 500, //5x
-            ///for each stNEAR paid as discount, reward LPs with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
-            lp_provider_meta_mult_pct: 2000, //20x
+            ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. initial 5x, default:1x. reward META = discounted * mult_pct / 100
+            stnear_sell_meta_mult_pct: 500, //1x
+            ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. initial 10x, default:5x. reward META = rewards * mult_pct / 100
+            staker_meta_mult_pct: 1000, //10x
+            ///for each stNEAR paid as discount, reward LPs with g-stNEAR. initial 50x, default:20x. reward META = fee * mult_pct / 100
+            lp_provider_meta_mult_pct: 5000, //50x
             staking_pools: Vec::new(),
 
         };
@@ -527,9 +527,9 @@ impl MetaPool {
     }
 
     /// buy_stnear_stake. Identical to stake, might change in the future
-    #[payable]
+    //#[payable]
     pub fn buy_stnear_stake(&mut self, amount: U128String) {
-        assert_one_yocto();
+        //assert_one_yocto();
         self.internal_stake(amount.0);
     }
 
@@ -555,30 +555,30 @@ impl MetaPool {
     /// user method
     /// Sells-stnear at discount in the Liquidity Pool
     /// returns near transferred
-    #[payable]
-    pub fn sell_stnear(
+    //#[payable]
+    pub fn liquid_unstake(
         &mut self,
-        stnear_to_sell: U128String,
+        stnear_to_burn: U128String,
         min_expected_near: U128String,
-    ) -> U128String {
+    ) -> LiquidUnstakeResult {
 
-        assert_one_yocto();
+        //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
         let mut user_account = self.internal_get_account(&account_id);
 
         let stnear_owned = self.amount_from_stake_shares(user_account.stake_shares);
         assert!(
-            stnear_owned >= stnear_to_sell.0,
+            stnear_owned >= stnear_to_burn.0,
             "Not enough stnear in your account"
         );
         //cannot leave less than 1 NEAR
-        let to_sell = if stnear_owned - stnear_to_sell.0 < NEAR {
+        let to_sell = if stnear_owned - stnear_to_burn.0 < NEAR {
             //if less than 1 near left, sell all
             stnear_owned
         }
         else {
-            stnear_to_sell.0
+            stnear_to_burn.0
         };
 
         let mut nslp_account = self.internal_get_nslp_account();
@@ -661,11 +661,11 @@ impl MetaPool {
 
         //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
         user_account.sub_stake_shares(stake_shares_sell, to_sell);
-        { //give the selling user some meta too
-            let meta_to_seller = apply_multiplier(fee_in_stnear, self.stnear_sell_meta_mult_pct);
-            self.total_meta += meta_to_seller;
-            user_account.realized_meta += meta_to_seller;
-        }
+        //give the selling user some meta too
+        let meta_to_seller = apply_multiplier(fee_in_stnear, self.stnear_sell_meta_mult_pct);
+        self.total_meta += meta_to_seller;
+        user_account.realized_meta += meta_to_seller;
+        
 
         //Save involved accounts
         self.internal_update_account(&self.treasury_account_id.clone(), &treasury_account);
@@ -690,7 +690,12 @@ impl MetaPool {
             .as_bytes(),
         );
 
-        return near_to_receive.into();
+        return LiquidUnstakeResult {
+            near: near_to_receive.into(),
+            fee: fee_in_stnear.into(),
+            meta: meta_to_seller.into()
+
+        }
 
         //TODO: Simplified UI. Transfer NEAR to the user account (Promise::Transfer)
     }
@@ -705,9 +710,12 @@ impl MetaPool {
     }
 
 
-    /// remove liquidity from deposited funds
-    pub fn nslp_remove_liquidity(&mut self, amount: U128String) {
-        
+    /// remove liquidity from liquidity pool
+    //#[payable]
+    pub fn nslp_remove_liquidity(&mut self, amount: U128String) -> RemoveLiquidityResult {
+
+        //assert_one_yocto();
+
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
         let mut nslp_account = self.internal_get_nslp_account();
@@ -724,9 +732,9 @@ impl MetaPool {
         let mut to_remove = amount.0;
         assert!(
             valued_actual_shares >= to_remove,
-            "Not enough share value to remove the requested amount from the NSLP"
+            "Not enough share value to remove the requested amount from the pool"
         );
-        // Calculate the number of "nslp" shares that the account will burn for removing the given amount of near liquidity from the lp
+        // Calculate the number of "nslp" shares that the account will burn for removing the given amount of near liquidity from the pool
         let mut num_shares_to_burn = self.nslp_shares_from_amount(to_remove, &nslp_account);
         assert!(num_shares_to_burn > 0);
 
@@ -737,7 +745,7 @@ impl MetaPool {
             num_shares_to_burn = acc.nslp_shares;
         }
 
-        //compute proportionals stNEAR/UNSTAKED/NEAR
+        //compute proportionals stNEAR/NEAR
         //1st: stNEAR
         let stake_shares_to_remove = proportional(
             nslp_account.stake_shares,
@@ -745,36 +753,37 @@ impl MetaPool {
             nslp_account.nslp_shares,
         );
         let stnear_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
-        //2nd: unstaked in the pool, proportional to shares being burned
-        let unstaked_to_remove = proportional(
-            nslp_account.unstaked,
-            num_shares_to_burn,
-            nslp_account.nslp_shares,
-        );
-        //3rd: NEAR, by difference
+        //2nd: NEAR, by difference
         assert!(
-            to_remove >= stnear_to_remove_from_pool + unstaked_to_remove,
+            to_remove >= stnear_to_remove_from_pool,
             "inconsistency NTR<STR+UTR"
         );
-        let near_to_remove = to_remove - stnear_to_remove_from_pool - unstaked_to_remove;
+        let near_to_remove = to_remove - stnear_to_remove_from_pool;
 
         //update user account
         //remove first from stNEAR in the pool, proportional to shares being burned
+        //NOTE: To simplify user-operations, the nslp_account DO NOT have "unstaked". The NSLP balances by selling their stNEAR to stakers
         acc.available += near_to_remove;
         acc.add_stake_shares(stake_shares_to_remove, stnear_to_remove_from_pool); //add stnear to user acc
-        acc.unstaked += unstaked_to_remove;
         acc.nslp_shares -= num_shares_to_burn; //shares this user burns
         //update NSLP account
         nslp_account.available -= near_to_remove;
         nslp_account.sub_stake_shares(stake_shares_to_remove,stnear_to_remove_from_pool); //remove stnear from the pool
-        nslp_account.unstaked -= unstaked_to_remove;
         nslp_account.nslp_shares -= num_shares_to_burn; //burn from total nslp shares
+
+        //simplify user-flow
+        //direct transfer to user (instead of leaving it in-contract, "available")
+        Promise::new(account_id.clone()).transfer(near_to_remove);
+        acc.available-=near_to_remove;
 
         //--SAVE ACCOUNTS
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
 
-        //TODO: Simplified UI. Transfer NEAR to the user account (Promise::Transfer)
+        return RemoveLiquidityResult {
+            near: near_to_remove.into(),
+            st_near: stnear_to_remove_from_pool.into()
+        }
     }
 
 

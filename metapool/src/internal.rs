@@ -119,7 +119,7 @@ impl MetaPool {
 
         //----------
         //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
-        self.nslp_try_liquidate_stnear_by_clearing();
+        self.nslp_try_internal_clearing();
 
     }
 
@@ -281,33 +281,31 @@ impl MetaPool {
     // NSLP shares are trickier to compute since the NSLP itself can have stNEAR
     pub(crate) fn nslp_shares_from_amount(&self, amount: u128, nslp_account: &Account) -> u128 {
         let total_pool_value: u128 = nslp_account.available
-            + self.amount_from_stake_shares(nslp_account.stake_shares)
-            + nslp_account.unstaked;
+            + self.amount_from_stake_shares(nslp_account.stake_shares);
         return shares_from_amount(amount, total_pool_value, nslp_account.nslp_shares);
     }
 
     // NSLP shares are trickier to compute since the NSLP itself can have stNEAR
     pub(crate) fn amount_from_nslp_shares(&self, num_shares: u128, nslp_account: &Account) -> u128 {
         let total_pool_value: u128 = nslp_account.available
-            + self.amount_from_stake_shares(nslp_account.stake_shares)
-            + nslp_account.unstaked;
+            + self.amount_from_stake_shares(nslp_account.stake_shares);
         return amount_from_shares(num_shares, total_pool_value, nslp_account.nslp_shares);
     }
 
     //----------------------------------
     // The LP acquires stnear providing the sell-stnear service
     // The LP needs to unstake the stnear ASAP, to recover liquidity and to keep the fee low.
-    // The LP can use staking orders to fast-liquidate its stnear by clearing.
+    // The LP can recover near by internal clearing.
     // returns true if it uses clearing to liquidate
     // ---------------------------------
-    pub(crate) fn nslp_try_liquidate_stnear_by_clearing(&mut self) -> bool {
+    pub(crate) fn nslp_try_internal_clearing(&mut self) -> bool {
         if self.total_for_staking <= self.total_actually_staked {
             //nothing ordered to be actually staked
             return false;
         }
         let amount_to_stake:u128 =  self.total_for_staking - self.total_actually_staked;
         let mut nslp_account = self.internal_get_nslp_account();
-        log!("nslp_try_liquidate_stnear_by_clearing nslp_account.stake_shares {}",nslp_account.stake_shares);
+        log!("nslp internal clearing nslp_account.stake_shares {}",nslp_account.stake_shares);
         if nslp_account.stake_shares > 0 {
             //how much stnear does the nslp have?
             let valued_stake_shares = self.amount_from_stake_shares(nslp_account.stake_shares);

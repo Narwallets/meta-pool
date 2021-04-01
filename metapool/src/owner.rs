@@ -52,11 +52,6 @@ impl MetaPool {
         return result;
     }
 
-    // get env::epoch_height() to compare with the fields in the staking-pool-list
-    pub fn get_env_epoch_height(&self) -> U64String {
-        return env::epoch_height().into()
-    }
-
     ///remove staking pool from list *if it's empty*
     pub fn remove_staking_pool(&mut self, inx:u16 ){
 
@@ -143,9 +138,11 @@ impl MetaPool {
         let trip_rewards = (stnear + acc.trip_accum_unstakes).saturating_sub(acc.trip_accum_stakes + acc.trip_start_stnear);
         //Liquidity Pool share value
         let mut nslp_share_value: u128 = 0;
+        let mut nslp_share_bp:u16=0;
         if acc.nslp_shares != 0 {
             let nslp_account = self.internal_get_nslp_account();
             nslp_share_value = acc.valued_nslp_shares(self, &nslp_account);
+            nslp_share_bp = proportional(10_000, acc.nslp_shares, nslp_account.nslp_shares) as u16;
         }
         return GetAccountInfoResult {
             account_id,
@@ -153,6 +150,7 @@ impl MetaPool {
             stnear: stnear.into(),
             unstaked: acc.unstaked.into(),
             unstaked_requested_unlock_epoch: acc.unstaked_requested_unlock_epoch.into(),
+            unstake_full_epochs_wait_left: acc.unstaked_requested_unlock_epoch.saturating_sub(env::epoch_height()) as u16,
             can_withdraw: (env::epoch_height() >= acc.unstaked_requested_unlock_epoch),
             total: (acc.available + stnear + acc.unstaked).into(),
             //trip-meter
@@ -164,6 +162,7 @@ impl MetaPool {
 
             nslp_shares: acc.nslp_shares.into(),
             nslp_share_value: nslp_share_value.into(),
+            nslp_share_bp, //% owned as basis points
 
             meta: acc.total_meta(self).into(),
         };
@@ -197,9 +196,10 @@ impl MetaPool {
     /// Returns JSON representation of the contract state
     pub fn get_contract_state(&self) -> GetContractStateResult {
 
-        let lp_account = self.internal_get_nslp_account();
+        let nslp_account = self.internal_get_nslp_account();
 
         return GetContractStateResult {
+            env_epoch_height: env::epoch_height().into(),
             total_available: self.total_available.into(),
             total_for_staking: self.total_for_staking.into(),
             total_actually_staked: self.total_actually_staked.into(),
@@ -210,9 +210,10 @@ impl MetaPool {
             total_meta: self.total_meta.into(),
             accounts_count: self.accounts.len().into(),
             staking_pools_count: self.staking_pools.len() as u16,
-            nslp_liquidity: lp_account.available.into(),
+            nslp_liquidity: nslp_account.available.into(),
+            nslp_stnear_balance: self.amount_from_stake_shares(nslp_account.stake_shares).into(), //how much stnear does the nslp have?
             nslp_target: self.nslp_liquidity_target.into(),
-            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(lp_account.available, TEN_NEAR),
+            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(nslp_account.available, TEN_NEAR),
             nslp_min_discount_basis_points:self.nslp_min_discount_basis_points,
             nslp_max_discount_basis_points:self.nslp_max_discount_basis_points,
         };

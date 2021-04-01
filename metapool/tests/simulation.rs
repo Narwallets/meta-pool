@@ -565,7 +565,7 @@ fn simtest() {
     let dbp = view!(metapool.nslp_get_discount_basis_points(TO_SELL.into()));
     print_vec_u8("metapool.nslp_get_discount_basis_points",&dbp.unwrap());
 
-    let bss_res = call!(bob,metapool.sell_stnear(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), 1, 100*TGAS);
+    let bss_res = call!(bob,metapool.liquid_unstake(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), 1, 100*TGAS);
     print_helper(&bss_res);
     let received = as_u128(&bss_res.unwrap_json_value());
     assert!(received >= MIN_REQUESTED,"sell stnear failed {} {}",MIN_REQUESTED,received);
