@@ -31,7 +31,7 @@ impl MetaPool {
 
         //----------
         //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
-        if self.nslp_try_liquidate_stnear_by_clearing(){
+        if self.nslp_try_internal_clearing(){
             return true; //call again
         }
 
@@ -430,7 +430,7 @@ impl MetaPool {
             // if the pool is not busy, has stake, and has not unstaked balance waiting for withdrawal
             if sp.unstaked > 0  {
                 if result == -3 { result = -2};
-                if sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= env::epoch_height() {
+                if sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK <= env::epoch_height() || sp.unstk_req_epoch_height>env::epoch_height() { //bad data or hard-fork
                     if result == -2 { result = -1};
                     if !sp.busy_lock {
                         // if this pool has unstaked and the waiting period has ended
@@ -461,8 +461,10 @@ impl MetaPool {
         let sp = &mut self.staking_pools[inx as usize];
         assert!(!sp.busy_lock,"sp is busy");
         assert!(sp.unstaked > 0,"sp unstaked == 0");
-        assert!(env::epoch_height() >= sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK,
+        if sp.unstk_req_epoch_height<=env::epoch_height() { //only if good data
+            assert!(env::epoch_height() >= sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK,
             "unstaking-delay ends at {}, now is {}",sp.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK,env::epoch_height());
+        }
 
         // if the pool is not busy, and we unstaked and the waiting period has elapsed
         sp.busy_lock = true;
