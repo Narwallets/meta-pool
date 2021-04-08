@@ -40,6 +40,12 @@ pub use reward_meter::*;
 pub mod validator_loans;
 pub use validator_loans::*;
 
+pub mod fungible_token_standard;
+
+// setup_alloc adds a #[cfg(target_arch = "wasm32")] to the global allocator, which prevents the allocator 
+// from being used when the contract's main file is used in simulation testing.
+// sdk 3.0.1 => near_sdk::setup_alloc!();
+
 #[cfg(target = "wasm32")]
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
@@ -96,7 +102,9 @@ pub trait ExtMetaStakingPoolOwnerCallbacks {
 
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
-    fn on_get_sp_total_balance(&mut self, sp_inx: usize, mode:u8,  #[callback] total_balance: U128String);
+    fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
+    
+    fn on_get_sp_unstaked_balance(&mut self, sp_inx: usize, #[callback] unstaked_balance: U128String);
 
 }
 
@@ -124,6 +132,7 @@ pub struct StakingPoolInfo {
 
     //total unstaked in this pool
     pub unstaked: u128,
+
     //set when the unstake command is passed to the pool
     //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
     //We might have to block users from unstaking if all the pools are in a waiting period
@@ -134,6 +143,7 @@ pub struct StakingPoolInfo {
 }
 
 impl StakingPoolInfo {
+
     pub fn is_empty(&self) -> bool {
         return self.busy_lock == false
             && self.weight_basis_points == 0
@@ -151,29 +161,43 @@ impl StakingPoolInfo {
             last_asked_rewards_epoch_height:0
         }
     }
+    pub fn total_balance(&self)->u128 { self.staked+self.unstaked }
+
+    pub fn wait_period_ended(&self) -> bool {
+        let epoch_height = env::epoch_height();
+        if self.unstk_req_epoch_height>epoch_height { //bad data at unstk_req_epoch_height or there was a hard-fork
+            return true;
+        }
+        //true if we reached epoch_requested+NUM_EPOCHS_TO_UNLOCK
+        return epoch_height >= self.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK;
+    }
 }
 
 
 //------------------------
 //  Main Contract State --
 //------------------------
+// Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts.None
+// accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct MetaPool {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
 
-    /// if you're holding stnear there's a min balance you must maintain to backup storage usage
-    /// can be adjusted down by keeping the required NEAR in the developers or operator account
-    pub min_account_balance: u128,
+    /// What should be the contract_account_balance according to our internal accounting (if there's extra, it is 30% tx-fees)
+    /// This amount increments with attachedNEAR calls (inflow) and decrements with deposit_and_stake calls (outflow)
+    /// increments with retrieve_from_staking_pool (inflow) and decrements with user withdrawals from the contract (outflow)
+    /// It should match env::balance()
+    pub contract_account_balance: u128,
 
     // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
     pub web_app_url: Option<String>, 
     pub auditor_account_id: Option<String>,
 
-    /// This amount increments with deposits and decrements when users stake
-    /// increments with finish_unstake and decrements with user withdrawals from the contract
-    /// since staking/unstaking is delayed it only eventually matches env::balance()
+    /// This value is equivalent to sum(accounts.available)
+    /// This amount increments with user's deposits_into_available and decrements when users stake_from_available
+    /// increments with finish_unstake and decrements with withdraw_from_available
     pub total_available: u128,
 
     /// The total amount of tokens selected for staking by the users
@@ -200,9 +224,11 @@ pub struct MetaPool {
     pub total_unstaked_and_waiting: u128,
 
     /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// It represents funds retrieved from the pools, but waiting for the users to execute finish_unstake()
+    /// It represents funds retrieved from the pools, but waiting for the users to execute withdraw_unstaked()
     /// During distribute_unstake(), If sp.unstaked>0 && sp.epoch_for_withdraw == env::epoch_height then all unstaked funds are retrieved from the sp
-    /// When the funds are actually requested by the users, total_actually_unstaked is decremented
+    /// When the funds are actually requested by the users, total_actually_unstaked_and_retrieved is decremented
+    /// and then total_available and acc.available are incremented
+    /// total_available + total_actually_unstaked_and_retrieved must be == to `near state meta.pool.near` + 30% burnt fee
     pub total_actually_unstaked_and_retrieved: u128,
 
     /// the staking pools will add rewards to the staked amount on each epoch
@@ -224,7 +250,7 @@ pub struct MetaPool {
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
     // We assume this pool is always UNBALANCED, there should be more NEAR than stNEAR 99% of the time
-    ///NEAR/stNEAR 1% fee Liquidity target. If the Liquidity reach this amount, the fee is 1%
+    ///NEAR/stNEAR Liquidity target. If the Liquidity reach this amount, the fee reaches nslp_min_discount_basis_points
     pub nslp_liquidity_target: u128, // 150_000*NEAR initially
     ///NEAR/stNEAR Liquidity pool max fee
     pub nslp_max_discount_basis_points: u16, //5% initially
@@ -262,19 +288,17 @@ impl MetaPool {
     /* NOTE
     This contract implements several traits
 
-    1. deposit-trait [NEP-xxx]: this contract implements: deposit, get_account_total_balance, get_account_available_balance, withdraw, withdraw_all
-       A [NEP-xxx] contract creates an account on deposit and allows you to withdraw later under certain conditions. Deletes the account on withdraw_all
-
-    2. staking-pool [NEP-xxx]: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users.
+    1. core-contracts/staking-pool: this contract must be perceived as a staking-pool for the lockup-contract, wallets, and users.
         This means implementing: ping, deposit, deposit_and_stake, withdraw_all, withdraw, stake_all, stake, unstake_all, unstake
         and view methods: get_account_unstaked_balance, get_account_staked_balance, get_account_total_balance, is_account_unstaked_balance_available,
             get_total_staked_balance, get_owner_id, get_reward_fee_fraction, is_staking_paused, get_staking_key, get_account,
             get_number_of_accounts, get_accounts.
 
-    3. meta-staking: these are the extensions to the standard staking pool (buy/sell stnear, finish_unstake)
+    2. meta-staking: these are the extensions to the standard staking pool (liquid_unstake, trip-meter)
 
-    4. multi-token (TODO) [NEP-xxx]: this contract implements: deposit(tok), get_token_balance(tok), withdraw_token(tok), transfer_token(tok), transfer_token_to_contract(tok)
-       A [NEP-xxx] manages multiple tokens
+    3. fungible token [NEP-141]: this contract is the NEP-141 contract for the stNEAR token
+
+    4. multi fungible token [NEP-138]: this contract works as a multi-token also to allow access to the $META governance token
 
     */
 
@@ -291,8 +315,8 @@ impl MetaPool {
         assert!(!env::state_exists(), "The contract is already initialized");
 
         //all accounts must be different 
-        // not all combinations tested, we assume the one deploying the contract has some knowledge
-        // it does not make sense to burn fees checking all combinations
+        // not all combinations tested, we assume the owner deploying the contract knows that accounts must be different
+        // it does not make sense to burn fees checking all possible combinations
         assert!(&owner_account_id!=&treasury_account_id);
         assert!(&owner_account_id!=&DEVELOPERS_ACCOUNT_ID);
         assert!(&operator_account_id!=&owner_account_id);
@@ -303,7 +327,7 @@ impl MetaPool {
             owner_account_id,
             operator_account_id,
             treasury_account_id,
-            min_account_balance: NEAR,
+            contract_account_balance: 0,
             web_app_url: Some(String::from(DEFAULT_WEB_APP_URL)),
             auditor_account_id: Some(String::from(DEFAULT_AUDITOR_ACCOUNT_ID)),
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
@@ -318,8 +342,8 @@ impl MetaPool {
             accumulated_staked_rewards: 0,
             total_stake_shares: 0,
             total_meta: 0,
-            accounts: UnorderedMap::new("A".into()),
-            loan_requests: LookupMap::new("L".into()),
+            accounts: UnorderedMap::new(b"A".to_vec()),
+            loan_requests: LookupMap::new(b"L".to_vec()),
             nslp_liquidity_target: 10_000*NEAR,
             nslp_max_discount_basis_points: 180, //1.8%
             nslp_min_discount_basis_points: 25,   //0.25%
@@ -334,10 +358,8 @@ impl MetaPool {
         };
     }
 
-    //pub fn set_min_balance(&mut self)
-
     //------------------------------------
-    // deposit trait & staking-pool trait
+    // core-contracts/staking-pool trait
     //------------------------------------
 
     /// staking-pool's ping is moot here
@@ -351,16 +373,19 @@ impl MetaPool {
         self.internal_deposit();
     }
 
-    /// Withdraws from the available balance
-    pub fn withdraw(&mut self, amount: U128String) {
-        self.internal_withdraw(amount.into());
+    /// Withdraws from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool .- core-contracts/staking-pool only has "unstaked" to withdraw from
+    pub fn withdraw(&mut self, amount: U128String) -> Promise {
+        self.internal_withdraw_use_unstaked(amount.0)
+    }
+    /// Withdraws ALL from from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool .- core-contracts/staking-pool only has "unstaked" to withdraw from
+    pub fn withdraw_all(&mut self) -> Promise {
+        let account = self.internal_get_account(&env::predecessor_account_id());
+        self.internal_withdraw_use_unstaked(account.unstaked)
     }
 
-    /// Withdraws ALL from the "available" balance
-    pub fn withdraw_all(&mut self) {
-        let account_id = env::predecessor_account_id();
-        let account = self.internal_get_account(&account_id);
-        self.internal_withdraw(account.available);
+    /// meta-pool extension: Withdraws from "available" balance
+    pub fn withdraw_from_available(&mut self, amount: U128String) -> Promise {
+        self.internal_withdraw_from_available(amount.into())
     }
 
     /// Deposits the attached amount into the inner account of the predecessor and stakes it.
@@ -447,8 +472,7 @@ impl MetaPool {
     /// Returns the current reward fee as a fraction.
     pub fn get_reward_fee_fraction(&self) -> RewardFeeFraction {
         return RewardFeeFraction {
-            numerator: (self.operator_rewards_fee_basis_points + DEVELOPERS_REWARDS_FEE_BASIS_POINTS)
-                .into(),
+            numerator: (self.operator_rewards_fee_basis_points + DEVELOPERS_REWARDS_FEE_BASIS_POINTS).into(),
             denominator: 10_000,
         };
     }
@@ -505,33 +529,37 @@ impl MetaPool {
             .collect();
     }
 
+    /// user method - simplified flow
+    /// completes delayed-unstake action by transferring from retrieved_from_the_pools to user's NEAR account
+    pub fn withdraw_unstaked(&mut self) -> Promise {
+        let account_id = env::predecessor_account_id();
+        let mut account = self.internal_get_account(&account_id);
+        let acquired = account.in_memory_try_finish_unstaking(self);
+        let amount = account.in_memory_withdraw(acquired, self);
+        //update user account in storage
+        self.internal_update_account(&account_id, &account);
+        //transfer to user
+        //log!("@{} withdrew {} from unstaked",account_id, acquired);
+        return self.native_transfer_to_predecessor(amount);
+    }
 
-    /// user method
-    /// completes unstake action by moving from retrieved_from_the_pools to available
+     /* DEPRECATED in favor of the simplified flow
+    /// user method - COMPLEX FLOW
+    /// completes delayed-unstake action by moving from retrieved_from_the_pools to *available*
+    /// all within the contract
     pub fn finish_unstaking(&mut self) {
 
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
 
-        account.try_finish_unstaking(self);
+        account.in_memory_try_finish_unstaking(self);
 
         self.internal_update_account(&account_id, &account);
 
-        env::log(
-            format!(
-                "@{} finishing unstaking. New available balance is {}",
-                account_id, account.available
-            )
-            .as_bytes(),
-        );
+        log!("@{} finishing unstaking. New available balance is {}",
+            account_id, account.available);
     }
-
-    /// buy_stnear_stake. Identical to stake, might change in the future
-    //#[payable]
-    pub fn buy_stnear_stake(&mut self, amount: U128String) {
-        //assert_one_yocto();
-        self.internal_stake(amount.0);
-    }
+    */
 
     //---------------------------
     // NSLP Methods
@@ -562,24 +590,32 @@ impl MetaPool {
         min_expected_near: U128String,
     ) -> LiquidUnstakeResult {
 
+        self.assert_not_paused();
         //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
         let mut user_account = self.internal_get_account(&account_id);
 
         let stnear_owned = self.amount_from_stake_shares(user_account.stake_shares);
-        assert!(
-            stnear_owned >= stnear_to_burn.0,
-            "Not enough stnear in your account"
-        );
-        //cannot leave less than 1 NEAR
-        let to_sell = if stnear_owned - stnear_to_burn.0 < NEAR {
-            //if less than 1 near left, sell all
-            stnear_owned
+
+        let mut to_sell:u128 = stnear_to_burn.0;
+        let stake_shares_to_burn:u128;
+        // if the amount is close to user's total, remove user's total
+        // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow 10 yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
+        if is_close(to_sell, stnear_owned) { // allow for rounding simplification
+            to_sell = stnear_owned;
+            stake_shares_to_burn =  user_account.stake_shares; // close enough to all shares, burn-it all (avoid leaving "dust" shares)
         }
         else {
-            stnear_to_burn.0
-        };
+            //use amount_requested
+            // Calculate the number shares that the account will burn based on the amount requested
+            stake_shares_to_burn = self.stake_shares_from_amount(to_sell);
+        }
+
+        assert!(stnear_owned >= to_sell, "Not enough stNEAR {} to unstake the requested amount", stnear_owned );
+        assert!(stake_shares_to_burn > 0 && stake_shares_to_burn <= user_account.stake_shares);
+
+        debug!("stake_shares:{}, to_burn:{}",user_account.stake_shares ,stake_shares_to_burn);
 
         let mut nslp_account = self.internal_get_nslp_account();
         let near_to_receive =
@@ -590,20 +626,14 @@ impl MetaPool {
         );
         assert!(
             nslp_account.available >= near_to_receive,
-            "available < near_to_receive"
+            "nslp available < near_to_receive"
         );
 
-        let stake_shares_sell = self.stake_shares_from_amount(to_sell);
-        assert!(
-            user_account.stake_shares >= stake_shares_sell,
-            "account.stake_shares < stake_shares_sell"
-        );
-
-        //the available for the user comes from the LP
+        //the NEAR for the user comes from the LP
         nslp_account.available -= near_to_receive;
         user_account.available += near_to_receive;
 
-        //the fee is the difference between stnear sold and near received
+        //the fee is the difference between stNEAR sold and NEAR received
         assert!(near_to_receive < to_sell);
         let fee_in_stnear = to_sell - near_to_receive;
         // compute how many shares the swap fee represent
@@ -647,21 +677,21 @@ impl MetaPool {
 
         assert!(fee_in_shares > treasury_stake_shares_cut + developers_stake_shares_cut + operator_stake_shares_cut);
 
-        // The rest of the stnear sold goes into the LP. Because it is a larger number than NEAR removes, it will increase share value for all LP providers.
-        // Adding value to the pool via adding more stnear than the near removed, will be counted as rewards for the nslp_meter, 
-        // so meta for LP providers will be created. G-stnear for LP providers are realized during add_liquidity(), remove_liquidity() or by calling harvest_meta_from_lp()
+        // The rest of the stnear sold goes into the LP. Because it is a larger than NEARs removed, it will increase share value for all LP providers.
+        // Adding value to the pool via adding more stNEAR than the NEAR removed, will be counted as rewards for the nslp_meter, 
+        // so $META for LP providers will be created. $META for LP providers are realized during add_liquidity(), remove_liquidity() or by calling harvest_meta_from_lp()
         debug!("nslp_account.add_stake_shares {} {}",
-            stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
+            stake_shares_to_burn - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
             to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut));
 
-        // major part of stnear sold goes to the NSLP
+        // major part of stNEAR sold goes to the NSLP
         nslp_account.add_stake_shares( 
-            stake_shares_sell - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
+            stake_shares_to_burn - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
             to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut ));
 
         //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
-        user_account.sub_stake_shares(stake_shares_sell, to_sell);
-        //give the selling user some meta too
+        user_account.sub_stake_shares(stake_shares_to_burn, to_sell);
+        //mint $META for the selling user 
         let meta_to_seller = apply_multiplier(fee_in_stnear, self.stnear_sell_meta_mult_pct);
         self.total_meta += meta_to_seller;
         user_account.realized_meta += meta_to_seller;
@@ -674,30 +704,28 @@ impl MetaPool {
         //Save nslp accounts
         self.internal_save_nslp_account(&nslp_account);
 
-        //simplify user-flow
-        //direct transfer to user (instead of leaving it in-contract, "available")
-        Promise::new(account_id.clone()).transfer(near_to_receive);
-        user_account.available-=near_to_receive;
+        //simplified user-flow
+        //direct transfer to user (instead of leaving it in-contract as "available")
+        let transfer_amount = user_account.in_memory_withdraw(near_to_receive, self);
+        self.native_transfer_to_predecessor(transfer_amount);
 
-        //Save user accounts
+        //Save user account
         self.internal_update_account(&account_id, &user_account);
 
         env::log(
             format!(
-                "@{} sold {} stNEAR for {} NEAR",
-                &account_id, to_sell, near_to_receive
+                "@{} liquid-unstaked {} stNEAR, got {} NEAR and {} $META",
+                &account_id, to_sell, transfer_amount, meta_to_seller
             )
             .as_bytes(),
         );
 
         return LiquidUnstakeResult {
-            near: near_to_receive.into(),
+            near: transfer_amount.into(),
             fee: fee_in_stnear.into(),
             meta: meta_to_seller.into()
-
         }
 
-        //TODO: Simplified UI. Transfer NEAR to the user account (Promise::Transfer)
     }
 
 
@@ -714,6 +742,7 @@ impl MetaPool {
     //#[payable]
     pub fn nslp_remove_liquidity(&mut self, amount: U128String) -> RemoveLiquidityResult {
 
+        self.assert_not_paused();
         //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
@@ -726,30 +755,33 @@ impl MetaPool {
         //how much does this user owns
         let valued_actual_shares = acc.valued_nslp_shares(self, &nslp_account);
 
-        //register removed liquidity to compute rewards correctly
-        acc.lp_meter.unstake(amount.0);
-
         let mut to_remove = amount.0;
-        assert!(
-            valued_actual_shares >= to_remove,
-            "Not enough share value to remove the requested amount from the pool"
-        );
-        // Calculate the number of "nslp" shares that the account will burn for removing the given amount of near liquidity from the pool
-        let mut num_shares_to_burn = self.nslp_shares_from_amount(to_remove, &nslp_account);
-        assert!(num_shares_to_burn > 0);
-
-        //cannot leave less than 1 NEAR
-        if valued_actual_shares - to_remove < NEAR {
-            //if less than 1 near left, remove all
+        let nslp_shares_to_burn:u128;
+        // if the amount is close to user's total, remove user's total
+        // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow 10 yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
+        if is_close(to_remove, valued_actual_shares) { // allow for rounding simplification
             to_remove = valued_actual_shares;
-            num_shares_to_burn = acc.nslp_shares;
+            nslp_shares_to_burn = acc.nslp_shares; // close enough to all shares, burn-it all (avoid leaving "dust")
+        }
+        else {
+            assert!(
+                valued_actual_shares >= to_remove,
+                "Not enough share value {} to remove the requested amount from the pool", valued_actual_shares
+            );
+            // Calculate the number of "nslp" shares that the account will burn based on the amount requested
+            nslp_shares_to_burn = self.nslp_shares_from_amount(to_remove, &nslp_account);
         }
 
+        assert!(nslp_shares_to_burn > 0);
+
+        //register removed liquidity to compute rewards correctly
+        acc.lp_meter.unstake(to_remove);
+
         //compute proportionals stNEAR/NEAR
-        //1st: stNEAR
+        //1st: stNEAR how much stNEAR from the Liq-Pool represents the ratio: nslp_shares_to_burn relative to total nslp_shares
         let stake_shares_to_remove = proportional(
             nslp_account.stake_shares,
-            num_shares_to_burn,
+            nslp_shares_to_burn,
             nslp_account.nslp_shares,
         );
         let stnear_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
@@ -762,26 +794,26 @@ impl MetaPool {
 
         //update user account
         //remove first from stNEAR in the pool, proportional to shares being burned
-        //NOTE: To simplify user-operations, the nslp_account DO NOT have "unstaked". The NSLP balances by selling their stNEAR to stakers
+        //NOTE: To simplify user-operations, the LIQ.POOL DO NOT carry "unstaked". The NSLP balances only by internal-clearing on `deposit_and_stake`
         acc.available += near_to_remove;
         acc.add_stake_shares(stake_shares_to_remove, stnear_to_remove_from_pool); //add stnear to user acc
-        acc.nslp_shares -= num_shares_to_burn; //shares this user burns
+        acc.nslp_shares -= nslp_shares_to_burn; //shares this user burns
         //update NSLP account
         nslp_account.available -= near_to_remove;
         nslp_account.sub_stake_shares(stake_shares_to_remove,stnear_to_remove_from_pool); //remove stnear from the pool
-        nslp_account.nslp_shares -= num_shares_to_burn; //burn from total nslp shares
+        nslp_account.nslp_shares -= nslp_shares_to_burn; //burn from total nslp shares
 
         //simplify user-flow
-        //direct transfer to user (instead of leaving it in-contract, "available")
-        Promise::new(account_id.clone()).transfer(near_to_remove);
-        acc.available-=near_to_remove;
+        //direct transfer to user (instead of leaving it in-contract as "available")
+        let transfer_amount = acc.in_memory_withdraw(near_to_remove, self);
+        self.native_transfer_to_predecessor(transfer_amount);
 
         //--SAVE ACCOUNTS
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
 
         return RemoveLiquidityResult {
-            near: near_to_remove.into(),
+            near: transfer_amount.into(),
             st_near: stnear_to_remove_from_pool.into()
         }
     }
@@ -874,9 +906,8 @@ mod tests {
 
         assert!( contract.internal_get_discount_basis_points(contract.nslp_liquidity_target+ntoy(100), ntoy(100)) == contract.nslp_min_discount_basis_points);
 
-
         println!("target {} min {} max {} ", yton(contract.nslp_liquidity_target), contract.nslp_min_discount_basis_points, contract.nslp_max_discount_basis_points);
-        for n in 0..24 {
+        for n in 0..12 {
             let liquidity = (contract.nslp_liquidity_target + ntoy(2000)).saturating_sub(ntoy(n*1000));
             let sell = ntoy(1000);
             let low = contract.internal_get_discount_basis_points(liquidity, sell);
@@ -884,9 +915,9 @@ mod tests {
         }
 
         //assert!( low  > contract.nslp_min_discount_basis_points);
-        assert!( contract.internal_get_discount_basis_points(ntoy(17_000), ntoy(1_000)) == 56);
-        assert!( contract.internal_get_discount_basis_points(ntoy(12_000), ntoy(1_000)) == 95);
-        assert!( contract.internal_get_discount_basis_points(ntoy(4_000), ntoy(1_000)) == 157);
+        assert!( contract.internal_get_discount_basis_points(ntoy(9_000), ntoy(1_000)) == 56);
+        assert!( contract.internal_get_discount_basis_points(ntoy(6_000), ntoy(1_000)) == 103);
+        assert!( contract.internal_get_discount_basis_points(ntoy(2_000), ntoy(1_000)) == 165);
         //assert!(false);
 
     }

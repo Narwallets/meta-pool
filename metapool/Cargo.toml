@@ -10,8 +10,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 
 #near-sdk = "2.0.1"
-near-sdk = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
-#near-sdk = { git = "https://github.com/Narwallets/near-sdk-rs.git", tag="2.4.0" }
+#near-sdk = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
+near-sdk = { git = "https://github.com/near/near-sdk-rs" }
+#near-sdk = { git = "https://github.com/Narwallets/near-sdk-rs" }
+
+near-contract-standards = { git = "https://github.com/near/near-sdk-rs" }
 
 uint = { version = "0.8.3", default-features = false }
 
@@ -24,7 +27,8 @@ env_logger = { version = "0.7.1", default-features = false }
 # near-crypto = { git = "https://github.com/nearprotocol/nearcore.git" }
 # near-primitives = { git = "https://github.com/nearprotocol/nearcore.git" }
 
-near-sdk-sim = { git = "https://github.com/near/near-sdk-rs.git", tag="2.4.0" }
+near-sdk-sim = { git = "https://github.com/near/near-sdk-rs" }
+#near-sdk-sim = { git = "https://github.com/near/near-sdk-rs", tag="2.4.0" }
 #near-sdk-sim = { git = "https://github.com/Narwallets/near-sdk-rs.git", tag="2.4.0" }
 
 #[dependencies.near-sdk]

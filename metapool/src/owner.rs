@@ -25,9 +25,15 @@ impl MetaPool {
     /// Owner's method.
     /// Pauses pool staking.
     pub fn pause_staking(&mut self) {
-        self.assert_owner_calling();
+        self.assert_operator_or_owner();
         assert!(!self.staking_paused, "The staking is already paused");
         self.staking_paused = true;
+    }
+    /// unPauses pool staking.
+    pub fn un_pause_staking(&mut self) {
+        self.assert_operator_or_owner();
+        assert!(self.staking_paused, "The staking is not paused");
+        self.staking_paused = false;
     }
 
     //---------------------------------
@@ -148,6 +154,8 @@ impl MetaPool {
             account_id,
             available: acc.available.into(),
             stnear: stnear.into(),
+            meta: acc.total_meta(self).into(),
+            
             unstaked: acc.unstaked.into(),
             unstaked_requested_unlock_epoch: acc.unstaked_requested_unlock_epoch.into(),
             unstake_full_epochs_wait_left: acc.unstaked_requested_unlock_epoch.saturating_sub(env::epoch_height()) as u16,
@@ -164,7 +172,7 @@ impl MetaPool {
             nslp_share_value: nslp_share_value.into(),
             nslp_share_bp, //% owned as basis points
 
-            meta: acc.total_meta(self).into(),
+            stake_shares: acc.stake_shares.into(),
         };
     }
 
@@ -200,6 +208,7 @@ impl MetaPool {
 
         return GetContractStateResult {
             env_epoch_height: env::epoch_height().into(),
+            contract_account_balance: self.contract_account_balance.into(),
             total_available: self.total_available.into(),
             total_for_staking: self.total_for_staking.into(),
             total_actually_staked: self.total_actually_staked.into(),
@@ -223,7 +232,6 @@ impl MetaPool {
     pub fn get_contract_params(&self) -> ContractParamsJSON {
         return ContractParamsJSON {
             staking_paused: self.staking_paused,
-            min_account_balance: self.min_account_balance.into(),
 
             nslp_liquidity_target: self.nslp_liquidity_target.into(),
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
@@ -244,8 +252,6 @@ impl MetaPool {
 
         self.assert_owner_calling();
         assert!(params.nslp_max_discount_basis_points>params.nslp_min_discount_basis_points);
-
-        self.min_account_balance = params.min_account_balance.0;
 
         self.nslp_liquidity_target = params.nslp_liquidity_target.0;
         self.nslp_max_discount_basis_points = params.nslp_max_discount_basis_points;

@@ -10,7 +10,7 @@ pub mod whitelist {
 
 pub mod staking_pool {
     /// Gas attached to deposit call on the staking pool contract.
-    /// Requires BASE for local updates + BASE potentially restake.
+    /// Requires BASE for local updates + BASE potentially re-stake.
     pub const DEPOSIT: u64 = super::BASE_GAS * 2;
 
     /// Gas attached to deposit call on the staking pool contract.
@@ -18,7 +18,7 @@ pub mod staking_pool {
     pub const DEPOSIT_AND_STAKE: u64 = super::BASE_GAS * 3;
 
     /// Gas attached to withdraw call on the staking pool contract.
-    /// Requires BASE for execution + 2 * BASE for transferring amount to us and potentially restake.
+    /// Requires BASE for execution + 2 * BASE for transferring amount to us and potentially re-stake.
     pub const WITHDRAW: u64 = super::BASE_GAS * 3;
 
     /// Gas attached to stake call on the staking pool contract.

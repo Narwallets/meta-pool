@@ -16,7 +16,7 @@ pub struct SymbolInfo {
     pub symbol: String,     // token symbol
     pub name: String,       // token name
     pub total_supply: Option<U128String>, //total circulating supply
-    pub owner_account_id: Option<String>, // owner of this particular token
+    pub owner_account_id: Option<String>, // owner of this particular token mint
     pub reference: Option<String>,  // URL to additional resources about the token.
 }
 
@@ -106,41 +106,7 @@ impl MetaPool {
         self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver_id, &symbol, amount.0);
     }
 
-    //NEP-141 for default token STNEAR, ft_transfer
-    /// Transfer `amount` of tokens from `predecessor_account_id` to another user `receiver_id`.
-    pub fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128String,  #[allow(unused_variables)] memo:Option<String>){
-        self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver_id, STNEAR, amount.0);
-    }
-
-    //NEP-141 for token STNEAR, ft_transfer_call
-    /// Transfer `amount` of tokens from the caller of the contract (`predecessor_id`) to a contract at `receiver_id`.
-    /// Requirements:
-    /// * receiver_id must be a contract and must respond to `ft_on_transfer(&mut self, sender_id: AccountId, amount: U128String, _msg: String ) -> PromiseOrValue<U128>`
-    /// * if receiver_id is not a contract or `ft_on_transfer` fails, the transfer is rolled-back
-    pub fn ft_transfer_call(&mut self, receiver_id: AccountId, amount: U128String, msg:String, #[allow(unused_variables)] memo:Option<String>){
-
-        self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver_id, STNEAR, amount.0);
-
-        ext_multifuntok_receiver::ft_on_transfer(
-            env::predecessor_account_id(),
-            amount,
-            msg,
-            //promise params:
-            &receiver_id, //contract
-            0, //attached native NEAR amount
-            100_000_000_000_000, //100 TGAS
-        )
-        .then(ext_self_callback::after_ft_on_transfer(
-            env::predecessor_account_id(),
-            receiver_id,
-            amount,
-            //promise params:
-            &env::current_account_id(),//contract
-            0, //attached native NEAR amount
-            30_000_000_000_000, //30TGAS
-        ));
-
-    }
+    /// NEP-141 .then() promise 
     /// After Transfer `amount` of symbol tokens to a contract at `receiver_id`.
     /// Check if the contract completed execution of on_multifuntok_transfer
     /// and undo transfer if it failed
@@ -173,7 +139,8 @@ impl MetaPool {
             log!("{} unused tokens returned", unused_tokens);
         }
 
-        return unused_tokens.into();
+        //in the current standard, this fn returns "used" amount
+        return (amount_transferred - unused_tokens).into();
     }
 
     /// Transfer `amount` of symbol tokens from the caller of the contract (`predecessor_id`) to a contract at `receiver_id`.
@@ -211,6 +178,7 @@ impl MetaPool {
     /// After Transfer `amount` of symbol tokens to a contract at `receiver_id`.
     /// Check if the contract completed execution of on_multifuntok_transfer
     /// and undo transfer if it failed
+    #[private]
     pub fn after_multifuntok_transfer(&mut self, sender_id:AccountId, contract_id: AccountId, symbol:String, amount: U128String){
 
         assert_callback_calling();

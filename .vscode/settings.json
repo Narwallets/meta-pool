@@ -2,6 +2,7 @@
     "cSpell.words": [
         "TGAS",
         "accum",
+        "ftmd",
         "funtok",
         "metapool",
         "metas",
@@ -9,9 +10,11 @@
         "multifuntok",
         "nanos",
         "nslp",
+        "quickcheck",
         "simtest",
         "staker",
         "stnear",
-        "unstk"
+        "unstk",
+        "vloan"
     ]
 }

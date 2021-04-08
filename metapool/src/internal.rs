@@ -16,11 +16,22 @@ impl MetaPool {
             "Can only be called by the owner"
         )
     }
+    pub fn assert_operator_or_owner(&self) {
+        assert!(&env::predecessor_account_id()==&self.owner_account_id || &env::predecessor_account_id()==&self.operator_account_id,
+            "Can only be called by the operator or the owner"
+        );
+    }
+
+    pub fn assert_not_paused(&self) {
+        assert!(!self.staking_paused, "Contract is paused. Try again later");
+    }
+
 }
 
 pub fn assert_min_amount(amount: u128) {
     assert!(amount >= NEAR, "minimum amount is 1N");
 }
+
 
 /***************************************/
 /* Internal methods staking-pool trait */
@@ -40,6 +51,7 @@ impl MetaPool {
 
         account.available += amount;
         self.total_available += amount;
+        self.contract_account_balance += amount;
 
         self.internal_update_account(&account_id, &account);
 
@@ -50,53 +62,58 @@ impl MetaPool {
     }
 
     //------------------------------
-    pub(crate) fn internal_withdraw(&mut self, amount_requested: u128) {
+    // MIMIC staking-pool, if there are unstaked, it must be free to withdraw
+    pub(crate) fn internal_withdraw_use_unstaked(&mut self, requested_amount: u128) -> Promise {
+        self.inner_withdraw(requested_amount, true)
+    }
+    //------------------------------
+    pub(crate) fn internal_withdraw_from_available(&mut self, requested_amount: u128) -> Promise {
+        self.inner_withdraw(requested_amount, false)
+    }
+    //------------------------------
+    fn inner_withdraw(&mut self, amount_requested: u128, must_use_unstaked:bool) -> Promise {
         
         let account_id = env::predecessor_account_id();
-        let mut acc = self.internal_get_account(&account_id);
+        let mut account = self.internal_get_account(&account_id);
 
-        if acc.available <  amount_requested && acc.unstaked > 0 { //not enough available, but there's some unstaked
-            let epoch = env::epoch_height();
-            if epoch >= acc.unstaked_requested_unlock_epoch {
-                //bring from unstaked to available
-                acc.try_finish_unstaking(self);
-            }
+        if must_use_unstaked && account.unstaked>0 { //MIMIC staking-pool, if there is some unstaked, it must be free to withdraw
+            account.in_memory_try_finish_unstaking(self);
         }
 
-        assert!(
-            acc.available >= amount_requested,
-            "Not enough available balance to withdraw the requested amount"
-        );
+        let amount = account.in_memory_withdraw(amount_requested, self);
 
-        let to_withdraw = 
-            if acc.available - amount_requested < NEAR_CENT/2  //small yoctoNEARS remain, withdraw all
-                { acc.available } 
-                else  { amount_requested };
+        //commented: Remove min_account_balance requirements, increase liq-pool target to  cover all storage requirements
+        //2 reasons: a) NEAR storage was cut by 10  b) in the simplified flow, users do not keep "available" balance
+        // assert!( !acc.is_empty() || acc.available >= self.min_account_balance,
+        //     "The min balance for an open account is {} NEAR. You need to close the account to remove all funds",
+        //     self.min_account_balance/NEAR);
 
-        acc.available -= to_withdraw;
-        assert!( !acc.is_empty() || acc.available >= self.min_account_balance,
-            "The min balance for an open account is {} NEAR. You can remove all funds and close the account",
-            self.min_account_balance/NEAR);
-
-        self.internal_update_account(&account_id, &acc);
-
-        self.total_available -= to_withdraw;
-        Promise::new(account_id).transfer(to_withdraw);
+        self.internal_update_account(&account_id, &account);
+        //transfer to user native near account
+        
+        return self.native_transfer_to_predecessor(amount);
+    }
+    
+    pub(crate) fn native_transfer_to_predecessor(&mut self, amount: u128) -> Promise {
+        //transfer to user native near account
+        self.contract_account_balance -= amount;
+        return Promise::new(env::predecessor_account_id()).transfer(amount);
     }
 
-
     //------------------------------
-    pub(crate) fn internal_stake(&mut self, amount: Balance) {
+    /// takes from account.available and mints stNEAR
+    /// actual stake ins staking-pool is made by the meta-pool-heartbeat before the end of the epoch
+    pub(crate) fn internal_stake(&mut self, amount_requested: Balance) {
 
-        assert_min_amount(amount);
+        self.assert_not_paused();
+
+        assert_min_amount(amount_requested);
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        assert!(
-            acc.available >= amount,
-            "Not enough available balance to stake the requested amount"
-        );
+        //take from the account "available" balance
+        let amount = acc.in_memory_withdraw(amount_requested, self);
 
         //use this operation to realize meta pending rewards
         acc.stake_realize_meta(self);
@@ -105,14 +122,11 @@ impl MetaPool {
         let num_shares = self.stake_shares_from_amount(amount);
         assert!(num_shares > 0);
 
-        //update user account
+        //add shares to user account
         acc.add_stake_shares(num_shares, amount);
-        acc.available -= amount;
         //contract totals
         self.total_stake_shares += num_shares;
         self.total_for_staking += amount;
-        assert!(self.total_available >= amount,"i_s_Inconsistency");
-        self.total_available -= amount;
 
         //--SAVE ACCOUNT--
         self.internal_update_account(&account_id, &acc);
@@ -126,53 +140,48 @@ impl MetaPool {
     //------------------------------
     pub(crate) fn internal_unstake(&mut self, amount_requested: u128) {
 
+        self.assert_not_paused();
+
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
         let valued_shares = self.amount_from_stake_shares(acc.stake_shares);
-        assert!(valued_shares >= amount_requested, "Not enough stnear");
 
+        let amount_to_unstake:u128;
+        let stake_shares_to_burn:u128;
+        // if the amount is close to user's total, remove user's total
+        // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow 10 yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
+        if is_close(amount_requested, valued_shares) { // allow for rounding simplification
+            amount_to_unstake = valued_shares;
+            stake_shares_to_burn =  acc.stake_shares; // close enough to all shares, burn-it all (avoid leaving "dust")
+        }
+        else {
+            //use amount_requested
+            amount_to_unstake = amount_requested;
+            // Calculate the number shares that the account will burn based on the amount requested
+            stake_shares_to_burn = self.stake_shares_from_amount(amount_requested);
+        }
+
+        assert!( valued_shares >= amount_to_unstake, "Not enough stNEAR {} to unstake the requested amount", valued_shares );
+        assert!(stake_shares_to_burn > 0 && stake_shares_to_burn <= acc.stake_shares);
+        
         //use this operation to realize meta pending rewards
         acc.stake_realize_meta(self);
 
-        let remains_staked = valued_shares - amount_requested;
-        //if less than one near would remain, unstake all
-        let amount_to_unstake = if remains_staked > NEAR {
-            amount_requested
-        }
-        else {
-            valued_shares //unstake all
-        };
-
-        let num_shares: u128;
-        //if unstake all staked near, we use all shares, so we include rewards in the unstaking...
-        //when "unstaking_all" the amount unstaked is the requested amount PLUS ALL ACCUMULATED REWARDS
-        if amount_to_unstake == valued_shares {
-            num_shares = acc.stake_shares;
-        } else {
-            // Calculate the number of shares required to unstake the given amount.
-            num_shares = self.stake_shares_from_amount(amount_to_unstake);
-            assert!(num_shares > 0);
-            assert!(
-                acc.stake_shares >= num_shares,
-                "Inconsistency. Not enough shares to unstake"
-            );
-        }
-
         //burn stake shares
-        acc.sub_stake_shares(num_shares, amount_to_unstake);
+        acc.sub_stake_shares(stake_shares_to_burn, amount_to_unstake);
         //the amount is now "unstaked"
         acc.unstaked += amount_to_unstake;
         acc.unstaked_requested_unlock_epoch = env::epoch_height() + self.internal_compute_current_unstaking_delay(amount_to_unstake); //when the unstake will be available
         //--contract totals
-        self.total_stake_shares -= num_shares;
+        self.total_stake_shares -= stake_shares_to_burn;
         self.total_for_staking -= amount_to_unstake;
 
         //--SAVE ACCOUNT--
         self.internal_update_account(&account_id, &acc);
 
         log!(
-                "@{} unstaked {}. Has now {} unstaked and {} stnear. Epoch:{}",
+                "@{} unstaked {}. Has now {} unstaked and {} stNEAR. Epoch:{}",
                 account_id, amount_to_unstake, acc.unstaked, self.amount_from_stake_shares(acc.stake_shares), env::epoch_height()
         );
         // env::log(
@@ -186,15 +195,15 @@ impl MetaPool {
 
     //--------------------------------------------------
     /// adds liquidity from deposited amount
-    pub(crate) fn internal_nslp_add_liquidity(&mut self, amount: u128) -> u16 {
+    pub(crate) fn internal_nslp_add_liquidity(&mut self, amount_requested: u128) -> u16 {
+
+        self.assert_not_paused();
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        assert!(
-            acc.available >= amount,
-            "Not enough available balance to add the requested amount to the NSLP"
-        );
+        //take from the account "available" balance
+        let amount = acc.in_memory_withdraw(amount_requested, self);
 
         //get NSLP account
         let mut nslp_account = self.internal_get_nslp_account();
@@ -210,10 +219,10 @@ impl MetaPool {
         acc.lp_meter.stake(amount);
 
         //update user account
-        acc.available -= amount;
         acc.nslp_shares += num_shares;
-        //update NSLP account
+        //update NSLP account & main
         nslp_account.available += amount;
+        self.total_available += amount;
         nslp_account.nslp_shares += num_shares; //total nslp shares
 
         //compute the % the user now owns of the Liquidity Pool (in basis points)
@@ -232,7 +241,7 @@ impl MetaPool {
         let mut normal_wait_staked_available:u128 =0;
         for (_,sp) in self.staking_pools.iter().enumerate() {
             //if the pool has no unstaking in process
-            if !sp.busy_lock && sp.staked>0 && sp.unstaked==0 { 
+            if !sp.busy_lock && sp.staked>0 && sp.wait_period_ended() { 
                 normal_wait_staked_available += sp.staked;
                 if normal_wait_staked_available > amount {
                     return NUM_EPOCHS_TO_UNLOCK 
@@ -245,21 +254,17 @@ impl MetaPool {
 
 
     //--------------------------------
-    pub(crate) fn add_amount_and_shares_preserve_share_price(
+    pub(crate) fn add_extra_minted_shares(
         &mut self,
         account_id: AccountId,
-        amount: u128,
+        num_shares: u128,
     ) {
-        if amount > 0 {
-            let num_shares = self.stake_shares_from_amount(amount);
-            if num_shares > 0 {
-                let account = &mut self.internal_get_account(&account_id);
-                account.stake_shares += num_shares;
-                &self.internal_update_account(&account_id, &account);
-                // Increasing the total amount of "stake" shares.
-                self.total_stake_shares += num_shares;
-                self.total_for_staking += amount;
-            }
+        if num_shares > 0 {
+            let account = &mut self.internal_get_account(&account_id);
+            account.stake_shares += num_shares;
+            &self.internal_update_account(&account_id, &account);
+            // Increasing the total amount of stake shares (reduces price)
+            self.total_stake_shares += num_shares;
         }
     }
 
@@ -293,8 +298,8 @@ impl MetaPool {
     }
 
     //----------------------------------
-    // The LP acquires stnear providing the sell-stnear service
-    // The LP needs to unstake the stnear ASAP, to recover liquidity and to keep the fee low.
+    // The LP acquires stNEAR providing the liquid-unstake service
+    // The LP needs to remove stNEAR automatically, to recover liquidity and to keep the fee low.
     // The LP can recover near by internal clearing.
     // returns true if it uses clearing to liquidate
     // ---------------------------------
@@ -453,19 +458,22 @@ impl MetaPool {
         let mut selected_sp_inx: usize = 0;
 
         for (sp_inx, sp) in self.staking_pools.iter().enumerate() {
-            // if the pool is not busy, has stake, and has not unstaked balance waiting for withdrawal
-            if !sp.busy_lock && sp.staked > 0 && sp.unstaked == 0 {
-                // if this pool has an unbalance requiring un-staking
-                let should_have = apply_pct(sp.weight_basis_points, self.total_for_staking);
-                // does this pool requires un-staking? (has too much staked?)
-                if sp.staked > should_have {
-                    // how much?
-                    let unstake_amount = sp.staked - should_have;
-                    // is this the most unbalanced pool so far?
-                    if unstake_amount > selected_to_unstake_amount {
-                        selected_to_unstake_amount = unstake_amount;
-                        selected_stake = sp.staked;
-                        selected_sp_inx = sp_inx;
+            // if the pool is not busy, has stake
+            if !sp.busy_lock && sp.staked > 0 {
+                //if has not unstaked balance waiting for withdrawal, or wait started in this same epoch (no harm in unstaking more)
+                if sp.wait_period_ended() || sp.unstk_req_epoch_height==env::epoch_height() { 
+                    // if this pool has an unbalance requiring un-staking
+                    let should_have = apply_pct(sp.weight_basis_points, self.total_for_staking);
+                    // does this pool requires un-staking? (has too much staked?)
+                    if sp.staked > should_have {
+                        // how much?
+                        let unstake_amount = sp.staked - should_have;
+                        // is this the most unbalanced pool so far?
+                        if unstake_amount > selected_to_unstake_amount {
+                            selected_to_unstake_amount = unstake_amount;
+                            selected_stake = sp.staked;
+                            selected_sp_inx = sp_inx;
+                        }
                     }
                 }
             }
@@ -489,24 +497,29 @@ impl MetaPool {
     /// Requirements:
     /// * receiver_id must pre-exist
     pub fn internal_multifuntok_transfer(&mut self, sender_id: &AccountId, receiver_id: &AccountId, symbol:&str, am: u128) {
+        assert_ne!(
+            sender_id, receiver_id,
+            "Sender and receiver should be different"
+        );
+        assert!(am > 0, "The amount should be a positive number");
         let mut sender_acc = self.internal_get_account(&sender_id);
         let mut receiver_acc = self.internal_get_account(&receiver_id);
         match &symbol as &str {
             "NEAR" => {
-                assert!(sender_acc.available >= am, "not enough NEAR at {}",sender_id);
+                assert!(sender_acc.available >= am,"@{} not enough NEAR available {}",sender_id,sender_acc.available);
                 sender_acc.available -= am;
                 receiver_acc.available += am;
             }
             STNEAR => {
                 let max_stnear = self.amount_from_stake_shares(sender_acc.stake_shares);
-                assert!( am <= max_stnear,"not enough stNEAR at {}",sender_id);
+                assert!( am <= max_stnear,"@{} not enough stNEAR balance {}",sender_id,max_stnear);
                 let shares = self.stake_shares_from_amount(am);
                 sender_acc.sub_stake_shares(shares,am);
                 receiver_acc.add_stake_shares(shares,am);
             }
             "META" => {
                 sender_acc.stake_realize_meta(self);
-                assert!(sender_acc.realized_meta >= am,"not enough META at {}",sender_id);
+                assert!(sender_acc.realized_meta >= am, "@{} not enough $META balance {}",sender_id,sender_acc.realized_meta);
                 sender_acc.realized_meta -= am;
                 receiver_acc.realized_meta += am;
             }

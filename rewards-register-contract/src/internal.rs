@@ -36,7 +36,7 @@ impl RewardsRegisterContract {
 
         let account_id = env::predecessor_account_id();
         let account = self.internal_get_account(&account_id);
-        assert!(account.deposited > 0, "No deposit to retreieve");
+        assert!(account.deposited > 0, "No deposit to retrieve");
 
         self.total_rewards -= account.rewards;
 
@@ -49,7 +49,7 @@ impl RewardsRegisterContract {
 
     /// Asserts that the method was called by the owner.
     pub(crate) fn assert_owner(&self) {
-        assert!(env::predecessor_account_id()==self.owner_account_id,"Can only be called by the owner")
+        assert!(env::predecessor_account_id()==self.owner_id,"Can only be called by the owner")
     }
 
 }

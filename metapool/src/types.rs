@@ -9,12 +9,22 @@ pub const STNEAR:&str = "stNEAR";
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
 pub const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+pub const ONE_NEAR: u128 = NEAR;
 pub const NEAR_CENT: u128 = NEAR/100;
+pub const ONE_MILLI_NEAR : u128 = NEAR/1_000;
+pub const ONE_MICRO_NEAR : u128 = NEAR/1_000_000;
 pub const TWO_NEAR: u128 = 2 * NEAR;
 pub const FIVE_NEAR: u128 = 5 * NEAR;
 pub const TEN_NEAR: u128 = 10 * NEAR;
 pub const K_NEAR: u128 = 1_000 * NEAR;
 
+pub const TGAS: u128 = 1_000_000_000_000;
+
+/// The number of epochs required for the locked balance to become unlocked.
+/// NOTE: The actual number of epochs when the funds are unlocked is 3. But there is a corner case
+/// when the unstaking promise can arrive at the next epoch, while the inner state is already
+/// updated in the previous epoch. It will not unlock the funds for 4 epochs.
+/// If all staking-pools are unstaking, the user might have to wait 2*NUM_EPOCHS_TO_UNLOCK
 pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4; //0 for testing in guild-net, 4 for mainnet & testnet;
 
 /// The contract keeps at least 35 NEAR in the account to avoid being transferred out to cover
@@ -100,16 +110,22 @@ pub struct HumanReadableAccount {
 #[serde(crate = "near_sdk::serde")]
 pub struct GetAccountInfoResult {
     pub account_id: AccountId,
+
     /// The available balance that can be withdrawn
     pub available: U128,
+
     /// The amount of stNEAR owned (computed from the shares owned)
     pub stnear: U128,
+
+    //META owned (including pending rewards)
+    pub meta: U128,
+
     /// The amount unstaked waiting for withdraw
     pub unstaked: U128,
 
     /// The epoch height when the unstaked will be available
     pub unstaked_requested_unlock_epoch: U64,
-    /// How many full-epochs we still have to wait until unstaked_requested_unlock_epoch
+    /// How many epochs we still have to wait until unstaked_requested_unlock_epoch (epoch_unlock - env::epoch_height )
     pub unstake_full_epochs_wait_left: u16,
     ///if env::epoch_height()>=unstaked_requested_unlock_epoch
     pub can_withdraw: bool,
@@ -138,9 +154,8 @@ pub struct GetAccountInfoResult {
     pub nslp_share_value: U128,
     pub nslp_share_bp: u16, //basis points, % user owned
 
-    //META owned (including pending rewards)
-    pub meta: U128,
-
+    //control: shares from the stake_pool
+    pub stake_shares: U128,
 }
 
 
@@ -152,6 +167,13 @@ pub struct GetAccountInfoResult {
 pub struct GetContractStateResult {
     //current env::epoch_height() .- to check gainst unstake-delay end epoch
     pub env_epoch_height: U64,
+
+    /// What should be the contract_account_balance according to our internal accounting (if there's extra, it is 30% tx-fees)
+    /// This amount increments with attachedNEAR calls (inflow) and decrements with deposit_and_stake calls (outflow)
+    /// increments with retrieve_from_staking_pool (inflow) and decrements with user withdrawals from the contract (outflow)
+    /// It should match env::balance()
+    pub contract_account_balance: U128,
+
     /// This amount increments with deposits and decrements when users stake
     /// increments with complete_unstake and decrements with user withdrawals from the contract
     /// withdrawals from the pools can include rewards
@@ -215,9 +237,6 @@ pub struct ContractParamsJSON {
 
     /// no auto-staking. true while changing staking pools
     pub staking_paused: bool, 
-
-    /// adjustable min account available balance (to backup storage)
-    pub min_account_balance: U128String,
 
     ///NEAR/stNEAR Liquidity pool 1% fee target. If Liquidity=target, fee is 1%
     pub nslp_liquidity_target: U128String,

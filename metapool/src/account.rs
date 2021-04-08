@@ -143,8 +143,8 @@ impl Account {
     }
 
     /// user method
-    /// completes unstake action by moving from retrieved_from_the_pools to available
-    pub fn try_finish_unstaking(&mut self, main:&mut MetaPool) {
+    /// completes unstake action by moving from acc.unstaked & main.total_actually_unstaked_and_retrieved -> acc.available & main.total_available
+    pub fn in_memory_try_finish_unstaking(&mut self, main:&mut MetaPool) -> u128 {
 
         let amount = self.unstaked;
         assert!(amount > 0, "No unstaked balance");
@@ -154,14 +154,41 @@ impl Account {
             "The unstaked balance is not yet available due to unstaking delay. You need to wait at least {} epochs"
             , self.unstaked_requested_unlock_epoch - epoch);
 
-        //use retrieved funds
-        // moves from total_actually_unstaked_and_retrieved to total_available
+        //check the heart beat has really moved the funds
         assert!(main.total_actually_unstaked_and_retrieved >= amount, "Funds are not yet available due to unstaking delay. Epoch:{}",env::epoch_height());
+        // in the contract, move from total_actually_unstaked_and_retrieved to total_available
         main.total_actually_unstaked_and_retrieved -= amount;
         main.total_available += amount;
         // in the account, moves from unstaked to available
         self.unstaked -= amount; //Zeroes
         self.available += amount;
+        log!("{} unstaked moved to available",amount);
+
+        return amount;
+    }
+
+    pub(crate) fn in_memory_withdraw(&mut self, amount_requested: u128, main:&mut MetaPool) -> u128 {
+        
+        let to_withdraw:u128 =
+        // if the amount is close to user's total, remove user's total
+        // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow 10 yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
+        if is_close(amount_requested, self.available) { // allow for rounding simplification
+            self.available
+        }
+        else {
+            amount_requested
+        };
+
+        assert!(
+            self.available >= to_withdraw,
+            "Not enough available balance {} for the requested amount", self.available
+        );
+        self.available -= to_withdraw;
+        
+        assert!(main.total_available >= to_withdraw,"i_s_Inconsistency");
+        main.total_available -= to_withdraw;
+
+        return to_withdraw;
     }
 
 

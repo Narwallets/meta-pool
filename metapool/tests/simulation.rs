@@ -28,6 +28,7 @@ near_sdk_sim::lazy_static! {
 
 const TGAS: u64 = 1_000_000_000_000;
 const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+const ONE_MILLI_NEAR: u128 = NEAR/1_000;
 const E24: u128 = NEAR;
 
 const SP_INITIAL_BALANCE:u128 = 100*NEAR;
@@ -447,6 +448,24 @@ fn simtest() {
   let view_results = view!(metapool.get_contract_state());
   print_vec_u8("contract_state",&view_results.unwrap());
 
+  {
+    println!("----------------------------------");
+    println!("------- small qty add-remove liq --");
+    let r1=call!(bob,metapool.nslp_add_liquidity(), 30*NEAR, 50*TGAS );
+    print_helper(&r1);
+    let bob_info_1 =sim.show_account_info(&bob.account_id());
+    assert!(as_u128(&bob_info_1["nslp_shares"]) == 30*NEAR);
+    let r2=call!(bob,metapool.nslp_remove_liquidity(U128::from(30*NEAR+9)), gas=100*TGAS);
+    print_helper(&r2);
+    let bob_info_2 =sim.show_account_info(&bob.account_id());
+    assert!(as_u128(&bob_info_2["nslp_shares"]) == 0);
+    call!(bob,metapool.nslp_add_liquidity(), 30*NEAR, 50*TGAS );
+    let r4=call!(bob,metapool.nslp_remove_liquidity(U128::from(30*NEAR + 1 - ONE_MILLI_NEAR)), gas=100*TGAS);
+    print_helper(&r4);
+    let bob_info_4 =sim.show_account_info(&bob.account_id());
+    assert!(as_u128(&bob_info_4["nslp_shares"]) == 0);
+  }
+
   //---- test distribute_staking
   sim.show_sps_balance();
   println!("----------------------------------");
@@ -478,7 +497,7 @@ fn simtest() {
   println!("----------------------------------");
   println!("------- alice unstakes --");
   let alice_unstaking = ntoy(6_000);
-  let ads_res = call!(alice,metapool.unstake(U128::from(alice_unstaking)), gas=50*TGAS);
+  let ads_res = call!(alice,metapool.unstake(alice_unstaking.into()), gas=50*TGAS);
   print_helper(&ads_res);
 
   //----------------------------------------------------------
@@ -536,18 +555,18 @@ fn simtest() {
   //----------------------------------------------------------
   {
     println!("----------------------------------");
-    println!("------- alice completes unstaking: withdraws --");
+    println!("------- alice calls withdraw_unstaked --");
     let previous = alice.amount();
-    let ads_res = call!(alice,metapool.withdraw(U128::from(alice_unstaking)), gas=50*TGAS);
+    let ads_res = call!(alice,metapool.withdraw_unstaked(), gas=50*TGAS);
     print_helper(&ads_res);
-    assert!(alice.amount()==previous+alice_unstaking,"withdraw failed {} {} {}",alice.amount(),previous,alice_unstaking);
+    assert!(alice.amount()==previous+alice_unstaking,"withdraw_unstaked failed {} {} {}",alice.amount(),previous,alice_unstaking);
   }
 
 
   //----------------------------------------------------------
   {
     println!("----------------------------------");
-    println!("------- bob sells stnear (immediate unstake)");
+    println!("------- bob liquid-unstakes");
 
     sim.show_account_info(&bob.account_id());
     sim.show_account_info(&carol.account_id());
@@ -565,10 +584,9 @@ fn simtest() {
     let dbp = view!(metapool.nslp_get_discount_basis_points(TO_SELL.into()));
     print_vec_u8("metapool.nslp_get_discount_basis_points",&dbp.unwrap());
 
-    let bss_res = call!(bob,metapool.liquid_unstake(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), 1, 100*TGAS);
-    print_helper(&bss_res);
-    let received = as_u128(&bss_res.unwrap_json_value());
-    assert!(received >= MIN_REQUESTED,"sell stnear failed {} {}",MIN_REQUESTED,received);
+    let lu_res = call!(bob,metapool.liquid_unstake(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), 0, 100*TGAS);
+    print_helper(&lu_res);
+    println!("liquid unstake result {}",&lu_res.unwrap_json_value());
 
     let bob_info = sim.show_account_info(&bob.account_id());
     let carol_info =sim.show_account_info(&carol.account_id());

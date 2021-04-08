@@ -1,11 +1,13 @@
 use crate::*;
 
+const NUM_EPOCHS_TO_UNLOCK:u64=4;
+
 impl StakingContract {
     /********************/
     /* Internal methods */
     /********************/
 
-    /// Restakes the current `total_staked_balance` again.
+    /// Re-stakes the current `total_staked_balance` again.
     pub(crate) fn internal_restake(&mut self) {
         if self.paused {
             return;
@@ -22,7 +24,7 @@ impl StakingContract {
         else {
             env::log(
                 format!(
-                    "@{} curr account_balance:{} locked/stkd:{} -> setting new staked balance to {}",
+                    "@{} current account_balance:{} locked/staked:{} -> setting new staked balance to {}",
                     env::current_account_id(), env::account_balance(), self.total_staked_balance, to_stake
                 )
                 .as_bytes(),

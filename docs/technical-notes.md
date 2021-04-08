@@ -14,7 +14,7 @@ There are 3 "heartbeat()" functions:
 
 This fn does staking if needed, according to staking-pool weight (% of the pool)
 
-This fns should be called preferently before the epoch ends. Leaving NEAR unstaked is beneficial for the NSLP clearing
+This fns should be called preferably before the epoch ends. Leaving NEAR unstaked is beneficial for the NSLP clearing
 so this function should not be called when not necessary.
 
 Once called, if distribute_staking() returns "true", the operator should call it again until it returns "false"
@@ -31,7 +31,7 @@ Once called, if distribute_staking() returns "true", the operator should call it
 
 This fn does unstaking if needed, according to staking-pool weight (% of the pool)
 
-This should be called only at the begining of each epoch, to maximize rewards received from the pools (from the previous epoch).
+This should be called only at the beginning of each epoch, to maximize rewards received from the pools (from the previous epoch).
 
 Once called, if the fn returns "true", the operator should call it again until it returns "false"
 
@@ -42,20 +42,20 @@ Once called, if the fn returns "true", the operator should call it again until i
     //------------------------------------------------------------------------
     // Operator method, but open to anyone. Should be called once per epoch per sp, after sp rewards distribution (ping)
     /// Retrieves total balance from the staking pool and remembers it internally.
-    /// Also computes and distributes rewards operator and delegators
+    /// computes and distributes rewards
     /// this fn queries the staking pool (makes a cross-contract call)
     pub fn distribute_rewards(&mut self, sp_inx_i32: i32) -> void 
 ```
 
 
-###  4. pub fn withdraw_from_a_pool(&mut self, inx:u16)
+###  4. pub fn retrieve_funds_from_a_staking_pool(&mut self, inx:u16)
 
 ```
     // Operator method, but open to anyone
     //----------------------------------------------------------------------
-    //  WITHDRAW FROM ONE OF THE POOLS ONCE THE WAITING PERIOD HAS ELAPSED
+    //  RETRIEVE FUNDS FROM ONE OF THE POOLS ONCE THE WAITING PERIOD HAS ELAPSED
     //----------------------------------------------------------------------
-    /// launchs a withdrawal call
+    /// launches a withdraw call
     /// returns the amount withdrawn
     pub fn retrieve_funds_from_a_pool(&mut self, inx:u16) -> Promise -> u128 {
 
@@ -65,6 +65,6 @@ Once called, if the fn returns "true", the operator should call it again until i
 
 This fn performs withdraw from a specific pool, in order to have the funds available when the user requests them
 
-This should be called at the begining of each epoch. The operator should call `get_staking_pool_list()`
-and process the list calling `retrieve_funds_from_a_pool` for each pool needing that
+This should be called at the beginning of each epoch. The operator should call `get_staking_pool_list()`
+and process the list calling `retrieve_funds_from_a_pool` for each pool needing retrieve and with can_retrieve=true
 

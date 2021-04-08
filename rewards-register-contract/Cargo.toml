@@ -9,7 +9,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = "2.0.0"
+near-sdk = "3"
 uint = { version = "0.8.3", default-features = false }
 
 [dev-dependencies]

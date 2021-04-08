@@ -1,15 +1,14 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::json_types::{U128};
-use near_sdk::{env, near_bindgen};
+use near_sdk::{env, near_bindgen, setup_alloc, PanicOnDefault};
 use near_sdk::{AccountId};
 use near_sdk::collections::UnorderedMap;
 
 mod internal;
 use internal::*;
 
-#[global_allocator]
-static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
+setup_alloc!();
 
 // const ONE_NEAR_CENT:u128 = ONE_NEAR/100;
 // const DEPOSIT_FOR_REQUEST: u128 = ONE_NEAR_CENT; // amount that clients have to attach to make a request to the api
@@ -45,32 +44,54 @@ pub struct HumanReadableAccount {
 
 //contract state
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct RewardsRegisterContract {
     /// The account ID of the owner 
-    pub owner_account_id: AccountId,
-    /// Persistent map from an account ID to the corresponding account.
-    pub accounts: UnorderedMap<AccountId, Account>,
+    pub owner_id: AccountId,
     /// The total rewards 
     pub total_rewards: u128,
+    pub total_balance: u128,
+    /// Persistent map from an account ID to the corresponding account.
+    pub accounts: UnorderedMap<AccountId, Account>,
 }
 
-impl Default for RewardsRegisterContract {
-    fn default() -> Self {
-        env::panic(b"This contract should be initialized before usage")  
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct RewardsRegisterContractNewVersion {
+    /// The account ID of the owner 
+    pub owner_id: AccountId,
+    /// The total rewards 
+    pub total_rewards: u128,
+    pub total_balance: u128,
+    /// Persistent map from an account ID to the corresponding account.
+    pub accounts: UnorderedMap<AccountId, Account>,
+}
+
+#[near_bindgen(receiver=None)]
+impl RewardsRegisterContract {
+    pub fn migrate() {
+        let old_state: RewardsRegisterContract = near_sdk::env::state_read().unwrap_or_default();
+        let new_state = RewardsRegisterContractNewVersion {
+            owner_id : old_state.owner_id,
+            total_rewards: old_state.total_rewards,
+            total_balance: old_state.total_balance,
+            accounts: old_state.accounts
+        };
+        near_sdk::env::state_write(&new_state);
     }
 }
 
 #[near_bindgen]
 impl RewardsRegisterContract {
 
+ 
     #[init]
-    pub fn new(owner_account_id:String)-> Self{
+    pub fn new(owner_id:String)-> Self{
         /* Prevent re-initializations */
         assert!(!env::state_exists(), "This contract is already initialized");
         return Self {
-             owner_account_id,
+             owner_id,
              total_rewards: 0,
+             total_balance: 0,
              accounts: UnorderedMap::new(b"A".to_vec()),
          };
     }
@@ -84,6 +105,7 @@ impl RewardsRegisterContract {
         let mut account = self.internal_get_account(&account_id);
         let amount = env::attached_deposit();
         account.deposited += amount;
+        self.total_balance  += amount;
         assert!(account.deposited>=1*NEAR, "send at least ONE NEAR to register you account. You'll get back your NEAR when closing the account");
         self.internal_update_account(&account_id, &account);
    
@@ -117,6 +139,8 @@ impl RewardsRegisterContract {
         self.internal_close_account();
     }
 
+    pub fn get_owner_id(self)-> AccountId { self.owner_id }
+
     /// Returns human readable representation of the account for the given account ID.
     pub fn get_account(&self, account_id: AccountId) -> HumanReadableAccount {
         self.assert_owner();
@@ -145,59 +169,3 @@ impl RewardsRegisterContract {
     }
 
 }
-
-/**************/
-/* Unit tests */
-/**************/
-
-/*
-#[cfg(test)]
-mod tests {
-    use near_sdk::MockedBlockchain;
-    use near_sdk::{testing_env, VMContext};
-
-    const ONE_NEAR:u128 = 1_000_000_000_000_000_000_000_000;
-
-    /// Set the contract context
-    // pub fn initialize() -> &VMContext {
-    //     let context = get_context(String::from("client.testnet"), 10);                    
-    //     testing_env!(context); 
-    //     return &context;
-    // }
-
-    /// Defines the context for the contract
-    fn get_context(predecessor_account_id: String, storage_usage: u64) -> VMContext {
-        VMContext {
-            current_account_id: "contract.testnet".to_string(),
-            signer_account_id: "alice.testnet".to_string(),
-            signer_account_pk: vec![0, 1, 2],
-            predecessor_account_id,
-            input: vec![],
-            block_index: 0,
-            block_timestamp: 0,
-            account_balance: 0,
-            account_locked_balance: 0,
-            storage_usage,
-            attached_deposit: 0,
-            prepaid_gas: 10u64.pow(18),
-            random_seed: vec![0, 1, 2],
-            is_view: false,
-            output_data_receivers: vec![],
-            epoch_height: 19,
-        }
-    }
-
-    //Test get_id and set_id methods
-    // #[test]
-    // fn test_id() {
-    //     let mut context = get_context(String::from("client.testnet"), 10);                    
-    //     testing_env!(context); 
-    //     /* Initialize contract */
-    //     let mut contract = super::RewardsRegisterContract::new(String::from("developers.near"));
-    //     let handle = String::from("narwallets");
-    //     context.attached_deposit = ONE_NEAR;
-    //     contract.set_github_handle(handle.clone());
-    //     assert_eq!(contract.get_github_handle(), handle.clone(), "handle is different from the expected");
-    // }
-}
-*/
