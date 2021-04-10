@@ -91,6 +91,9 @@ impl FungibleTokenCore for MetaPool {
 
         assert_one_yocto();
 
+        self.assert_not_busy();
+        self.contract_busy = true;
+
         let receiver:String = receiver_id.into();
         self.internal_multifuntok_transfer(&env::predecessor_account_id(), &receiver, STNEAR, amount.0);
 

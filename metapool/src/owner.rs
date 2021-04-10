@@ -65,7 +65,7 @@ impl MetaPool {
 
         let sp = &self.staking_pools[inx as usize];
         if !sp.is_empty() {
-            panic!(b"sp is not empty")
+            panic!("sp is not empty")
         }
         self.staking_pools.remove(inx as usize);
     }
@@ -77,7 +77,7 @@ impl MetaPool {
 
         let sp = &mut self.staking_pools[inx as usize];
         if sp.busy_lock {
-            panic!(b"sp is busy")
+            panic!("sp is busy")
         }
         sp.weight_basis_points = weight_basis_points;
     }
@@ -213,8 +213,8 @@ impl MetaPool {
             total_for_staking: self.total_for_staking.into(),
             total_actually_staked: self.total_actually_staked.into(),
             accumulated_staked_rewards: self.accumulated_staked_rewards.into(),
-            total_unstaked_and_waiting: self.total_unstaked_and_waiting.into(),
-            total_actually_unstaked_and_retrieved: self.total_actually_unstaked_and_retrieved.into(),
+            total_unstake_claims: self.total_unstake_claims.into(),
+            reserve_for_unstaked_claims: self.reserve_for_unstake_claims.into(),
             total_stake_shares: self.total_stake_shares.into(),
             total_meta: self.total_meta.into(),
             accounts_count: self.accounts.len().into(),

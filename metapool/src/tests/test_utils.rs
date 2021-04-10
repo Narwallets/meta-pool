@@ -62,10 +62,8 @@ pub fn to_ts(num_days: u64) -> u64 {
 pub fn assert_almost_eq_with_max_delta(left: u128, right: u128, max_delta: u128) {
     assert!(
         std::cmp::max(left, right) - std::cmp::min(left, right) < max_delta,
-        format!(
-            "Left {} is not even close to Right {} within delta {}",
-            left, right, max_delta
-        )
+        "Left {} is not even close to Right {} within delta {}",
+        left, right, max_delta
     );
 }
 
@@ -113,6 +111,7 @@ pub fn testing_env_with_promise_results(context: VMContext, promise_result: Prom
         Default::default(),
         vec![promise_result],
         storage,
+        Default::default(),
         Default::default(),
     )));
 }

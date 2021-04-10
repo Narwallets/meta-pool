@@ -11,7 +11,7 @@ const CONTRACT_VERSION: &str = "0.1.0";
 const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Promise};
+use near_sdk::{env, ext_contract, near_bindgen, PanicOnDefault, AccountId, Promise};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::collections::{UnorderedMap,LookupMap};
@@ -44,11 +44,7 @@ pub mod fungible_token_standard;
 
 // setup_alloc adds a #[cfg(target_arch = "wasm32")] to the global allocator, which prevents the allocator 
 // from being used when the contract's main file is used in simulation testing.
-// sdk 3.0.1 => near_sdk::setup_alloc!();
-
-#[cfg(target = "wasm32")]
-#[global_allocator]
-static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
+near_sdk::setup_alloc!();
 
 pub const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
 
@@ -75,6 +71,7 @@ pub trait ExtStakingPool {
     fn deposit_and_stake(&mut self);
 
     fn withdraw(&mut self, amount: U128String);
+    fn withdraw_all(&mut self);
 
     fn stake(&mut self, amount: U128String);
 
@@ -87,7 +84,7 @@ pub trait ExtStakingPool {
 pub trait ExtMetaStakingPoolOwnerCallbacks {
     fn on_staking_pool_deposit(&mut self, amount: U128String) -> bool;
 
-    fn on_staking_pool_withdraw(&mut self, inx: u16) -> bool;
+    fn on_retrieve_from_staking_pool(&mut self, inx: u16) -> bool;
 
     fn on_staking_pool_stake_maybe_deposit(
         &mut self,
@@ -180,10 +177,16 @@ impl StakingPoolInfo {
 // Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts.None
 // accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct MetaPool {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
+
+    /// Avoid re-entry when async-calls are in-flight
+    pub contract_busy: bool,
+
+    /// no auto-staking. true while changing staking pools
+    pub staking_paused: bool,
 
     /// What should be the contract_account_balance according to our internal accounting (if there's extra, it is 30% tx-fees)
     /// This amount increments with attachedNEAR calls (inflow) and decrements with deposit_and_stake calls (outflow)
@@ -191,14 +194,33 @@ pub struct MetaPool {
     /// It should match env::balance()
     pub contract_account_balance: u128,
 
-    // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    pub web_app_url: Option<String>, 
-    pub auditor_account_id: Option<String>,
+    /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
+    /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
+    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now. 
+    /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
+    /// This amount also increments at retrieve_from_staking_pool
+    /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
+    /// This amount decrements at unstake-withdraw, sending the NEAR to the user
+    /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
+    pub reserve_for_unstake_claims: u128,
+    // control: reserve_for_unstaked_claims must be == sum(acc.unstake)+sum(sp.unstaked)
 
     /// This value is equivalent to sum(accounts.available)
     /// This amount increments with user's deposits_into_available and decrements when users stake_from_available
-    /// increments with finish_unstake and decrements with withdraw_from_available
+    /// increments with unstake_to_available and decrements with withdraw_from_available
+    /// Note: in the current simplified UI user-flow of the meta-pool, only the NSLP & the treasury can have available balance
+    /// the rest of the users mov directly between their NEAR native accounts & the contract accounts, only briefly occupying acc.available
     pub total_available: u128,
+
+    //-- ORDERS
+    /// The total amount of "stake" orders in the current epoch
+    pub epoch_stake_orders: u128,
+    /// The total amount of "delayed-unstake" orders in the current epoch
+    pub epoch_unstake_orders: u128,
+    // this two amounts can cancel each other at end_of_epoch_clearing
+    
+    /// The epoch when the last end_of_epoch_clearing was performed. To avoid calling it twice in the same epoch.
+    pub epoch_last_clearing: EpochHeight,
 
     /// The total amount of tokens selected for staking by the users
     /// not necessarily what's actually staked since staking can is done in batches
@@ -223,20 +245,14 @@ pub struct MetaPool {
     /// The total amount of tokens actually unstaked and in the waiting-delay (the tokens are in the staking pools)
     pub total_unstaked_and_waiting: u128,
 
-    /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// It represents funds retrieved from the pools, but waiting for the users to execute withdraw_unstaked()
-    /// During distribute_unstake(), If sp.unstaked>0 && sp.epoch_for_withdraw == env::epoch_height then all unstaked funds are retrieved from the sp
-    /// When the funds are actually requested by the users, total_actually_unstaked_and_retrieved is decremented
-    /// and then total_available and acc.available are incremented
-    /// total_available + total_actually_unstaked_and_retrieved must be == to `near state meta.pool.near` + 30% burnt fee
-    pub total_actually_unstaked_and_retrieved: u128,
+    /// sum(accounts.unstake). Every time a user delayed-unstakes, this amount is incremented
+    /// when the funds are withdrawn the amount is decremented.
+    /// Control: total_unstaked_claims == reserve_for_unstaked_claims + total_unstaked_and_waiting
+    pub total_unstake_claims: u128,
 
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulated amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: u128,
-
-    /// no auto-staking. true while changing staking pools
-    pub staking_paused: bool,
 
     //user's accounts
     pub accounts: UnorderedMap<String, Account>,
@@ -275,13 +291,81 @@ pub struct MetaPool {
     pub treasury_account_id: String,
     /// treasury cut on Liquid Unstake (25% from the fees by default)
     pub treasury_swap_cut_basis_points: u16,
+
+    // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    pub web_app_url: Option<String>, 
+    pub auditor_account_id: Option<String>,
 }
 
-impl Default for MetaPool {
-    fn default() -> Self {
-        env::panic(b"The contract is not initialized.");
+//-----------------------------
+//contract main state migration
+//-----------------------------
+/*
+mod migrations;
+#[near_bindgen]
+impl MetaPool {
+    #[init(ignore_state)]
+    pub fn migrate_state() -> Self {
+        let old: migrations::MetaPoolV1 = env::state_read().expect("Old state doesn't exist");
+        // Verify the migration can only be done by the owner.
+        assert_eq!(
+            &env::predecessor_account_id(),
+            &old.owner_account_id,
+            "Can only be called by the owner"
+        );
+
+        // Create the new contract using the data from the old contract.
+        Self { 
+            owner_account_id: old.owner_account_id,
+            contract_busy:false ,
+            staking_paused: old.staking_paused,
+            contract_account_balance: old.contract_account_balance,
+            reserve_for_unstaked_claims: 0,
+            total_available: old.total_available,
+
+            //-- ORDERS
+            epoch_stake_orders: 0,
+            epoch_d_unstake_orders: 0,
+            epoch_last_clearing:0,
+
+            total_for_staking: old.total_for_staking,
+            total_actually_staked: old.total_actually_staked,
+            total_stake_shares: old.total_stake_shares,
+            total_meta: old.total_meta,
+            total_unstaked_and_waiting: old.total_unstaked_and_waiting,
+
+            total_unstaked_claims: 0,
+
+            accumulated_staked_rewards: old.accumulated_staked_rewards,
+
+            accounts: old.accounts,
+
+            staking_pools: old.staking_pools,
+
+            loan_requests: old.loan_requests,
+            
+            nslp_liquidity_target: old.nslp_liquidity_target, 
+            nslp_max_discount_basis_points: old.nslp_max_discount_basis_points,
+            nslp_min_discount_basis_points: old.nslp_min_discount_basis_points,
+
+            staker_meta_mult_pct: old.staker_meta_mult_pct,
+            stnear_sell_meta_mult_pct: old.stnear_sell_meta_mult_pct,
+            lp_provider_meta_mult_pct: old.lp_provider_meta_mult_pct,
+
+            operator_account_id: old.operator_account_id,
+            operator_rewards_fee_basis_points: old.operator_rewards_fee_basis_points,
+            operator_swap_cut_basis_points: old.operator_swap_cut_basis_points,
+
+            treasury_account_id: old.treasury_account_id,
+            treasury_swap_cut_basis_points: old.treasury_swap_cut_basis_points,
+
+            // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+            web_app_url: old.web_app_url,
+            auditor_account_id: old.auditor_account_id,
+        }
     }
 }
+*/
 
 #[near_bindgen]
 impl MetaPool {
@@ -302,8 +386,6 @@ impl MetaPool {
 
     */
 
-    /// Requires 25 TGas (1 * BASE_GAS)
-    ///
     /// Initializes MetaPool contract.
     /// - `owner_account_id` - the account ID of the owner.  Only this account can call owner's methods on this contract.
     #[init]
@@ -325,6 +407,7 @@ impl MetaPool {
 
         return Self {
             owner_account_id,
+            contract_busy: false, 
             operator_account_id,
             treasury_account_id,
             contract_account_balance: 0,
@@ -336,9 +419,13 @@ impl MetaPool {
             staking_paused: false, 
             total_available: 0,
             total_for_staking: 0,
-            total_actually_staked: 0, //amount actually sent to the staking_pool and staked
-            total_unstaked_and_waiting: 0, // tracks unstaked amount from the staking_pool (tokens are in the pool)
-            total_actually_unstaked_and_retrieved: 0, // tracks unstaked AND retrieved amount (tokens are here)
+            total_actually_staked: 0,
+            total_unstaked_and_waiting: 0, 
+            reserve_for_unstake_claims: 0,
+            total_unstake_claims:0,
+            epoch_stake_orders:0,
+            epoch_unstake_orders:0,
+            epoch_last_clearing:0,
             accumulated_staked_rewards: 0,
             total_stake_shares: 0,
             total_meta: 0,
@@ -370,7 +457,9 @@ impl MetaPool {
     /// Deposits the attached amount into the inner account of the predecessor.
     #[payable]
     pub fn deposit(&mut self) {
-        self.internal_deposit();
+        //block "deposit" only, so all actions are thru the simplified user-flow, using deposit_and_stake
+        panic!("please use deposit_and_stake");
+        //self.internal_deposit();
     }
 
     /// Withdraws from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool .- core-contracts/staking-pool only has "unstaked" to withdraw from
@@ -534,8 +623,8 @@ impl MetaPool {
     pub fn withdraw_unstaked(&mut self) -> Promise {
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
-        let acquired = account.in_memory_try_finish_unstaking(self);
-        let amount = account.in_memory_withdraw(acquired, self);
+        let acquired = account.in_memory_try_finish_unstaking(&account_id,self);
+        let amount = account.take_from_available(acquired, self);
         //update user account in storage
         self.internal_update_account(&account_id, &account);
         //transfer to user
@@ -590,7 +679,7 @@ impl MetaPool {
         min_expected_near: U128String,
     ) -> LiquidUnstakeResult {
 
-        self.assert_not_paused();
+        self.assert_not_busy();
         //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
@@ -706,7 +795,7 @@ impl MetaPool {
 
         //simplified user-flow
         //direct transfer to user (instead of leaving it in-contract as "available")
-        let transfer_amount = user_account.in_memory_withdraw(near_to_receive, self);
+        let transfer_amount = user_account.take_from_available(near_to_receive, self);
         self.native_transfer_to_predecessor(transfer_amount);
 
         //Save user account
@@ -742,7 +831,7 @@ impl MetaPool {
     //#[payable]
     pub fn nslp_remove_liquidity(&mut self, amount: U128String) -> RemoveLiquidityResult {
 
-        self.assert_not_paused();
+        self.assert_not_busy();
         //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
@@ -805,12 +894,14 @@ impl MetaPool {
 
         //simplify user-flow
         //direct transfer to user (instead of leaving it in-contract as "available")
-        let transfer_amount = acc.in_memory_withdraw(near_to_remove, self);
+        let transfer_amount = acc.take_from_available(near_to_remove, self);
         self.native_transfer_to_predecessor(transfer_amount);
 
         //--SAVE ACCOUNTS
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
+
+        event!(r#"{{"event":"REM.L","account_id":"{}","near":"{}","stnear":"{}"}}"#, account_id, transfer_amount, stnear_to_remove_from_pool);
 
         return RemoveLiquidityResult {
             near: transfer_amount.into(),
@@ -922,7 +1013,7 @@ mod tests {
 
     }
 
-    #[test]
+/*    #[test]
     fn test_internal_get_near_amount_sell_stnear() {
         let (_context, contract) = contract_only_setup();
         let lp_balance_y: u128 = ntoy(500_000);
@@ -939,7 +1030,7 @@ mod tests {
         assert!(discounted_y == apply_pct(discount_bp, sell_stnear_y));
         assert!(near_amount_y == sell_stnear_y - discounted_y);
     }
-
+*/
 
 
     // #[test]
@@ -1082,7 +1173,7 @@ mod tests {
 
         context.predecessor_account_id = this_account();
         testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
-        contract.on_staking_pool_withdraw(unstake_amount.into());
+        contract.on_retrieve_from_staking_pool(unstake_amount.into());
         context.is_view = true;
         testing_env!(context.clone());
         assert_eq!(contract.get_known_deposited_balance().0, 0);
@@ -1261,7 +1352,7 @@ mod tests {
 
             context.predecessor_account_id = this_account();
             testing_env_with_promise_results(context.clone(), PromiseResult::Successful(vec![]));
-            contract.on_staking_pool_withdraw(amount.into());
+            contract.on_retrieve_from_staking_pool(amount.into());
             context.is_view = true;
             testing_env!(context.clone());
             assert_eq!(

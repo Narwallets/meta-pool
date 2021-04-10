@@ -13,7 +13,7 @@ export NODE_ENV=$NETWORK
 #near create-account $CONTRACT_ACC --masterAccount $MASTER_ACC
 near deploy $CONTRACT_ACC ./res/rewards_register.wasm --accountId $OWNER
 #near call $CONTRACT_ACC new {\"owner_account_id\":\"$OWNER\"} --accountId $OWNER
-#meta new { owner_account_id:$OWNER, treasury_account_id:treasury.$CONTRACT_ACC, operator_account_id:operator.$CONTRACT} --accountId $MASTER_ACC
+#meta new { owner_account_id:$OWNER, treasury_account_id:treasury.$CONTRACT_ACC, operator_account_id:operator.$CONTRACT_ACC} --accountId $MASTER_ACC
 ## set params@meta set_params
 #meta default_pools_testnet
 

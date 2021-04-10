@@ -1,13 +1,6 @@
 //use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, Promise};
+use near_sdk::{env, Promise, log};
 use crate::*;
-
-#[macro_export]
-macro_rules! log {
-    ($($arg:tt)*) => ({
-        env::log(format!($($arg)*).as_bytes());
-    });
-}
 
 pub const NEAR:u128 = 1_000_000_000_000_000_000_000_000;
 

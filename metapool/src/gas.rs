@@ -98,6 +98,9 @@ pub mod owner_callbacks {
     /// Gas attached to the inner callback for processing result of the call to get the current total balance from the staking pool.
     pub const ON_GET_SP_TOTAL_BALANCE: u64 = super::BASE_GAS * 5; //because distributes realized rewards to author and owner
 
+    /// Gas attached to the inner callback for sync_unstaked_balance to get precise unstaked balance from the staking pool.
+    pub const ON_GET_SP_UNSTAKED_BALANCE: u64 = super::BASE_GAS; // just update unstaked amount (yocto differences)
+
     /// Gas attached to the inner callback for processing result of the call to get the current
     /// unstaked balance from the staking pool.
     /// The callback might proceed with withdrawing this amount.

@@ -18,7 +18,9 @@ pub const FIVE_NEAR: u128 = 5 * NEAR;
 pub const TEN_NEAR: u128 = 10 * NEAR;
 pub const K_NEAR: u128 = 1_000 * NEAR;
 
-pub const TGAS: u128 = 1_000_000_000_000;
+pub const MIN_MOVEMENT : u128 = 20*NEAR_CENT; //if there's less than 0.20 NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
+
+pub const TGAS: u64 = 1_000_000_000_000;
 
 /// The number of epochs required for the locked balance to become unlocked.
 /// NOTE: The actual number of epochs when the funds are unlocked is 3. But there is a corner case
@@ -197,12 +199,12 @@ pub struct GetContractStateResult {
 
     /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
     /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
-    pub total_unstaked_and_waiting: U128,
+    pub total_unstake_claims: U128,
 
     /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
     /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
     /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
-    pub total_actually_unstaked_and_retrieved: U128,
+    pub reserve_for_unstaked_claims: U128,
 
     /// total meta minted
     pub total_meta: U128, 

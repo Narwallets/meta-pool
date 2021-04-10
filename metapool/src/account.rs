@@ -1,3 +1,4 @@
+use near_sdk::log;
 use crate::*;
 
 pub use crate::types::*;
@@ -143,8 +144,8 @@ impl Account {
     }
 
     /// user method
-    /// completes unstake action by moving from acc.unstaked & main.total_actually_unstaked_and_retrieved -> acc.available & main.total_available
-    pub fn in_memory_try_finish_unstaking(&mut self, main:&mut MetaPool) -> u128 {
+    /// completes unstake action by moving from acc.unstaked & main.reserve_for_unstaked_claims -> acc.available & main.total_available
+    pub fn in_memory_try_finish_unstaking(&mut self, account_id:&str, main:&mut MetaPool) -> u128 {
 
         let amount = self.unstaked;
         assert!(amount > 0, "No unstaked balance");
@@ -154,20 +155,23 @@ impl Account {
             "The unstaked balance is not yet available due to unstaking delay. You need to wait at least {} epochs"
             , self.unstaked_requested_unlock_epoch - epoch);
 
-        //check the heart beat has really moved the funds
-        assert!(main.total_actually_unstaked_and_retrieved >= amount, "Funds are not yet available due to unstaking delay. Epoch:{}",env::epoch_height());
-        // in the contract, move from total_actually_unstaked_and_retrieved to total_available
-        main.total_actually_unstaked_and_retrieved -= amount;
-        main.total_available += amount;
         // in the account, moves from unstaked to available
-        self.unstaked -= amount; //Zeroes
+        self.unstaked -= amount; //Zeroes, claimed
         self.available += amount;
+        //check the heart beat has really moved the funds
+        assert!(main.reserve_for_unstake_claims >= amount, "Funds are not yet available due to unstaking delay. Epoch:{}",env::epoch_height());
+        // in the contract, move from reserve_for_unstaked_claims to total_available
+        main.reserve_for_unstake_claims -= amount;
+        main.total_available += amount;
+
+        event!(r#"{{"event":"D-WITHD","account_id":"{}","amount":"{}"}}"#, account_id, amount);
+
         log!("{} unstaked moved to available",amount);
 
         return amount;
     }
 
-    pub(crate) fn in_memory_withdraw(&mut self, amount_requested: u128, main:&mut MetaPool) -> u128 {
+    pub(crate) fn take_from_available(&mut self, amount_requested: u128, main:&mut MetaPool) -> u128 {
         
         let to_withdraw:u128 =
         // if the amount is close to user's total, remove user's total

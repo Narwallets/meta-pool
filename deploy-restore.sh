@@ -20,8 +20,9 @@ export NODE_ENV=$NETWORK
 
 
 ## redeploy code only
-meta deploy ./res/metapool.wasm  --accountId $MASTER_ACC
+#meta deploy ./res/metapool.wasm  --accountId $MASTER_ACC
+meta deploy ./res/metapool.2021-04-08.07:27:12.wasm
 
 #save last deployment  (to be able to recover state/tokens)
-cp ./res/metapool.wasm ./res/metapool.`date +%F.%T`.wasm
-date +%F.%T
+#cp ./res/metapool.wasm ./res/metapool.`date +%F.%T`.wasm
+#date +%F.%T

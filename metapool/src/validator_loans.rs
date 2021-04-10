@@ -5,7 +5,7 @@ pub use crate::types::*;
 pub use crate::utils::*;
 
 //------------------------
-//  Validator's Loan Req Status
+//  Validator Loan Req Status
 //------------------------
 pub const DRAFT: u8 = 0;
 pub const ACTIVE: u8 = 1;
@@ -19,11 +19,10 @@ const ACTIVATION_FEE:u128= 5*NEAR;
 const MIN_REQUEST:u128 = 10*K_NEAR;
 
 //------------------------
-//  Validator's Loan Req
+//  Validator Loan Req
 //------------------------
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize,Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-#[derive(Serialize, Deserialize)]
 pub struct VLoanRequest {
     //total requested
     pub amount_requested: u128,
@@ -37,8 +36,8 @@ pub struct VLoanRequest {
     //committed fee
     //The validator commits to have their fee at x%, x amount of epochs
     //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
-    pub commited_fee: u16,
-    pub commited_fee_duration: u16,
+    pub committed_fee: u16,
+    pub committed_fee_duration: u16,
 
     //status: set by requester: draft, active / set by owner: rejected, accepted, implemented
     pub status: u8,
@@ -49,10 +48,10 @@ pub struct VLoanRequest {
     pub activated_epoch_height: EpochHeight,
 }
 
-#[serde(crate = "near_sdk::serde")]
 #[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct VLoanInfo {
-    //same as above but u128 => U128String so the json ser/deser does the right thing
+    //same as above but u128 => U128String so the json ser/deserialization does the right thing
 
     //total requested
     pub amount_requested: U128String,
@@ -66,8 +65,8 @@ pub struct VLoanInfo {
     //committed fee
     //The validator commits to have their fee at x%, x amount of epochs
     //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
-    pub commited_fee: u16,
-    pub commited_fee_duration: u16,
+    pub committed_fee: u16,
+    pub committed_fee_duration: u16,
 
     //status: set by requester: draft, active / set by owner: rejected, accepted, implemented
     pub status: u8,
@@ -84,8 +83,8 @@ impl Default for VLoanRequest {
             amount_requested: 0,
             staking_pool_account_id: String::from(""),
             information_url: String::from(""),
-            commited_fee: 0,
-            commited_fee_duration: 0,
+            committed_fee: 0,
+            committed_fee_duration: 0,
             status: DRAFT,
             loan_fee: 0,
             activated_epoch_height: 0,
@@ -100,8 +99,8 @@ pub struct VLoanRequestInfo {
     pub amount_requested: U128String,
     pub staking_pool_account_id: AccountId,
     pub information_url: String,
-    pub commited_fee: u16,
-    pub commited_fee_duration: u16,
+    pub committed_fee: u16,
+    pub committed_fee_duration: u16,
     pub status: u8,
     pub loan_fee_near: U128String,
     pub activated_epoch_height: U64String,
@@ -118,8 +117,8 @@ impl MetaPool {
             amount_requested: request.amount_requested.into(),
             staking_pool_account_id: request.staking_pool_account_id,
             information_url: request.information_url,
-            commited_fee: request.commited_fee,
-            commited_fee_duration: request.commited_fee_duration,
+            committed_fee: request.committed_fee,
+            committed_fee_duration: request.committed_fee_duration,
             loan_fee: request.loan_fee.into(),
             activated_epoch_height: request.activated_epoch_height.into(),
         };
@@ -130,8 +129,8 @@ impl MetaPool {
         &mut self,
         amount_requested: U128String,
         staking_pool_account_id: String,
-        commited_fee: u16,
-        commited_fee_duration: u16,
+        committed_fee: u16,
+        committed_fee_duration: u16,
         information_url: String
     ) {
         let mut request = self.loan_requests.get(&env::predecessor_account_id()).unwrap_or_default();
@@ -140,8 +139,8 @@ impl MetaPool {
         assert!(request.status==DRAFT,"You can only modify DRAFT requests");
         request.staking_pool_account_id = staking_pool_account_id;
         request.amount_requested = amount_requested.0;
-        request.commited_fee = commited_fee;
-        request.commited_fee_duration = commited_fee_duration;
+        request.committed_fee = committed_fee;
+        request.committed_fee_duration = committed_fee_duration;
         request.information_url = information_url;
         
         self.loan_requests.insert(&env::predecessor_account_id(), &request);
@@ -158,8 +157,8 @@ impl MetaPool {
         assert!(env::attached_deposit()==ACTIVATION_FEE,"Activation fee MUST be {}",ACTIVATION_FEE);
         assert!(env::is_valid_account_id(&request.staking_pool_account_id.as_bytes()),"invalid staking pool account id");
         assert!(request.amount_requested >= MIN_REQUEST, "Min amount is {}",MIN_REQUEST);
-        assert!(request.commited_fee<2000,"invalid commited fee. Maxc 20%");
-        assert!(request.commited_fee_duration>0,"invalid commited fee duration");
+        assert!(request.committed_fee<2000,"invalid committed fee. Max 20%");
+        assert!(request.committed_fee_duration>0,"invalid committed fee duration");
         request.activated_epoch_height = env::epoch_height();
         //update
         self.loan_requests.insert(&env::predecessor_account_id(), &request);

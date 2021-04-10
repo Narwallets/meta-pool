@@ -20,10 +20,13 @@ use near_sdk_sim::{
 use metapool::*;
 
 // Load contracts' bytes.
-near_sdk_sim::lazy_static! {
-  static ref WASM_BYTES_META_POOL: &'static [u8] = include_bytes!("../../res/metapool.wasm").as_ref();
-  static ref WASM_BYTES_SP: &'static [u8] = include_bytes!("../../res/staking_pool.wasm").as_ref();
-  static ref WASM_BYTES_GET_EPOCH: &'static [u8] = include_bytes!("../../res/get_epoch_contract.wasm").as_ref();
+near_sdk_sim::lazy_static_include::lazy_static_include_bytes! {
+  WASM_BYTES_META_POOL => "../res/metapool.wasm",
+  //static ref WASM_BYTES_META_POOL: &'static [u8] = include_bytes!("../../res/metapool.wasm").as_ref();
+  WASM_BYTES_SP => "../res/staking_pool.wasm",
+  // static ref WASM_BYTES_SP: &'static [u8] = include_bytes!("../../res/staking_pool.wasm").as_ref();
+  WASM_BYTES_GET_EPOCH => "../res/get_epoch_contract.wasm",
+  // static ref WASM_BYTES_GET_EPOCH: &'static [u8] = include_bytes!("../../res/get_epoch_contract.wasm").as_ref();
 }
 
 const TGAS: u64 = 1_000_000_000_000;
@@ -31,7 +34,7 @@ const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 const ONE_MILLI_NEAR: u128 = NEAR/1_000;
 const E24: u128 = NEAR;
 
-const SP_INITIAL_BALANCE:u128 = 100*NEAR;
+const SP_INITIAL_BALANCE:u128 = 35*NEAR;
 
 /// Deploy the contract(s) and create some metapool accounts. Returns:
 /// - The metapool Contract
@@ -103,13 +106,13 @@ fn init_simulator_and_contract(
 
 //----------------------
 fn view(contract_account: &UserAccount, method:&str, args_json:&str) -> Value {
-    let pct = PendingContractTx {
-      receiver_id: contract_account.account_id(),
-      method: method.into(),
-      args: args_json.into(),
-      is_view:true,
-    };
-    let vr = &contract_account.view(pct);
+    // let pct = PendingContractTx {
+    //   receiver_id: contract_account.account_id(),
+    //   method: method.into(),
+    //   args: args_json.into(),
+    //   is_view:true,
+    // };
+    let vr = &contract_account.view(contract_account.account_id(), method, args_json.as_bytes());
     //println!("view Result: {:#?}", vr.unwrap_json_value());
     return vr.unwrap_json_value();
 }
@@ -129,13 +132,13 @@ fn view_u128 (contract_account: &UserAccount, method:&str, args_json:&str) -> u1
 
 //----------------------
 fn call(who: &UserAccount, contract_account: &UserAccount, method:&str, args_json:&str, attached_deposit:u128, gas:u64) -> ExecutionResult {
-  let pct = PendingContractTx {
-    receiver_id: contract_account.account_id(),
-    method: method.into(),
-    args: args_json.into(),
-    is_view:false,
-  };
-  let exec_res = who.call(pct,attached_deposit,gas);
+  // let pct = PendingContractTx {
+  //   receiver_id: contract_account.account_id(),
+  //   method: method.into(),
+  //   args: args_json.into(),
+  //   is_view:false,
+  // };
+  let exec_res = who.call(contract_account.account_id(), method, args_json.as_bytes(), gas, attached_deposit);
   //println!("Result: {:#?}", exec_res);
   return exec_res;
 }
@@ -158,29 +161,45 @@ fn deploy_simulated_staking_pool(
         ).into(),//arguments: Vec<u8>,
       50*TGAS, 0);
   let res = user_txn.submit();
-  //print_helper(res);
+  //check_exec_result(res);
   return sp;
 }
 
 /// Helper to log ExecutionResult outcome of a call/view
-fn print_helper(res: &ExecutionResult) {
-  println!("Result: {:#?}", res);
+fn check_exec_result(res: &ExecutionResult) {
+  //println!("Result: {:#?}", res);
+  for line in &res.outcome().logs {
+    println!("{:?}",line);
+  }
+  if !res.is_ok() {
+    println!("{:?}",res);
+  }
   assert!(res.is_ok());
 }
-fn print_helper_promise(res: &ExecutionResult) {
-  println!("Result: {:#?}", res);
+fn check_exec_result_promise(res: &ExecutionResult) {
+  //println!("Result: {:#?}", res);
+  check_exec_result(res);
   //println!("Receipt results: {:#?}", res.get_receipt_results());
-  println!("Promise results: {:#?}", res.promise_results());
+  //println!("Promise results: {:#?}", res.promise_results());
+  println!("----Promise results:", );
+  let mut inx=0;
+  for pr in &res.promise_results() {
+    if let Some(some_pr) = pr {
+      println!("--promise #{}",inx);
+      check_exec_result(&some_pr);
+      inx+=1;
+    }
+  }
   assert!(res.is_ok());
 }
 /// Helper to log ExecutionResult outcome of a call/view
-fn print_helper_profile(res: &ExecutionResult) {
-  println!("Promise results: {:#?}", res.promise_results());
-  //println!("Receipt results: {:#?}", res.get_receipt_results());
-  println!("Profiling: {:#?}", res.profile_data());
-  //println!("Result: {:#?}", res);
-  assert!(res.is_ok());
-}
+// fn check_exec_result_profile(res: &ExecutionResult) {
+//   println!("Promise results: {:#?}", res.promise_results());
+//   //println!("Receipt results: {:#?}", res.get_receipt_results());
+//   //println!("Profiling: {:#?}", res.profile_data());
+//   //println!("Result: {:#?}", res);
+//   assert!(res.is_ok());
+// }
 
  fn print_vec_u8(title:&str, v:&Vec<u8>){
   println!("{}:{}", title,
@@ -193,7 +212,7 @@ fn print_helper_profile(res: &ExecutionResult) {
 fn ntoy(near:u64) -> u128 { to_yocto(&near.to_string()) }
 
 fn yton(yoctos:u128) -> String { 
-  let mut str = yoctos.to_string();
+  let mut str = format!("{:0>25}",yoctos);
   let dec = str.split_off(str.len()-24);
   return [&str,".",&dec].concat();
 }
@@ -207,6 +226,9 @@ struct Simulation {
   pub operator:UserAccount,
   pub sp: Vec<UserAccount> //Staking pools
 }
+
+
+const METAPOOL_CONTRACT_ID:&str = "metapool";
 
 //-----------------------------
 //-----------------------------
@@ -249,7 +271,7 @@ impl Simulation {
     //create acc, deploy & init the main contract
     let metapool = deploy!(
       contract: MetaPoolContract,
-      contract_id: "metapool",
+      contract_id: &METAPOOL_CONTRACT_ID,
       bytes: &WASM_BYTES_META_POOL,
       // User deploying the contract
       signer_account: &owner,
@@ -266,10 +288,10 @@ impl Simulation {
     let mut sp = Vec::with_capacity(4);
     for n in 0..=3 {
       let sp_contract =deploy_simulated_staking_pool(&master_account, &format!("sp{}",n), &owner.account_id());
-      call(&owner,&sp_contract,"pause_staking","{}",0,10*TGAS);
+      //call(&owner,&sp_contract,"pause_staking","{}",0,10*TGAS);
       sp.push( sp_contract );
     }
-
+    
     return Self {
 
       metapool,
@@ -287,12 +309,25 @@ impl Simulation {
 
   }
 
-  pub fn sp_balance(&self, n:usize) -> u128 { self.sp[n].amount()+self.sp[n].locked() }
+  pub fn sp_staked(&self, n:usize) -> u128 { 
+    view_u128(&self.sp[n],"get_account_staked_balance",&format!(r#"{{"account_id":"{}"}}"#,METAPOOL_CONTRACT_ID))
+  }
+
+  // pub fn sp_balance(&self, n:usize) -> u128 { 
+  //   if let Some(data) = self.sp[n].account() {
+  //     data.amount+data.locked
+  //   }
+  //   else { 0 }
+  //   //self.sp[n].amount()+self.sp[n].locked() 
+  // }
   
   pub fn show_sp_balance(&self, n:usize) { 
-      let total = self.sp_balance(n);
-      let staked =  view_u128(&self.sp[n],"get_total_staked_balance","{}");
-      println!("sp{} amount: {}, staked:{}+unstk:{}", n, total, staked, total - staked ); 
+      //let total = self.sp_balance(n);
+      //let data = self.sp[n].account().unwrap();
+      //println!("{}",&format!(r#"{{"account_id":"{}"}}"#,&METAPOOL_CONTRACT_ID));
+      let staked =  view_u128(&self.sp[n],"get_account_staked_balance",&format!(r#"{{"account_id":"{}"}}"#,METAPOOL_CONTRACT_ID));
+      //println!("sp{} get_account_staked_balance:{}, data.amount:{}+data.locked:{}", n, yton(staked));//, data.amount, data.locked ); 
+      println!("sp{} get_account_staked_balance:{}", n, yton(staked));//, data.amount, data.locked ); 
   }
 
   pub fn show_sps_balance(&self){
@@ -312,7 +347,7 @@ impl Simulation {
 
 }
 
-pub fn show_balance(ua:&UserAccount) { println!("@{} balance: staked:{} unstk:{}", ua.account_id(), ua.locked(),ua.amount() ); }
+pub fn show_balance(ua:&UserAccount) { println!("@{} balance: {}", ua.account_id(), balance(ua) ); }
 
 // #[test]
 // fn sim_bug() {
@@ -394,13 +429,14 @@ fn simtest() {
   let view_results = view!(metapool.get_contract_info());
   print_vec_u8("contract_info",&view_results.unwrap());
 
+  sim.show_sps_balance();
 
   //Example transfer to account
   // let transaction = master_account
   //   .create_transaction("sp1".to_string());  
     //["sp1",".", &metapool_contract.user_account.account_id()].concat());
   //let res = transaction.transfer(ntoy(1)).submit();
-  //print_helper(res);
+  //check_exec_result(res);
 
   //test sp1 exists
   //println!("sp0 owner {}",view_call(&sim.sp[0], "get_owner_id", "{}"));
@@ -428,8 +464,8 @@ fn simtest() {
   let alice = sim.testnet.create_user("alice".to_string(), ntoy(500_000));
   let alice_dep_and_stake = ntoy(100_000);
   let ads_res = call!(alice,metapool.deposit_and_stake(), alice_dep_and_stake, 50*TGAS);
-  //print_helper(&ads_res);
-  assert!(metapool.user_account.amount()>=alice_dep_and_stake);
+  //check_exec_result(&ads_res);
+  assert!(balance(&metapool.user_account)>=alice_dep_and_stake);
 
   //---- bob
   let bob = sim.testnet.create_user("bob".to_string(), ntoy(500_000));
@@ -452,16 +488,16 @@ fn simtest() {
     println!("----------------------------------");
     println!("------- small qty add-remove liq --");
     let r1=call!(bob,metapool.nslp_add_liquidity(), 30*NEAR, 50*TGAS );
-    print_helper(&r1);
+    check_exec_result(&r1);
     let bob_info_1 =sim.show_account_info(&bob.account_id());
     assert!(as_u128(&bob_info_1["nslp_shares"]) == 30*NEAR);
     let r2=call!(bob,metapool.nslp_remove_liquidity(U128::from(30*NEAR+9)), gas=100*TGAS);
-    print_helper(&r2);
+    check_exec_result(&r2);
     let bob_info_2 =sim.show_account_info(&bob.account_id());
     assert!(as_u128(&bob_info_2["nslp_shares"]) == 0);
     call!(bob,metapool.nslp_add_liquidity(), 30*NEAR, 50*TGAS );
     let r4=call!(bob,metapool.nslp_remove_liquidity(U128::from(30*NEAR + 1 - ONE_MILLI_NEAR)), gas=100*TGAS);
-    print_helper(&r4);
+    check_exec_result(&r4);
     let bob_info_4 =sim.show_account_info(&bob.account_id());
     assert!(as_u128(&bob_info_4["nslp_shares"]) == 0);
   }
@@ -473,21 +509,22 @@ fn simtest() {
   for n in 0..4 {
     println!("------- call #{} to distribute_staking",n);
     let distribute_result = call!(sim.operator, metapool.distribute_staking(), gas=125*TGAS );
-    //print_helper_profile(&distribute_result);
+    //check_exec_result_profile(&distribute_result);
     sim.show_sps_balance();
   }
   
   //check the staking was distributed according to weight
   let total_staked = alice_dep_and_stake + bob_dep_and_stake;
   for n in 0..sim.sp.len() {
-    let expected:u128 = SP_INITIAL_BALANCE + total_staked * weight_basis_points_vec[n] as u128 / 100;
-    assert!( &sim.sp_balance(n) == &expected,
-      "total_for_staking:{}, sp{} balance = {}, wbp:{}, !== expected:{}", alice_dep_and_stake, n, &sim.sp_balance(n), weight_basis_points_vec[n], expected);
+    let expected:u128 = total_staked * weight_basis_points_vec[n] as u128 / 100;
+    let staked = sim.sp_staked(n);
+    assert!( staked >= expected - 1 && staked <= expected + 1,
+      "total_for_staking:{}, sp{} balance = {}, wbp:{}, !== expected:{}", alice_dep_and_stake, n, &sim.sp_staked(n), weight_basis_points_vec[n], expected);
   }
 
   //test unstake
   // let unstake_result = view(&sim.sp[0],"unstake_all","{}",0,50*TGAS);
-  // print_helper_promise(&unstake_result);
+  // check_exec_result_promise(&unstake_result);
   // sim.show_sps_balance();
 
   //----------------------------------------------------------
@@ -498,7 +535,7 @@ fn simtest() {
   println!("------- alice unstakes --");
   let alice_unstaking = ntoy(6_000);
   let ads_res = call!(alice,metapool.unstake(alice_unstaking.into()), gas=50*TGAS);
-  print_helper(&ads_res);
+  check_exec_result(&ads_res);
 
   //----------------------------------------------------------
   sim.show_account_info(&alice.account_id());
@@ -510,7 +547,7 @@ fn simtest() {
   for n in 0..20 {
     println!("------- call #{} to distribute_unstaking",n);
     let distribute_result = call!(sim.operator, metapool.distribute_unstaking(), gas=125*TGAS );
-    print_helper_profile(&distribute_result);
+    check_exec_result(&distribute_result);
     sim.show_sps_balance();
     if &distribute_result.unwrap_json_value()==false { break };
   }
@@ -540,26 +577,32 @@ fn simtest() {
 
     if inx>=0 {
       println!("------- pool #{} requires retrieve",inx);
-      sim.show_sps_balance();
-      let retrieve_result_2 = call!(sim.operator, metapool.retrieve_funds_from_a_pool(inx as u16), gas=125*TGAS );
-      print_helper_promise(&retrieve_result_2);
+      println!("------- pool #{} sync unstaked",inx);
+      let retrieve_result_sync = call!(sim.operator, metapool.sync_unstaked_balance(inx as u16), gas=200*TGAS );
+      check_exec_result(&retrieve_result_sync);
+      println!("------- pool #{} retrieve unstaked",inx);
+      let retrieve_result_2 = call!(sim.operator, metapool.retrieve_funds_from_a_pool(inx as u16), gas=200*TGAS );
+      check_exec_result_promise(&retrieve_result_2);
     }
     else if inx==-3 { //no more funds unstaked
       break;
     }
 
-    //make a dummy txn to advance the epoch
-    call(&sim.owner, &get_epoch_acc,"set_i32",&format!(r#"{{"num":{}}}"#,inx).to_string(),0,10*TGAS);
+    for epoch in 1..4 {
+      //make a dummy txn to advance the epoch
+      call(&sim.owner, &get_epoch_acc,"set_i32",&format!(r#"{{"num":{}}}"#,inx).to_string(),0,10*TGAS);
+      println!("epoch {}",view(&get_epoch_acc,"get_epoch_height","{}"));
+    }
   }
 
   //----------------------------------------------------------
   {
     println!("----------------------------------");
     println!("------- alice calls withdraw_unstaked --");
-    let previous = alice.amount();
+    let previous = balance(&alice);
     let ads_res = call!(alice,metapool.withdraw_unstaked(), gas=50*TGAS);
-    print_helper(&ads_res);
-    assert!(alice.amount()==previous+alice_unstaking,"withdraw_unstaked failed {} {} {}",alice.amount(),previous,alice_unstaking);
+    check_exec_result(&ads_res);
+    assert_less_than_one_milli_near_diff_balance("withdraw_unstaked",balance(&alice),previous+alice_unstaking);
   }
 
 
@@ -577,7 +620,7 @@ fn simtest() {
     print_vec_u8("contract_params",&vr2.unwrap());
     
 
-    let previous = bob.amount();
+    let previous = balance(&bob);
     const TO_SELL:u128 = 20_000*NEAR;
     const MIN_REQUESTED:u128 = 19_300*NEAR; //7% discount
     
@@ -585,15 +628,15 @@ fn simtest() {
     print_vec_u8("metapool.nslp_get_discount_basis_points",&dbp.unwrap());
 
     let lu_res = call!(bob,metapool.liquid_unstake(U128::from(ntoy(20_000)),U128::from(MIN_REQUESTED)), 0, 100*TGAS);
-    print_helper(&lu_res);
+    check_exec_result(&lu_res);
     println!("liquid unstake result {}",&lu_res.unwrap_json_value());
 
     let bob_info = sim.show_account_info(&bob.account_id());
     let carol_info =sim.show_account_info(&carol.account_id());
     let nslp_info = sim.show_account_info(NSLP_INTERNAL_ACCOUNT);
 
-    assert!(as_u128(&bob_info["meta"]) == 50*E24);
-    assert!(as_u128(&carol_info["meta"]) == 700*E24);
+    assert_eq!(as_u128(&bob_info["meta"]), 250*E24);
+    assert_eq!(as_u128(&carol_info["meta"]), 1750*E24);
     
   }
 
@@ -601,12 +644,45 @@ fn simtest() {
   {
     println!("----------------------------------");
     const AMOUNT:u128 = 100_000*NEAR;
-    println!("------- carol removes liquidity");
+    println!("------- carol will remove liquidity");
+    println!("-- pre ");
+    let pre_balance = balance(&carol);
+    println!("pre balance {}", yton(pre_balance));
+    let carol_info_pre = sim.show_account_info(&carol.account_id());
+    println!("-- nslp_remove_liquidity");
     let res = call!(carol,metapool.nslp_remove_liquidity(U128::from(AMOUNT)), gas=100*TGAS);
-    print_helper(&res);
-    let carol_info =sim.show_account_info(&carol.account_id());
-    assert!(as_u128(&carol_info["total"]) == AMOUNT);
+    check_exec_result(&res);
+    //let res_json = serde_json::from_str(std::str::from_utf8(&res.unwrap()).unwrap()).unwrap();
+    let res_json = res.unwrap_json_value();
+    println!("-- result: {:?}",res_json);
+    println!("-- after ");
+    let carol_info = sim.show_account_info(&carol.account_id());
+    let new_balance = balance(&carol);
+    println!("new balance {}", yton(new_balance));
+    let stnear = as_u128(&carol_info["stnear"]);
+    println!("stnear {}", yton(stnear));
+    assert_less_than_one_milli_near_diff_balance("rem.liq", new_balance + stnear - pre_balance,  AMOUNT);
   }
 
 
+}
+
+pub fn assert_less_than_one_milli_near_diff_balance(action:&str, bal:u128, expected:u128) -> bool {
+  if bal==expected {return true};
+  if bal>expected {
+    panic!("{} failed MORE THAN EXPECTED diff:{} bal:{} expected:{}", 
+          action,yton(bal-expected), yton(bal), yton(expected));
+  }
+  let differ = expected-bal;
+  if differ<ONE_MILLI_NEAR {return true};
+  panic!("{} failed LESS THAN EXPECTED by more than 0.001 diff:{} bal:{} expected:{}", 
+        action,yton(differ), yton(bal), yton(expected));
+}
+
+pub fn balance(acc:&UserAccount) -> u128 { 
+  if let Some(data) = acc.account() {
+    data.amount+data.locked
+  }
+  else { 0 }
+  //self.sp[n].amount()+self.sp[n].locked() 
 }

@@ -3,7 +3,7 @@
 //
 
 use crate::*;
-use near_sdk::{near_bindgen, PromiseResult};
+use near_sdk::{near_bindgen, PromiseResult, log};
 use near_sdk::serde::{Deserialize, Serialize};
 
 pub use crate::types::*;
@@ -113,6 +113,8 @@ impl MetaPool {
     pub fn after_ft_on_transfer(&mut self, sender_id:AccountId, receiver_id: AccountId, amount: U128String) -> U128String {
 
         assert_callback_calling();
+        
+        self.contract_busy = false;
 
         let amount_transferred = amount.into();
 
@@ -150,6 +152,9 @@ impl MetaPool {
     /// * if receiver_id is not a contract or `on_multifuntok_transfer` fails, the transfer is rolled-back
     pub fn transfer_to_contract(&mut self, contract_id: AccountId, symbol:String, amount: U128String, memo:String){
 
+        self.assert_not_busy();
+        self.contract_busy = true;
+
         self.internal_multifuntok_transfer(&env::predecessor_account_id(), &contract_id, &symbol, amount.0);
 
         ext_multifuntok_receiver::on_multifuntok_transfer(
@@ -160,7 +165,7 @@ impl MetaPool {
             //promise params:
             &contract_id, //contract
             0, //attached native NEAR amount
-            100_000_000_000_000, //100TGAS
+            100*TGAS,
         )
         .then(ext_self_callback::after_multifuntok_transfer(
             env::predecessor_account_id(),
@@ -170,7 +175,7 @@ impl MetaPool {
             //promise params:
             &env::current_account_id(),//contract
             0, //attached native NEAR amount
-            30_000_000_000_000, //30TGAS
+            30*TGAS, //30TGAS
         ));
 
     }
@@ -182,6 +187,8 @@ impl MetaPool {
     pub fn after_multifuntok_transfer(&mut self, sender_id:AccountId, contract_id: AccountId, symbol:String, amount: U128String){
 
         assert_callback_calling();
+
+        self.contract_busy = false;
 
         if !is_promise_success() {
             //undo transfer

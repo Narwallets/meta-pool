@@ -1,5 +1,5 @@
 use crate::*;
-use near_sdk::{Balance, Promise};
+use near_sdk::{Balance, Promise, log};
 
 pub use crate::types::*;
 pub use crate::utils::*;
@@ -22,8 +22,8 @@ impl MetaPool {
         );
     }
 
-    pub fn assert_not_paused(&self) {
-        assert!(!self.staking_paused, "Contract is paused. Try again later");
+    pub fn assert_not_busy(&self) {
+        assert!(!self.contract_busy, "Contract is busy. Try again later");
     }
 
 }
@@ -77,10 +77,10 @@ impl MetaPool {
         let mut account = self.internal_get_account(&account_id);
 
         if must_use_unstaked && account.unstaked>0 { //MIMIC staking-pool, if there is some unstaked, it must be free to withdraw
-            account.in_memory_try_finish_unstaking(self);
+            account.in_memory_try_finish_unstaking(&account_id, self);
         }
 
-        let amount = account.in_memory_withdraw(amount_requested, self);
+        let amount = account.take_from_available(amount_requested, self);
 
         //commented: Remove min_account_balance requirements, increase liq-pool target to  cover all storage requirements
         //2 reasons: a) NEAR storage was cut by 10  b) in the simplified flow, users do not keep "available" balance
@@ -105,7 +105,7 @@ impl MetaPool {
     /// actual stake ins staking-pool is made by the meta-pool-heartbeat before the end of the epoch
     pub(crate) fn internal_stake(&mut self, amount_requested: Balance) {
 
-        self.assert_not_paused();
+        self.assert_not_busy();
 
         assert_min_amount(amount_requested);
 
@@ -113,7 +113,7 @@ impl MetaPool {
         let mut acc = self.internal_get_account(&account_id);
 
         //take from the account "available" balance
-        let amount = acc.in_memory_withdraw(amount_requested, self);
+        let amount = acc.take_from_available(amount_requested, self);
 
         //use this operation to realize meta pending rewards
         acc.stake_realize_meta(self);
@@ -127,9 +127,13 @@ impl MetaPool {
         //contract totals
         self.total_stake_shares += num_shares;
         self.total_for_staking += amount;
+        self.epoch_stake_orders += amount;
 
         //--SAVE ACCOUNT--
         self.internal_update_account(&account_id, &acc);
+
+        //log event 
+        event!(r#"{{"event":"STAKE","account":"{}","amount":"{}"}}"#, account_id, amount);
 
         //----------
         //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
@@ -140,7 +144,7 @@ impl MetaPool {
     //------------------------------
     pub(crate) fn internal_unstake(&mut self, amount_requested: u128) {
 
-        self.assert_not_paused();
+        self.assert_not_busy();
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
@@ -168,42 +172,38 @@ impl MetaPool {
         //use this operation to realize meta pending rewards
         acc.stake_realize_meta(self);
 
-        //burn stake shares
+        //burn acc stake shares
         acc.sub_stake_shares(stake_shares_to_burn, amount_to_unstake);
-        //the amount is now "unstaked"
+        //the amount is now "unstaked", i.e. the user has a claim to this amount, 4-8 epochs form now
         acc.unstaked += amount_to_unstake;
         acc.unstaked_requested_unlock_epoch = env::epoch_height() + self.internal_compute_current_unstaking_delay(amount_to_unstake); //when the unstake will be available
         //--contract totals
+        self.epoch_unstake_orders += amount_to_unstake;
         self.total_stake_shares -= stake_shares_to_burn;
         self.total_for_staking -= amount_to_unstake;
 
         //--SAVE ACCOUNT--
         self.internal_update_account(&account_id, &acc);
 
+        event!(r#"{{"event":"D-UNSTK","account_id":"{}","amount":"{}","shares":"{}"}}"#, account_id, amount_to_unstake, stake_shares_to_burn);
+
         log!(
                 "@{} unstaked {}. Has now {} unstaked and {} stNEAR. Epoch:{}",
                 account_id, amount_to_unstake, acc.unstaked, self.amount_from_stake_shares(acc.stake_shares), env::epoch_height()
         );
-        // env::log(
-        //     format!(
-        //         "Contract total staked balance is {}. Total number of shares {}",
-        //         self.total_staked_balance, self.total_stake_shares
-        //     )
-        //     .as_bytes(),
-        // );
     }
 
     //--------------------------------------------------
     /// adds liquidity from deposited amount
     pub(crate) fn internal_nslp_add_liquidity(&mut self, amount_requested: u128) -> u16 {
 
-        self.assert_not_paused();
+        self.assert_not_busy();
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
         //take from the account "available" balance
-        let amount = acc.in_memory_withdraw(amount_requested, self);
+        let amount = acc.take_from_available(amount_requested, self);
 
         //get NSLP account
         let mut nslp_account = self.internal_get_nslp_account();
@@ -231,6 +231,8 @@ impl MetaPool {
         //--SAVE ACCOUNTS
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
+
+        event!(r#"{{"event":"ADD.L","account_id":"{}","amount":"{}"}}"#, account_id, amount);
 
         return result_bp;
     }
@@ -324,6 +326,9 @@ impl MetaPool {
                 };
             //nslp sells-stnear directly, contract now needs to stake less
             log!("NSLP clearing {} {}",shares_to_liquidate, amount_to_liquidate);
+            //log event 
+            event!(r#"{{"event":"NSLP.clr","shares":"{}","amount":"{}"}}"#, shares_to_liquidate, amount_to_liquidate);
+
             nslp_account.sub_stake_shares(shares_to_liquidate, amount_to_liquidate);
             self.total_stake_shares -= shares_to_liquidate;
             self.total_for_staking -= amount_to_liquidate; //nslp has burned shares, total_for_staking is less now

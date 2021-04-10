@@ -2,7 +2,7 @@ use near_sdk::{env, PromiseResult};
 pub use crate::types::*;
 
 #[macro_export]
-macro_rules! log {
+macro_rules! event {
     ($($arg:tt)*) => ({
         env::log(format!($($arg)*).as_bytes());
     });
