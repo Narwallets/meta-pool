@@ -19,7 +19,13 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 - Deposit, withdraw
 - Distributed stake/unstake
 - NEAR/stNEAR liquidity pool, Add/Remove liquidity
-- META Minting wtih rewards
+- META Minting with rewards
+
+#### `1.0.0`
+
+- Full functionality
+- Simplified user flow 
+- Desk check testing https://github.com/Narwallets/sc-desk-check-parser
 
 ### TO DO & Help needed
 
@@ -34,9 +40,9 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
  - [x] retrieve unstaked and ready
  - [x] NEAR/stNEAR Liquidity Pool, Add/Remove liquidity
  - [x] clearing mechanism on stake to restore liquidity in the NSLP
- - [ ] act as a NEP-xxx MULTI-FUN-TOK (multi-token contract). Implement for NEAR, stNEAR and META
+ - [x] act as a NEP-xxx MULTI-FUN-TOK (multi-token contract). Implement for NEAR, stNEAR and META
  - [ ] Dividends-pool stNEAR/META
- - [ ] Staking-loans to whitelisted validators
+ - [x] Staking-loans to whitelisted validators
  - [ ] Emergency Staking (from the nslp) to whitelisted validators
 
 #### Test
@@ -53,11 +59,10 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
  - [ ] Phase II - Governing DAO
 
 #### Infrastructure
-- [ ] External chron to call distribute()
-- [ ] compute remainig epoch time
-- [ ] withelist pools before adding them
-- [ ] auto-unstake stNEAR in the NSLP (when the clearing mechanism is not enough)
+- [x] External cron to call distribute()
+- [x] compute remaining epoch time
+- [x] whitelist pools before adding them
 
 #### Expansions
 
-- [ ] USDN: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & stNEAR as collateral
+- [x] USDNEAR MVP: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & stNEAR as collateral
