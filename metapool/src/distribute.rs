@@ -44,10 +44,9 @@ impl MetaPool {
         }
         // find pool
         let (sp_inx, mut amount_to_stake) = self.get_staking_pool_requiring_stake(total_amount_to_stake);
-        log!("{} {} {}",total_amount_to_stake,sp_inx, amount_to_stake);
+        log!("total_amount_to_stake:{} get_staking_pool_requiring_stake=>{},{}",total_amount_to_stake,sp_inx, amount_to_stake);
         if amount_to_stake > 0 {
             //most unbalanced pool found & available
-            //launch async stake or deposit_and_stake on that pool
 
             self.contract_busy=true;
             let sp = &mut self.staking_pools[sp_inx];
@@ -63,7 +62,8 @@ impl MetaPool {
                     //re-stake the unstaked
                     amount_to_stake = sp.unstaked;
                 }
-                //launch async stake to re-stake in the pool
+
+                //schedule async stake to re-stake in the pool
                 ext_staking_pool::stake(
                     amount_to_stake.into(),
                     &sp.account_id,
@@ -79,34 +79,37 @@ impl MetaPool {
                     gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
                 ));
 
-                return true; //some work scheduled
             }
 
-            //here the sp has no sizable unstaked balance, we must deposit_and_stake on the sp
-            //launch async deposit_and_stake on the pool
-            assert!(
-                env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,
-                "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_stake"
-            );
+            else {
 
-            self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
-            ext_staking_pool::deposit_and_stake(
-                &sp.account_id,
-                amount_to_stake.into(), //attached amount
-                gas::staking_pool::DEPOSIT_AND_STAKE,
-            )
-            .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
-                sp_inx,
-                amount_to_stake,
-                true,
-                &env::current_account_id(),
-                NO_DEPOSIT,
-                gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
-            ));
+              //here the sp has no sizable unstaked balance, we must deposit_and_stake on the sp from our balance
+              assert!( env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,"env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_stake");
+
+              //schedule async stake or deposit_and_stake on that pool
+              ext_staking_pool::deposit_and_stake(
+                  &sp.account_id,
+                  amount_to_stake.into(), //attached amount
+                  gas::staking_pool::DEPOSIT_AND_STAKE,
+              )
+              .then(ext_self_owner::on_staking_pool_stake_maybe_deposit(
+                  sp_inx,
+                  amount_to_stake,
+                  true,
+                  &env::current_account_id(),
+                  NO_DEPOSIT,
+                  gas::owner_callbacks::ON_STAKING_POOL_DEPOSIT_AND_STAKE,
+              ));
+            }
 
         }
 
-        return true; //more work needed
+        //Here we did some staking (the promises are scheduled for exec after this fn completes)
+        self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
+        assert!(self.epoch_stake_orders>=amount_to_stake,"ISO");
+        self.epoch_stake_orders-=amount_to_stake; //preventively reduce stake orders 
+        //did some staking (promises scheduled), call again
+        return true 
 
     }
 
@@ -157,6 +160,7 @@ impl MetaPool {
             //STAKE FAILED
             result = "has failed";
             self.total_actually_staked -= amount; //undo preventive action considering the amount staked
+            self.epoch_stake_orders += amount; //undo preventively reduce stake orders 
         }
         log!("Staking of {} at @{} {}", amount, sp.account_id, result);
         return stake_succeeded;
@@ -202,7 +206,10 @@ impl MetaPool {
             sp.busy_lock = true;
 
             //preventively consider the amount un-staked (undoes if promise fails)
+            assert!(self.total_actually_staked >= amount_to_unstake && self.epoch_unstake_orders >= amount_to_unstake,"IUN");
             self.total_actually_staked -= amount_to_unstake; 
+            self.epoch_unstake_orders -= amount_to_unstake; 
+
             //launch async to un-stake from the pool
             ext_staking_pool::unstake(
                 amount_to_unstake.into(),
@@ -218,15 +225,19 @@ impl MetaPool {
                 gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
             ));
 
+            return true; //needs to be called again
+
+        }
+        else {
+            return false;
         }
 
-        return true; //needs to be called again
     }
 
     /// The prev fn continues here
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
-    pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool {
+    pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) {
 
         assert_callback_calling();
 
@@ -248,10 +259,11 @@ impl MetaPool {
         } else {
             result = "has failed";
             self.total_actually_staked += amount; //undo preventive action considering the amount unstaked
+            self.epoch_unstake_orders += amount; //undo preventive action considering the amount unstaked
         }
 
         log!("Unstaking of {} at @{} {}", amount, sp.account_id, result);
-        return unstake_succeeded;
+
     }
     
     //utility to set busy flag manually by operator.
@@ -699,14 +711,15 @@ impl MetaPool {
     //----------------------------------------------------------------------
     // End of Epoch clearing of STAKE_ORDERS vs UNSTAKE_ORDERS
     //----------------------------------------------------------------------
-    // only the delta between stake & unstake orders needs to be actually staked
-    // if there was more in the stake orders than in the unstake orders, there's some NEAR that's not sent to the pools
-    // e.g. stake-orders: 1200, unstake-orders:1000 => net: stake 200, and kept 1000 to fulfill unstake claims after 4 epochs
+    // At the end of the epoch, only the delta between stake & unstake orders needs to be actually staked
+    // if there are more in the stake orders than the unstake orders, some NEAR will not be sent to the pools
+    // e.g. stake-orders: 1200, unstake-orders:1000 => net: stake 200 and keep 1000 to fulfill unstake claims after 4 epochs.
     // if there was more in the unstake orders than in the stake orders, a real unstake was initiated with one or more pools, 
-    // the rest should also be kept to fulfill unstake claims after 4 epochs
-    // e.g. stake-orders: 700, unstake-orders:1000 => net: start-unstake 300, and kept 700 to fulfill unstake claims after 4 epochs
+    // the rest should also be kept to fulfill unstake claims after 4 epochs.
+    // e.g. stake-orders: 700, unstake-orders:1000 => net: start-unstake 300 and keep 700 to fulfill unstake claims after 4 epochs
     // if the delta is 0, there's no real stake-unstake, but the amount should be kept to fulfill unstake claims after 4 epochs
-    // 
+    // e.g. stake-orders: 500, unstake-orders:500 => net: 0 so keep 500 to fulfill unstake claims after 4 epochs.
+    //
     pub fn end_of_epoch_clearing(&mut self)  {
 
         self.assert_not_busy();

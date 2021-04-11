@@ -179,6 +179,7 @@ impl MetaPool {
         acc.unstaked_requested_unlock_epoch = env::epoch_height() + self.internal_compute_current_unstaking_delay(amount_to_unstake); //when the unstake will be available
         //--contract totals
         self.epoch_unstake_orders += amount_to_unstake;
+        self.total_unstake_claims += amount_to_unstake;
         self.total_stake_shares -= stake_shares_to_burn;
         self.total_for_staking -= amount_to_unstake;
 
@@ -444,7 +445,8 @@ impl MetaPool {
         }
 
         if selected_to_stake_amount>0 {
-            //to avoid moving small amounts, if the remainder is less than 1K increase amount to include all in this movement
+            //to avoid moving small amounts, if the remainder is less than MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT 
+            // **increase** amount to include all in this movement
             if selected_to_stake_amount > total_to_stake { selected_to_stake_amount = total_to_stake };
             let remainder = total_to_stake - selected_to_stake_amount;
             if remainder <= MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT { 

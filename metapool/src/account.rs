@@ -162,6 +162,8 @@ impl Account {
         assert!(main.reserve_for_unstake_claims >= amount, "Funds are not yet available due to unstaking delay. Epoch:{}",env::epoch_height());
         // in the contract, move from reserve_for_unstaked_claims to total_available
         main.reserve_for_unstake_claims -= amount;
+        assert!(main.total_unstake_claims>=amount,"ITUC");
+        main.total_unstake_claims -= amount;
         main.total_available += amount;
 
         event!(r#"{{"event":"D-WITHD","account_id":"{}","amount":"{}"}}"#, account_id, amount);

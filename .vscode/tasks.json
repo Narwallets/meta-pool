@@ -28,7 +28,7 @@
 		{
 			"type": "shell",
 			"label": "simulation test",
-			"command": "clear && cd metapool && cargo +nightly test -- --nocapture",
+			"command": "clear && cd metapool && bash test.sh",
 			"problemMatcher": [
 				"$rustc"
 			],

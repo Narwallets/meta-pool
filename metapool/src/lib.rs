@@ -203,7 +203,7 @@ pub struct MetaPool {
     /// This amount decrements at unstake-withdraw, sending the NEAR to the user
     /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
     pub reserve_for_unstake_claims: u128,
-    // control: reserve_for_unstaked_claims must be == sum(acc.unstake)+sum(sp.unstaked)
+    // control: reserve_for_unstake_claims must be == sum(acc.unstake)+sum(sp.unstaked)
 
     /// This value is equivalent to sum(accounts.available)
     /// This amount increments with user's deposits_into_available and decrements when users stake_from_available
@@ -300,7 +300,7 @@ pub struct MetaPool {
 //-----------------------------
 //contract main state migration
 //-----------------------------
-/*
+
 mod migrations;
 #[near_bindgen]
 impl MetaPool {
@@ -320,12 +320,12 @@ impl MetaPool {
             contract_busy:false ,
             staking_paused: old.staking_paused,
             contract_account_balance: old.contract_account_balance,
-            reserve_for_unstaked_claims: 0,
+            reserve_for_unstake_claims: 0,
             total_available: old.total_available,
 
             //-- ORDERS
             epoch_stake_orders: 0,
-            epoch_d_unstake_orders: 0,
+            epoch_unstake_orders: 0,
             epoch_last_clearing:0,
 
             total_for_staking: old.total_for_staking,
@@ -334,7 +334,7 @@ impl MetaPool {
             total_meta: old.total_meta,
             total_unstaked_and_waiting: old.total_unstaked_and_waiting,
 
-            total_unstaked_claims: 0,
+            total_unstake_claims: 0,
 
             accumulated_staked_rewards: old.accumulated_staked_rewards,
 
@@ -365,7 +365,7 @@ impl MetaPool {
         }
     }
 }
-*/
+
 
 #[near_bindgen]
 impl MetaPool {
@@ -958,11 +958,10 @@ mod tests {
 
     use near_sdk::{testing_env, MockedBlockchain,  VMContext}; //PromiseResult,
 
-    use test_utils::*;
+    mod unit_test_utils;
+    use unit_test_utils::*;
 
     use super::*;
-
-    mod test_utils;
 
     //pub type AccountId = String;
 
@@ -989,6 +988,7 @@ mod tests {
         return (context, contract);
     }
 
+    /*
     #[test]
     fn test_internal_fee_curve() {
         let (_context, contract) = contract_only_setup();
@@ -1012,8 +1012,9 @@ mod tests {
         //assert!(false);
 
     }
+    */
 
-/*    #[test]
+    #[test]
     fn test_internal_get_near_amount_sell_stnear() {
         let (_context, contract) = contract_only_setup();
         let lp_balance_y: u128 = ntoy(500_000);
@@ -1030,7 +1031,7 @@ mod tests {
         assert!(discounted_y == apply_pct(discount_bp, sell_stnear_y));
         assert!(near_amount_y == sell_stnear_y - discounted_y);
     }
-*/
+
 
 
     // #[test]

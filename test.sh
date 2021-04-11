@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
 
-cargo build
-cargo test -- --nocapture
+cargo +nightly build
+cargo +nightly test -- --nocapture
+

@@ -41,6 +41,7 @@ pub fn operator_account() -> AccountId {
 pub fn ntoy(near_amount: u128) -> u128 {
     return near_amount * 10u128.pow(24)
 }
+
 pub fn yton(yoctos_amount: u128) -> f64 {
     return yoctos_amount as f64 / 10u128.pow(24) as f64
 }

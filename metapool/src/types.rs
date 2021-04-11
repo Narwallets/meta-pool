@@ -18,7 +18,7 @@ pub const FIVE_NEAR: u128 = 5 * NEAR;
 pub const TEN_NEAR: u128 = 10 * NEAR;
 pub const K_NEAR: u128 = 1_000 * NEAR;
 
-pub const MIN_MOVEMENT : u128 = 20*NEAR_CENT; //if there's less than 0.20 NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
+pub const MIN_MOVEMENT : u128 = ONE_NEAR; //if there's less than 0.20 NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
 
 pub const TGAS: u64 = 1_000_000_000_000;
 
@@ -176,10 +176,9 @@ pub struct GetContractStateResult {
     /// It should match env::balance()
     pub contract_account_balance: U128,
 
-    /// This amount increments with deposits and decrements when users stake
-    /// increments with complete_unstake and decrements with user withdrawals from the contract
-    /// withdrawals from the pools can include rewards
-    /// since staking is delayed and in batches it only eventually matches env::balance()
+    /// This amount increments with deposits and decrements when actual stake is performed
+    /// increments with retrieve_funds and decrements with user withdrawals from the contract
+    /// with the new simplified user flow, the only accounts with available should be NSLP and treasury
     pub total_available: U128,
 
     /// The total amount of tokens selected for staking by the users 
@@ -191,20 +190,30 @@ pub struct GetContractStateResult {
     /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets unstaked in 100kN batches
     pub total_actually_staked: U128,
 
+    pub epoch_stake_orders: U128,
+    pub epoch_unstake_orders: U128,
+    pub total_unstaked_and_waiting: U128,
+
     // how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
     pub total_stake_shares: U128,
 
-    /// The total amount of tokens actually unstaked (the tokens are in the staking pools)
-    /// During distribute(), If !staking_paused && total_for_unstaking<total_actually_unstaked, then the difference gets unstaked in 100kN batches
+    /// sum(accounts.unstake). Every time a user delayed-unstakes, this amount is incremented
+    /// when the funds are withdrawn the amount is decremented.
+    /// Control: total_unstaked_claims == reserve_for_unstaked_claims + total_unstaked_and_waiting
     pub total_unstake_claims: U128,
 
-    /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// During distribute(), If sp.pending_withdrawal && sp.epoch_for_withdraw == env::epoch_height then all funds are retrieved from the sp
-    /// When the funds are actually withdraw by the users, total_actually_unstaked is decremented
-    pub reserve_for_unstaked_claims: U128,
+    /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
+    /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
+    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now. 
+    /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
+    /// This amount also increments at retrieve_from_staking_pool
+    /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
+    /// This amount decrements at unstake-withdraw, sending the NEAR to the user
+    /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
+    pub reserve_for_unstake_claims: U128,
 
     /// total meta minted
     pub total_meta: U128, 
