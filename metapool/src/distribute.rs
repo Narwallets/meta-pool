@@ -275,24 +275,7 @@ impl MetaPool {
         self.contract_busy=value;
     }
 
-    //--FIXES
-    //utility to rebuild stake information if it goes out-of-sync
-    pub fn rebuild_stake_from_pool_information(&mut self, sp_inx: u16, staked:U128String, unstaked:U128String) {
-        
-        self.assert_operator_or_owner();
-
-        let inx = sp_inx as usize;
-        assert!(inx < self.staking_pools.len());
-
-        let sp = &mut self.staking_pools[inx];
-        assert!(!sp.busy_lock, "sp is busy");
-
-        sp.staked = staked.0;
-        sp.unstaked = unstaked.0;
-
-    }
-
-    //-- If extra balance has accumulated (30% of tx fees by near-protocol)
+    //-- check If extra balance has accumulated (30% of tx fees by near-protocol)
     pub fn extra_balance_accumulated(&self) -> U128String {
         return env::account_balance().saturating_sub(self.contract_account_balance).into();
     }
@@ -301,82 +284,13 @@ impl MetaPool {
     // transfer to self.operator_account_id
     pub fn transfer_extra_balance_accumulated(&mut self) -> U128String {
         let extra_balance  = self.extra_balance_accumulated().0;
-        if extra_balance >= 2*NEAR {
-            //only if there's more than 2 near, and left 10 cents (consider this fn & transfer fee)
+        if extra_balance >= ONE_NEAR {
+            //only if there's more than one near, and left 10 cents (consider transfer fees)
             Promise::new(self.operator_account_id.clone()).transfer(extra_balance-10*NEAR_CENT);
             return extra_balance.into();
         }
         return 0.into();
     }
-    
-    //--FIXES
-    //utility to rebuild stake information if it goes out-of-sync
-    pub fn rebuild_contract_staked(&mut self, total_actually_staked:U128String, total_unstaked_and_waiting:U128String) {
-        self.assert_operator_or_owner();
-        self.total_actually_staked = total_actually_staked.0;
-        self.total_unstaked_and_waiting = total_unstaked_and_waiting.0;
-    }
-
-    //--FIXES
-    //utility to rebuild stake information if it goes out-of-sync
-    pub fn rebuild_contract_available(&mut self, total_available:U128String, total_unstake_claims: U128String, reserve_for_unstake_claims:U128String ) {
-        self.assert_operator_or_owner();
-        self.total_available = total_available.0;
-        self.total_unstake_claims = total_unstake_claims.0;
-        self.reserve_for_unstake_claims = reserve_for_unstake_claims.0;
-    }
-
-    //--FIXES
-    //utility to rebuild information if it goes out-of-sync
-    pub fn set_contract_account_balance(&mut self, contract_account_balance:U128String ) {
-        self.assert_operator_or_owner();
-        self.contract_account_balance = contract_account_balance.0;
-    }
-
-    //--FIXES
-    //utility to rebuild information if it goes out-of-sync
-    pub fn fix_epoch_stake_orders(&mut self ) {
-        self.assert_operator_or_owner();
-        assert!(self.epoch_stake_orders>19984*NEAR/10000 && self.epoch_stake_orders<19985*NEAR/10000,"{}",self.epoch_stake_orders);
-        self.epoch_stake_orders = 0;
-    }
-
-    //--FIXES
-    // in the simplified user flow, there's no more "available". All is staked or withdrew
-    // for old accounts, stake the available
-    //------------------------------
-    pub fn stake_available(&mut self, account_id: AccountId) {
-
-        self.assert_operator_or_owner();
-
-        let mut acc = self.internal_get_account(&account_id);
-
-        //take from the account "available" balance
-        let amount = acc.take_from_available(acc.available, self);
-        assert_min_amount(amount);
-
-        //use this operation to realize meta pending rewards
-        acc.stake_realize_meta(self);
-    
-        // Calculate the number of "stake" shares that the account will receive for staking the given amount.
-        let num_shares = self.stake_shares_from_amount(amount);
-        assert!(num_shares > 0);
-
-        //add shares to user account
-        acc.add_stake_shares(num_shares, amount);
-        //contract totals
-        self.total_stake_shares += num_shares;
-        self.total_for_staking += amount;
-
-        //--SAVE ACCOUNT--
-        self.internal_update_account(&account_id, &acc);
-
-        //----------
-        //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
-        self.nslp_try_internal_clearing();
-
-    }
-
 
     //-------------------------
     /// sync_unstaked_balance: called before `retrieve_funds_from_a_pool`

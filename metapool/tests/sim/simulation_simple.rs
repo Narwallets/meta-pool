@@ -290,7 +290,7 @@ fn simtest_simple() {
         metapool.retrieve_funds_from_a_pool(inx as u16),
         gas = 200 * TGAS
       );
-      check_exec_result_promise(&retrieve_result_2);
+      check_exec_result(&retrieve_result_2);
     } else if inx == -3 {
       //no more funds unstaked
       break;

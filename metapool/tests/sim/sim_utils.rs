@@ -72,7 +72,12 @@ pub fn check_exec_result_single(res: &ExecutionResult) {
 }
 
 pub fn check_exec_result(res: &ExecutionResult) {
-    print_exec_result(res);
+    check_exec_result_single(res);
+    for pr in &res.promise_results() {
+        if let Some(some_pr) = pr {
+            check_exec_result_single(&some_pr);
+        }
+    }
     assert!(res.is_ok());
 }
 
