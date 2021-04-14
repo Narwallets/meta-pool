@@ -30,7 +30,6 @@ pub mod account;
 pub mod internal;
 pub mod distribute;
 pub mod owner;
-pub mod multi_fun_token;
 
 pub mod reward_meter;
 pub use reward_meter::*;
