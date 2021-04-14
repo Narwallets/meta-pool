@@ -11,7 +11,7 @@ const CONTRACT_VERSION: &str = "0.1.0";
 const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
-use near_sdk::{env, ext_contract, near_bindgen, PanicOnDefault, AccountId, Promise};
+use near_sdk::{env, ext_contract, near_bindgen, PanicOnDefault, AccountId, Promise, log};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::collections::{UnorderedMap,LookupMap};
@@ -462,12 +462,20 @@ impl MetaPool {
         //self.internal_deposit();
     }
 
-    /// Withdraws from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool .- core-contracts/staking-pool only has "unstaked" to withdraw from
+    /// Withdraws from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool* .- core-contracts/staking-pool only has "unstaked" to withdraw from
     pub fn withdraw(&mut self, amount: U128String) -> Promise {
         self.internal_withdraw_use_unstaked(amount.0)
     }
     /// Withdraws ALL from from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool .- core-contracts/staking-pool only has "unstaked" to withdraw from
     pub fn withdraw_all(&mut self) -> Promise {
+        let account = self.internal_get_account(&env::predecessor_account_id());
+        self.internal_withdraw_use_unstaked(account.unstaked)
+    }
+
+    /// user method - simplified flow
+    /// completes delayed-unstake action by transferring from retrieved_from_the_pools to user's NEAR account
+    /// equivalent to core-contracts/staking-pool.withdraw_all
+    pub fn withdraw_unstaked(&mut self) -> Promise {
         let account = self.internal_get_account(&env::predecessor_account_id());
         self.internal_withdraw_use_unstaked(account.unstaked)
     }
@@ -616,20 +624,6 @@ impl MetaPool {
         return (from_index..std::cmp::min(from_index + limit, keys.len()))
             .map(|index| self.get_account_info(keys.get(index).unwrap()))
             .collect();
-    }
-
-    /// user method - simplified flow
-    /// completes delayed-unstake action by transferring from retrieved_from_the_pools to user's NEAR account
-    pub fn withdraw_unstaked(&mut self) -> Promise {
-        let account_id = env::predecessor_account_id();
-        let mut account = self.internal_get_account(&account_id);
-        let acquired = account.in_memory_try_finish_unstaking(&account_id,self);
-        let amount = account.take_from_available(acquired, self);
-        //update user account in storage
-        self.internal_update_account(&account_id, &account);
-        //transfer to user
-        //log!("@{} withdrew {} from unstaked",account_id, acquired);
-        return self.native_transfer_to_predecessor(amount);
     }
 
      /* DEPRECATED in favor of the simplified flow
@@ -801,13 +795,8 @@ impl MetaPool {
         //Save user account
         self.internal_update_account(&account_id, &user_account);
 
-        env::log(
-            format!(
-                "@{} liquid-unstaked {} stNEAR, got {} NEAR and {} $META",
-                &account_id, to_sell, transfer_amount, meta_to_seller
-            )
-            .as_bytes(),
-        );
+        log!("@{} liquid-unstaked {} stNEAR, got {} NEAR and {} $META",&account_id, to_sell, transfer_amount, meta_to_seller);
+        event!(r#"{{"event":"LIQ.U","account_id":"{}","stnear":"{}","near":"{}"}}"#, &account_id, to_sell, transfer_amount);
 
         return LiquidUnstakeResult {
             near: transfer_amount.into(),

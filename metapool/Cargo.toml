@@ -24,6 +24,10 @@ quickcheck = "0.9"
 quickcheck_macros = "0.9"
 log = "0.4"
 env_logger = { version = "0.7.1", default-features = false }
+
+rand = "0.8"
+rand_pcg = "0.3"
+
 # near-crypto = { git = "https://github.com/nearprotocol/nearcore.git" }
 # near-primitives = { git = "https://github.com/nearprotocol/nearcore.git" }
 

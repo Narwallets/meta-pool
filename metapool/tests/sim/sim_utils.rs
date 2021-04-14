@@ -15,6 +15,51 @@ use near_sdk_sim::{
 use metapool::*;
 
 /// Helper to log ExecutionResult outcome of a call/view
+pub fn print_exec_result_single(res: &ExecutionResult) {
+
+    let is_ok = res.is_ok();
+
+    for line in &res.outcome().logs {
+        if !is_ok && line.starts_with("{\"") {
+            //add a prefix to event lines if the transaction failed
+            println!("(failed) {:?}", line);
+        }
+        else {
+            println!("{:?}", line);
+        }
+    }
+    if !is_ok {
+        println!("{:?}", res);
+    }
+}
+/// Helper to log ExecutionResult outcome of a call/view
+pub fn print_exec_result_promise(inx:u64, res: &ExecutionResult) {
+    if res.outcome().logs.len() == 0 || res.is_ok() { return }
+    println!("--promise #{}", inx);
+    print_exec_result_single(&res);
+}
+
+pub fn print_exec_result(res: &ExecutionResult) {
+    print_exec_result_single(&res);
+    let mut inx = 0;
+    for pr in &res.promise_results() {
+        if let Some(some_pr) = pr {
+            print_exec_result_promise(inx, &some_pr);
+            inx += 1;
+        }
+    }
+}
+
+pub fn print_logs(res: &ExecutionResult) {
+    for item in &res.promise_results() {
+        if let Some(some_res) = item {
+            for line in &some_res.outcome().logs {
+                println!("{:?}", line);
+            }
+        }
+    }
+}
+
 pub fn check_exec_result_single(res: &ExecutionResult) {
     //println!("Result: {:#?}", res);
     for line in &res.outcome().logs {
@@ -27,19 +72,7 @@ pub fn check_exec_result_single(res: &ExecutionResult) {
 }
 
 pub fn check_exec_result(res: &ExecutionResult) {
-    //println!("Result: {:#?}", res);
-    //check_exec_result_single(res);
-    //println!("Receipt results: {:#?}", res.get_receipt_results());
-    //println!("Promise results: {:#?}", res.promise_results());
-    //println!("----Promise results:",);
-    let mut inx = 0;
-    for pr in &res.promise_results() {
-        if let Some(some_pr) = pr {
-            println!("--promise #{}", inx);
-            check_exec_result_single(&some_pr);
-            inx += 1;
-        }
-    }
+    print_exec_result(res);
     assert!(res.is_ok());
 }
 

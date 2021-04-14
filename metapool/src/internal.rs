@@ -71,19 +71,19 @@ impl MetaPool {
         self.inner_withdraw(requested_amount, false)
     }
     //------------------------------
-    fn inner_withdraw(&mut self, amount_requested: u128, must_use_unstaked:bool) -> Promise {
+    fn inner_withdraw(&mut self, requested_amount: u128, from_unstaked:bool) -> Promise {
         
         let account_id = env::predecessor_account_id();
         let mut account = self.internal_get_account(&account_id);
 
-        if must_use_unstaked && account.unstaked>0 { //MIMIC staking-pool, if there is some unstaked, it must be free to withdraw
-            account.in_memory_try_finish_unstaking(&account_id, self);
+        if from_unstaked { //MIMIC staking-pool, move 1st form unstaked->available, it must be free to withdraw
+            account.in_memory_try_finish_unstaking(&account_id, requested_amount, self);
         }
 
-        let amount = account.take_from_available(amount_requested, self);
+        let amount = account.take_from_available(requested_amount, self);
 
         //commented: Remove min_account_balance requirements, increase liq-pool target to  cover all storage requirements
-        //2 reasons: a) NEAR storage was cut by 10  b) in the simplified flow, users do not keep "available" balance
+        //2 reasons: a) NEAR storage was cut by 10x  b) in the simplified flow, users do not keep "available" balance
         // assert!( !acc.is_empty() || acc.available >= self.min_account_balance,
         //     "The min balance for an open account is {} NEAR. You need to close the account to remove all funds",
         //     self.min_account_balance/NEAR);

@@ -176,3 +176,45 @@ pub fn state_diff(pre:&State, post:&State) -> StateDiff {
   }
 }
 
+//-----------
+impl State {
+
+  pub fn test_invariants(&self) -> Result<u8,String> {
+
+    //delta stake must be = delta stake/unstake orders
+    if self.total_for_staking>=self.total_actually_staked {
+      let delta_stake = self.total_for_staking - self.total_actually_staked;
+      if self.epoch_stake_orders < self.epoch_unstake_orders { return Err("delta-stake>0 but self.epoch_stake_orders < self.epoch_unstake_orders".into()) }
+      let delta_orders = self.epoch_stake_orders - self.epoch_unstake_orders;
+      if delta_stake != delta_orders { return Err("delta_stake!=delta_orders".into())}
+    }
+    else {
+      let delta_unstake = self.total_actually_staked - self.total_for_staking;
+      if !(self.epoch_stake_orders < self.epoch_unstake_orders) { return Err("delta-stake NEG but epoch_stake_orders > self.epoch_unstake_orders".into()) }
+      let delta_orders = self.epoch_unstake_orders - self.epoch_stake_orders;
+      if delta_unstake != delta_orders { return Err("delta_unstake != delta_orders".into()) }
+    }
+    
+    if self.contract_account_balance != self.total_available + self.reserve_for_withdraw + self.epoch_stake_orders {
+      return Err("CAB != self.total_available + self.reserve_for_withdraw + self.epoch_stake_orders".into()) 
+    }
+
+    return Ok(0);
+  }
+
+  pub fn assert_rest_state(&self) {
+
+    //we've just cleared orders
+    assert_eq!(self.epoch_stake_orders,0);
+    assert_eq!(self.epoch_unstake_orders,0);
+  
+    assert_eq!(self.total_for_staking, self.total_actually_staked);
+    assert_eq!(self.total_for_staking, self.staked_in_pools);
+
+    assert_eq!(self.total_unstaked_and_waiting, self.unstaked_in_pools);
+
+    assert_eq!(self.unstake_claims, self.reserve_for_withdraw + self.unstaked_in_pools);
+
+  }
+
+}

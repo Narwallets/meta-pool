@@ -1,9 +1,8 @@
 mod sim_utils;
 mod sim_setup;
+mod sim_contract_state;
+mod sim_steps;
 
-//simple cases
-//mod simulation_simple;
-
-//desk check
-mod simulation_desk_state;
-mod simulation_desk_check;
+//mod simulation_simple; //simple cases
+//mod simulation_desk_check; //desk check
+mod simulation_fuzzy;

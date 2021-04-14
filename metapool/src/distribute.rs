@@ -140,12 +140,12 @@ impl MetaPool {
             result = "succeeded";
             let event:&str;
             if included_deposit { //we send NEAR to the staking-pool
-                event="d.stak"; //stake in the pools (including transfer)
+                event="dist.stak"; //stake in the pools (including transfer)
                 //we took from contract balance (transfer)
                 self.contract_account_balance -= amount;
             }
             else {
-                event="d.stak.nt"; //stake in the pools, no-transfer
+                event="dist.stak.nt"; //stake in the pools, no-transfer
                 //not deposited first, so staked funds came from unstaked funds already in the staking-pool
                 sp.unstaked -= amount; //we've now less unstaked in this sp
                 self.total_unstaked_and_waiting -= amount; // contract total of all unstaked & waiting
@@ -258,7 +258,7 @@ impl MetaPool {
             sp.unstaked += amount;
             sp.unstk_req_epoch_height = env::epoch_height();
             self.total_unstaked_and_waiting += amount; //contract total
-            event!(r#"{{"event":"d.unstk","sp":"{}","amount":"{}"}}"#, sp.account_id, amount);
+            event!(r#"{{"event":"dist.unstk","sp":"{}","amount":"{}"}}"#, sp.account_id, amount);
 
         } else {
             result = "has failed";

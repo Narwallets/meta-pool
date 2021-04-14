@@ -145,10 +145,9 @@ impl Account {
 
     /// user method
     /// completes unstake action by moving from acc.unstaked & main.reserve_for_unstaked_claims -> acc.available & main.total_available
-    pub fn in_memory_try_finish_unstaking(&mut self, account_id:&str, main:&mut MetaPool) -> u128 {
+    pub fn in_memory_try_finish_unstaking(&mut self, account_id:&str, amount:u128, main:&mut MetaPool) -> u128 {
 
-        let amount = self.unstaked;
-        assert!(amount > 0, "No unstaked balance");
+        assert!(amount <= self.unstaked, "Not enough unstaked balance {}",self.unstaked);
         
         let epoch = env::epoch_height();
         assert!( epoch >= self.unstaked_requested_unlock_epoch,
