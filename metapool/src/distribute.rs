@@ -22,26 +22,29 @@ impl MetaPool {
 
         self.assert_not_busy();
 
+        //do we need to stake?
+        if self.total_for_staking <= self.total_actually_staked {
+            log!("no staking needed");
+            return false;
+        }
+
         //----------
         //check if the liquidity pool needs liquidity, and then use this opportunity to liquidate stnear in the LP by internal-clearing 
         if self.nslp_try_internal_clearing(){
             return true; //call again
         }
 
-        //do wo need to stake?
-        if self.total_for_staking <= self.total_actually_staked {
-            log!("no staking needed");
-            return false;
-        }
-
         //-------------------------------------
         //compute amount to stake
         //-------------------------------------
-        let total_amount_to_stake =  self.total_for_staking - self.total_actually_staked;
+        
+        //there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
+        let  total_amount_to_stake =  std::cmp::min(self.epoch_stake_orders, self.total_for_staking - self.total_actually_staked);
         if total_amount_to_stake < MIN_MOVEMENT {
             log!("amount too low {}",total_amount_to_stake);
             return false;
         }
+        
         // find pool
         let (sp_inx, mut amount_to_stake) = self.get_staking_pool_requiring_stake(total_amount_to_stake);
         log!("total_amount_to_stake:{} get_staking_pool_requiring_stake=>{},{}",total_amount_to_stake,sp_inx, amount_to_stake);
@@ -106,7 +109,7 @@ impl MetaPool {
 
         //Here we did some staking (the promises are scheduled for exec after this fn completes)
         self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
-        assert!(self.epoch_stake_orders>=amount_to_stake,"ISO");
+        assert!(self.epoch_stake_orders>=amount_to_stake,"ISO epoch_stake_orders:{} amount_to_stake:{}",self.epoch_stake_orders,amount_to_stake);
         self.epoch_stake_orders-=amount_to_stake; //preventively reduce stake orders 
         //did some staking (promises scheduled), call again
         return true 
@@ -190,7 +193,8 @@ impl MetaPool {
             //no unstaking needed
             return false;
         }
-        let total_to_unstake = self.total_actually_staked - self.total_for_staking;
+        //there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
+        let total_to_unstake = std::cmp::min(self.epoch_unstake_orders, self.total_actually_staked - self.total_for_staking);
         //check if the amount justifies tx-fee / can be unstaked really
         if total_to_unstake <= 10*TGAS as u128 { 
             return false;
@@ -295,11 +299,14 @@ impl MetaPool {
 
     //-- If extra balance has accumulated (30% of tx fees by near-protocol)
     // transfer to self.operator_account_id
-    pub fn transfer_extra_balance_accumulated(&mut self){
+    pub fn transfer_extra_balance_accumulated(&mut self) -> U128String {
         let extra_balance  = self.extra_balance_accumulated().0;
-        if extra_balance >= ONE_NEAR {
-            Promise::new(self.operator_account_id.clone()).transfer(extra_balance);
+        if extra_balance >= 2*NEAR {
+            //only if there's more than 2 near, and left 10 cents (consider this fn & transfer fee)
+            Promise::new(self.operator_account_id.clone()).transfer(extra_balance-10*NEAR_CENT);
+            return extra_balance.into();
         }
+        return 0.into();
     }
     
     //--FIXES
@@ -312,10 +319,11 @@ impl MetaPool {
 
     //--FIXES
     //utility to rebuild stake information if it goes out-of-sync
-    pub fn rebuild_contract_available(&mut self, total_available:U128String, reserve_for_unstaked_claims:U128String ) {
+    pub fn rebuild_contract_available(&mut self, total_available:U128String, total_unstake_claims: U128String, reserve_for_unstake_claims:U128String ) {
         self.assert_operator_or_owner();
         self.total_available = total_available.0;
-        self.reserve_for_unstake_claims = reserve_for_unstaked_claims.0;
+        self.total_unstake_claims = total_unstake_claims.0;
+        self.reserve_for_unstake_claims = reserve_for_unstake_claims.0;
     }
 
     //--FIXES
@@ -323,6 +331,14 @@ impl MetaPool {
     pub fn set_contract_account_balance(&mut self, contract_account_balance:U128String ) {
         self.assert_operator_or_owner();
         self.contract_account_balance = contract_account_balance.0;
+    }
+
+    //--FIXES
+    //utility to rebuild information if it goes out-of-sync
+    pub fn fix_epoch_stake_orders(&mut self ) {
+        self.assert_operator_or_owner();
+        assert!(self.epoch_stake_orders>19984*NEAR/10000 && self.epoch_stake_orders<19985*NEAR/10000,"{}",self.epoch_stake_orders);
+        self.epoch_stake_orders = 0;
     }
 
     //--FIXES

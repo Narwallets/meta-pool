@@ -311,32 +311,36 @@ impl MetaPool {
             //nothing ordered to be actually staked
             return false;
         }
-        let amount_to_stake:u128 =  self.total_for_staking - self.total_actually_staked;
+        let amount_to_stake:u128 = std::cmp::min(self.epoch_stake_orders, self.total_for_staking - self.total_actually_staked);
         let mut nslp_account = self.internal_get_nslp_account();
         log!("nslp internal clearing nslp_account.stake_shares {}",nslp_account.stake_shares);
         if nslp_account.stake_shares > 0 {
-            //how much stnear does the nslp have?
+            //how much stNEAR do the nslp has?
             let valued_stake_shares = self.amount_from_stake_shares(nslp_account.stake_shares);
             //how much can we liquidate?
             let (shares_to_liquidate, amount_to_liquidate) =
                 if amount_to_stake >= valued_stake_shares  { 
-                    ( nslp_account.stake_shares, valued_stake_shares )
+                    ( nslp_account.stake_shares, valued_stake_shares ) //all of them
                 } 
                 else { 
-                    ( self.stake_shares_from_amount(amount_to_stake), amount_to_stake )
+                    ( self.stake_shares_from_amount(amount_to_stake), amount_to_stake ) //the amount to stake
                 };
-            //nslp sells-stnear directly, contract now needs to stake less
+
             log!("NSLP clearing {} {}",shares_to_liquidate, amount_to_liquidate);
             //log event 
             event!(r#"{{"event":"NSLP.clr","shares":"{}","amount":"{}"}}"#, shares_to_liquidate, amount_to_liquidate);
 
-            nslp_account.sub_stake_shares(shares_to_liquidate, amount_to_liquidate);
-            self.total_stake_shares -= shares_to_liquidate;
-            self.total_for_staking -= amount_to_liquidate; //nslp has burned shares, total_for_staking is less now
-            self.total_available += amount_to_liquidate; // amount returns to total_available (since it was never staked to begin with)
+            //nslp sells-stnear directly to fulfill (partially) the stake-order, contract now needs to stake less
+            self.total_for_staking -= amount_to_liquidate; //nslp sold stNEAR, got NEAR (did the staking), total_for_staking is less now
+            self.epoch_stake_orders -= amount_to_liquidate; //same for stake orders .- part of the orders have been fulfilled
+
+            nslp_account.sub_stake_shares(shares_to_liquidate, amount_to_liquidate); //nslp has less stNEAR now
+            self.total_stake_shares -= shares_to_liquidate; //reflect in the contract
             nslp_account.available += amount_to_liquidate; //nslp has more available now
-            //save account
+            self.total_available += amount_to_liquidate; // which must be reflected in contract totals
+            //save nslp account
             self.internal_save_nslp_account(&nslp_account);
+
             return true;
         }        
         return false;

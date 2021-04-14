@@ -66,6 +66,7 @@ fn bot_distributes(sim:&Simulation, start:State) -> StateAndDiff {
       println!("--POST {}",serde_json::to_string(&post).unwrap_or_default());
     }
     state=post;
+    state.assert_invariants();
   }
 
   more_work=true;
@@ -82,6 +83,7 @@ fn bot_distributes(sim:&Simulation, start:State) -> StateAndDiff {
       println!("--POST {}",serde_json::to_string(&post).unwrap_or_default());
     }
     state=post;
+    state.assert_invariants();
   }
 
   let diff = state_diff(&start, &state);
@@ -150,6 +152,7 @@ pub struct StateAndDiff {
 
 //-----------
 fn step_call( sim:&Simulation, acc:&UserAccount, method:&str, args:Value, gas:u64, attached_near: u128, pre:&State) -> StateAndDiff {
+  
   println!("step_call {}",method);
   let res = acc.call( sim.metapool.account_id(), method, args.to_string().as_bytes() , gas, attached_near);// call!(pepe, metapool.nslp_add_liquidity(),10_000*NEAR,200*TGAS);
   check_exec_result(&res);
@@ -157,9 +160,51 @@ fn step_call( sim:&Simulation, acc:&UserAccount, method:&str, args:Value, gas:u6
   let diff = state_diff(&pre,&post);
   println!("--DIFF {}",serde_json::to_string(&diff).unwrap_or_default());
   println!("--POST {}",serde_json::to_string(&post).unwrap_or_default());
+  
+  post.assert_invariants();
+
   return StateAndDiff { state:post, diff };
 }
 
+//-----------
+impl State {
+
+  pub fn assert_invariants(&self) {
+
+    //delta stake must be = delta stake/unstake orders
+    if self.total_for_staking>=self.total_actually_staked {
+      let delta_stake = self.total_for_staking - self.total_actually_staked;
+      assert!(self.epoch_stake_orders >= self.epoch_unstake_orders);
+      let delta_orders = self.epoch_stake_orders - self.epoch_unstake_orders;
+      assert_eq!(delta_stake,delta_orders);
+    }
+    else {
+      let delta_unstake = self.total_actually_staked - self.total_for_staking;
+      assert!(self.epoch_stake_orders < self.epoch_unstake_orders);
+      let delta_orders = self.epoch_unstake_orders - self.epoch_stake_orders;
+      assert_eq!(delta_unstake,delta_orders);
+    }
+    
+    assert_eq!(self.contract_account_balance, self.total_available + self.reserve_for_withdraw + self.epoch_stake_orders);
+
+  }
+
+  pub fn assert_rest_state(&self) {
+
+    //we've just cleared orders
+    assert_eq!(self.epoch_stake_orders,0);
+    assert_eq!(self.epoch_unstake_orders,0);
+  
+    assert_eq!(self.total_for_staking, self.total_actually_staked);
+    assert_eq!(self.total_for_staking, self.staked_in_pools);
+
+    assert_eq!(self.total_unstaked_and_waiting, self.unstaked_in_pools);
+
+    assert_eq!(self.unstake_claims, self.reserve_for_withdraw + self.unstaked_in_pools);
+
+  }
+
+}
 
 
 
@@ -222,6 +267,7 @@ fn simulation_desk_check() {
   result = bot_distributes(&sim, result.state);
   result = bot_ping_rewards(&sim, result.state);
   result = bot_end_of_epoch_clearing(&sim, result.state);
+  result.state.assert_rest_state();
 
   result = step_call(&sim, &jose, "deposit_and_stake", json!({}), 50*TGAS, 420*NEAR, &result.state);
 

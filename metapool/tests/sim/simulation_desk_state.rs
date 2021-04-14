@@ -110,7 +110,7 @@ pub fn build_state(sim:&Simulation) -> State {
   let total_for_staking= as_u128(&contract_state["total_for_staking"]);
   let total_actually_staked= as_u128(&contract_state["total_actually_staked"]);
 
-  let reserve_for_withdraw = as_u128(&contract_state["reserve_for_unstaked_claims"]);
+  let reserve_for_withdraw = as_u128(&contract_state["reserve_for_unstake_claims"]);
   let total_unstaked_and_waiting = as_u128(&contract_state["total_unstaked_and_waiting"]);
 
   let view_result = view!(metapool.get_staking_pool_list());

@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'divpool'",
+            "name": "Debug unit tests in library 'metapool'",
             "cargo": {
                 "args": [
                     "+nightly",
@@ -26,7 +26,8 @@
             "type": "lldb",
             "request": "launch",
             "args": [],
-            "program": "target/debug/deps/tests-78512ce406ce79d4",
+            "env": {"CARGO_MANIFEST_DIR":"${workspaceFolder}/metapool"},
+            "program": "target/debug/deps/sim-165a134e5a65691f",
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false,
             "sourceLanguages": [
