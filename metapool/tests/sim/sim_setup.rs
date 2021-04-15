@@ -14,7 +14,7 @@ use near_sdk::{serde_json::Value};
 use metapool::*;
 use crate::sim_utils::*;
 
-pub const SP_INITIAL_BALANCE:u128 = 35*NEAR;
+pub const SP_INITIAL_BALANCE:u128 = 36*NEAR;
 
 // Load contracts' bytes.
 near_sdk_sim::lazy_static_include::lazy_static_include_bytes! {
@@ -249,6 +249,7 @@ impl Simulation {
       //let total = self.sp_balance(n);
       //let data = self.sp[n].account().unwrap();
       //println!("{}",&format!(r#"{{"account_id":"{}"}}"#,&METAPOOL_CONTRACT_ID));
+      println!("sp{} native acc {:?}",n,&self.sp[n].account().unwrap());
       let staked =  view_u128(&self.sp[n],"get_account_staked_balance",&format!(r#"{{"account_id":"{}"}}"#,METAPOOL_CONTRACT_ID));
       //println!("sp{} get_account_staked_balance:{}, data.amount:{}+data.locked:{}", n, yton(staked));//, data.amount, data.locked ); 
       println!("sp{} get_account_staked_balance:{}", n, yton(staked));//, data.amount, data.locked ); 
