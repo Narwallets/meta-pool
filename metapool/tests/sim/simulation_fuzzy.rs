@@ -87,7 +87,7 @@ pub fn step_random_action( sim:&Simulation, acc:&UserAccount, action:Action, amo
   }
 }
 
-const SEED_COUNT:u16=10;
+const SEED_COUNT:u16=5;
 const START_SEED:u16=0;
 const END_SEED:u16 = START_SEED+SEED_COUNT;
 
@@ -181,6 +181,24 @@ fn simulation_fuzzy() {
 
     seed_results.push(SeedResults { seed:seed.into(), steps_ok: count_steps_ok });
   
+    //ordered end of epoch
+    let _r0 = bot_ping_rewards(&sim,&state);
+    let _r1 = bot_distributes(&sim, &state);
+    let _r2 = bot_retrieve(&sim,&state);
+    let result = bot_end_of_epoch_clearing(&sim,&state);
+
+    //after orderly end_of_epoch check stricter invariants
+    if let Ok(res)=&result {
+      if res.state.epoch_stake_orders!=0 || res.state.epoch_unstake_orders!=0 { // both must be 0 after an orderly end_of_epoch
+        panic!("after orderly end_of_epoch_clearing epoch_stake_orders {} epoch_unstake_orders {}",res.state.epoch_stake_orders,res.state.epoch_unstake_orders) 
+      }
+      //no delta should remain
+      if res.state.to_stake_delta != 0 { 
+        panic!("after orderly end_of_epoch_clearing epoch_stake_orders {} epoch_unstake_orders {}",res.state.epoch_stake_orders,res.state.epoch_unstake_orders) 
+      }
+    }
+  
+
   } // x seeds
 
   println!("{:?}", seed_results);

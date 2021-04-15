@@ -34,7 +34,7 @@ impl RewardMeter {
       return 0; //withdrew all or no positive difference => no rewards, fast exit
     }
     let rewards_by_difference = valued_shares - self.delta;
-    return proportional(rewards_by_difference, self.last_multiplier_pct as u128, 100);
+    return apply_multiplier(rewards_by_difference, self.last_multiplier_pct);
   }
   ///register a stake (to be able to compute rewards later)
   pub fn stake(&mut self, value: u128) {

@@ -123,6 +123,8 @@ pub fn build_state(sim:&Simulation) -> State {
     sum_unstaked+=as_u128(&sp["unstaked"]);
   }
 
+  let to_stake_delta = total_for_staking as i128 - total_actually_staked as i128;
+
   return State {
     
     epoch: as_u128(&contract_state["env_epoch_height"]) as u64,
@@ -136,12 +138,12 @@ pub fn build_state(sim:&Simulation) -> State {
   
     total_for_staking,
     total_actually_staked,
-    to_stake_delta: total_for_staking as i128 - total_actually_staked as i128,
+    to_stake_delta,
   
     total_unstaked_and_waiting,
   
     unstake_claims: as_u128(&contract_state["total_unstake_claims"]),
-    unstake_claims_available_sum: reserve_for_withdraw + total_unstaked_and_waiting,
+    unstake_claims_available_sum: reserve_for_withdraw + total_unstaked_and_waiting + if to_stake_delta<0 { (-to_stake_delta) as u128 } else {0}, //to_stake_delta neg means unstake to be made
   
     staked_in_pools: sum_staked,
     unstaked_in_pools: sum_unstaked,

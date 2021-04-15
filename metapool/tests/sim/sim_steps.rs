@@ -41,7 +41,20 @@ use metapool::*;
 
 //-----------------
 pub fn bot_end_of_epoch_clearing(sim:&Simulation, start:&State) -> Result<StateAndDiff, String> {
-  return step_call(sim, &sim.operator, "end_of_epoch_clearing", json!({}), 50*TGAS, NO_DEPOSIT, start);
+
+  let result = step_call(sim, &sim.operator, "end_of_epoch_clearing", json!({}), 50*TGAS, NO_DEPOSIT, start);
+
+  //after end_of_epoch_clearing check invariants
+  if let Ok(res)=&result {
+    if res.state.unstake_claims_available_sum < res.state.unstake_claims {
+      panic!("unstake_claims_available_sum {} < unstake_claims {}",res.state.unstake_claims_available_sum,res.state.unstake_claims) 
+    }
+    if res.state.epoch_stake_orders!=0 && res.state.epoch_unstake_orders!=0 { //at least on (or both) must be 0 after end_of_epoch_clearing
+      panic!("after end_of_epoch_clearing epoch_stake_orders {} epoch_unstake_orders {}",res.state.epoch_stake_orders,res.state.epoch_unstake_orders) 
+    }
+  }
+
+  return result;
 }
 
 //-----------------
@@ -62,12 +75,16 @@ pub fn bot_distributes(sim:&Simulation, start:&State) -> Result<StateAndDiff,Str
         state = data.state;
         more_work = data.res.unwrap().unwrap_json();
         println!("--result {}",more_work);
-        if let Err(err) = state.test_invariants() { return Err(err) }
+        if let Err(err) = state.test_invariants() { 
+          panic!("invariant check {}", err);
+          //return Err(err) 
+        }
       }
     }
   }
 
-  let mut more_work:bool = state.total_actually_staked > state.total_for_staking;
+  //END_OF_EPOCH Task 1: check if there is the need to unstake
+  more_work = state.total_actually_staked > state.total_for_staking;
   while more_work {
     println!("--CALL metapool.distribute_unstaking");
     match step_call(sim, &sim.operator, "distribute_unstaking", json!({}), 150*TGAS, NO_DEPOSIT, &state) {
@@ -76,7 +93,10 @@ pub fn bot_distributes(sim:&Simulation, start:&State) -> Result<StateAndDiff,Str
         state = data.state;
         more_work = data.res.unwrap().unwrap_json();
         println!("--result {}",more_work);
-        if let Err(err) = state.test_invariants() { return Err(err) }
+        if let Err(err) = state.test_invariants() { 
+          panic!("invariant check {}", err);
+          //return Err(err) 
+        }
       }
     }
   }
@@ -164,7 +184,10 @@ pub fn step_call( sim:&Simulation, acc:&UserAccount, method:&str, args:Value, ga
     println!("--DIFF {}",serde_json::to_string(&diff).unwrap_or_default());
     println!("--POST {}",serde_json::to_string(&post).unwrap_or_default());
   
-    if let Err(err) = post.test_invariants() { return Err(err) }
+    if let Err(err) = post.test_invariants() { 
+      panic!("invariant check {}", err);
+      //return Err(err) 
+    }
     return Ok(StateAndDiff { state:post, diff, res:Some(res) })
   }
   else {
