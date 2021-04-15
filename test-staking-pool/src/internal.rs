@@ -1,42 +1,24 @@
 use crate::*;
 
-const NUM_EPOCHS_TO_UNLOCK:u64=4;
-
 impl StakingContract {
     /********************/
     /* Internal methods */
     /********************/
 
-    /// Re-stakes the current `total_staked_balance` again.
+    /// Restakes the current `total_staked_balance` again.
     pub(crate) fn internal_restake(&mut self) {
         if self.paused {
             return;
         }
-        let to_stake = if UNSTAKING_DELAY_ENABLED { self.total_staked_balance } else { self.total_staked_balance - self.total_staked_balance*25/100 };
         // Stakes with the staking public key. If the public key is invalid the entire function
         // call will be rolled back.
-        if SIMULATOR_TEST_MODE {
-            env::log(format!(
-                "@on_stake_action stake_action sim mode total_staked_balance:{}", 
-                self.total_staked_balance
-            ).as_bytes());
-        }
-        else {
-            env::log(
-                format!(
-                    "@{} current account_balance:{} locked/staked:{} -> setting new staked balance to {}",
-                    env::current_account_id(), env::account_balance(), self.total_staked_balance, to_stake
-                )
-                .as_bytes(),
-            );
-            Promise::new(env::current_account_id())
-                .stake(to_stake, self.stake_public_key.clone())
-                .then(ext_self::on_stake_action(
-                    &env::current_account_id(),
-                    NO_DEPOSIT,
-                    ON_STAKE_ACTION_GAS,
-                ));
-        }
+        Promise::new(env::current_account_id())
+            .stake(self.total_staked_balance, self.stake_public_key.clone())
+            .then(ext_self::on_stake_action(
+                &env::current_account_id(),
+                NO_DEPOSIT,
+                ON_STAKE_ACTION_GAS,
+            ));
     }
 
     pub(crate) fn internal_deposit(&mut self) -> u128 {
@@ -66,13 +48,10 @@ impl StakingContract {
             account.unstaked >= amount,
             "Not enough unstaked balance to withdraw"
         );
-        if UNSTAKING_DELAY_ENABLED {
-            assert!(
-                account.unstaked_available_epoch_height <= env::epoch_height(),
-                "The unstaked balance is not yet available due to unstaking delay"
-            );
-        }
-        
+        assert!(
+            account.unstaked_available_epoch_height <= env::epoch_height(),
+            "The unstaked balance is not yet available due to unstaking delay"
+        );
         account.unstaked -= amount;
         self.internal_save_account(&account_id, &account);
 
@@ -227,8 +206,8 @@ impl StakingContract {
             env::account_locked_balance() + env::account_balance() - env::attached_deposit();
 
         assert!(
-            total_balance >= self.last_total_balance, 
-            "The new total balance {} should not be less than the old total balance {}",total_balance,self.last_total_balance
+            total_balance >= self.last_total_balance,
+            "The new total balance should not be less than the old total balance"
         );
         let total_reward = total_balance - self.last_total_balance;
         if total_reward > 0 {
@@ -267,7 +246,7 @@ impl StakingContract {
         }
 
         self.last_total_balance = total_balance;
-        return true
+        true
     }
 
     /// Returns the number of "stake" shares rounded down corresponding to the given staked balance

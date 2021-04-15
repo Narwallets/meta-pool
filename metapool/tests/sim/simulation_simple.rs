@@ -137,6 +137,7 @@ fn simtest_simple() {
     bob_dep_and_stake,
     50 * TGAS
   );
+  sim.show_account_info(&bob.account_id());
 
   //---- carol
   let carol = sim.testnet.create_user("carol".to_string(), ntoy(500_000));

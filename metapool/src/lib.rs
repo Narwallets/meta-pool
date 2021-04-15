@@ -1033,4 +1033,17 @@ mod tests {
         contract.set_operator_account_id(AccountId::from("staking_pool"));
     }
 
+    #[test]
+    fn test_rewards_meter(){
+      let mut rm = RewardMeter::default();
+      rm.stake(100);
+      assert_eq!(rm.compute_rewards(105),5);
+
+      rm.unstake(105);
+      assert_eq!(rm.compute_rewards(0),0);
+
+      rm.stake(10);
+      assert_eq!(rm.compute_rewards(10),5);
+    }
+  
 }

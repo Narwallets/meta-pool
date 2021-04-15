@@ -12,9 +12,6 @@ use uint::construct_uint;
 
 mod internal;
 
-const SIMULATOR_TEST_MODE:bool = true; // there's a bug in near_sdk_sim making unstaking not working. This mode avoids staking, but keeps the internal state
-const UNSTAKING_DELAY_ENABLED:bool = true; //true => standard staking pool, false=>only stake 75%, no unstaking delay (used for testing)
-
 /// The amount of gas given to complete `vote` call.
 const VOTE_GAS: u64 = 100_000_000_000_000;
 
@@ -81,6 +78,11 @@ impl Default for Account {
     }
 }
 
+/// The number of epochs required for the locked balance to become unlocked.
+/// NOTE: The actual number of epochs when the funds are unlocked is 3. But there is a corner case
+/// when the unstaking promise can arrive at the next epoch, while the inner state is already
+/// updated in the previous epoch. It will not unlock the funds for 4 epochs.
+const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -203,7 +205,7 @@ impl StakingContract {
         this
     }
 
-    /// Distributes rewards and re-stakes if needed.
+    /// Distributes rewards and restakes if needed.
     pub fn ping(&mut self) {
         if self.internal_ping() {
             self.internal_restake();
@@ -262,7 +264,7 @@ impl StakingContract {
 
     /// Stakes all available unstaked balance from the inner account of the predecessor.
     pub fn stake_all(&mut self) {
-        // Stake action always re-stakes
+        // Stake action always restakes
         self.internal_ping();
 
         let account_id = env::predecessor_account_id();
@@ -372,7 +374,7 @@ impl StakingContract {
             staked_balance: self
                 .staked_amount_from_num_shares_rounded_down(account.stake_shares)
                 .into(),
-            can_withdraw: UNSTAKING_DELAY_ENABLED==false || account.unstaked_available_epoch_height <= env::epoch_height(),
+            can_withdraw: account.unstaked_available_epoch_height <= env::epoch_height(),
         }
     }
 
@@ -410,11 +412,6 @@ impl StakingContract {
             PromiseResult::Successful(_) => true,
             _ => false,
         };
-
-        env::log(format!(
-            "@on_stake_action stake_action_succeeded:{} account_balance:{} locked/staked:{}", 
-            stake_action_succeeded, env::account_balance(), env::account_locked_balance()
-        ).as_bytes());
 
         // If the stake action failed and the current locked amount is positive, then the contract
         // has to unstake.
@@ -470,9 +467,7 @@ impl StakingContract {
 
         self.internal_ping();
         self.paused = true;
-        if !SIMULATOR_TEST_MODE {
-            Promise::new(env::current_account_id()).stake(0, self.stake_public_key.clone());
-        }
+        Promise::new(env::current_account_id()).stake(0, self.stake_public_key.clone());
     }
 
     /// Owner's method.
@@ -696,7 +691,7 @@ mod tests {
             expected_amount
                 + ntoy((yton(expected_amount) * 90_000 + n_locked_amount / 2) / n_locked_amount)
         );
-        // owner earns 10% with the fee and also small percentage from re-staking.
+        // owner earns 10% with the fee and also small percentage from restaking.
         assert_eq_in_near!(
             emulator.contract.get_account_staked_balance(owner()).0,
             ntoy(10_000)
