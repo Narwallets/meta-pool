@@ -263,6 +263,7 @@ fn simtest_simple() {
   println!("---------------------------------------------");
   println!("------- test retrieve funds from the pools --");
   for n in 0..30 {
+    
     println!(
       "epoch {}",
       view(&sim.get_epoch_acc, "get_epoch_height", "{}")
@@ -285,6 +286,7 @@ fn simtest_simple() {
         gas = 200 * TGAS
       );
       check_exec_result(&retrieve_result_sync);
+      println!("{:?}",&sim.sp[inx as usize].account().unwrap());
       println!("------- pool #{} retrieve unstaked", inx);
       let retrieve_result_2 = call!(
         sim.operator,

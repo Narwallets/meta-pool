@@ -54,9 +54,9 @@ pub struct Account {
 
     /// How much stnear the user had at "trip_start".
     pub trip_start_stnear: u128,
-    // how much stnear the staked since trip start. always incremented
+    // how much stnear the staked since trip start (minus unstaked)
     pub trip_accum_stakes: u128,
-    // how much the user unstaked since trip start. always incremented
+    // how much the user unstaked since trip start (zeroed if there was stake)
     pub trip_accum_unstakes: u128,
 
     ///NS liquidity pool shares, if the user is a liquidity provider
@@ -140,6 +140,10 @@ impl Account {
         self.stake_shares -= num_shares;
         //to sell stnear is to unstake
         self.trip_accum_unstakes += stnear;
+        if self.trip_accum_unstakes<self.trip_accum_stakes { //keep just the delta
+            self.trip_accum_stakes -= self.trip_accum_unstakes;
+            self.trip_accum_unstakes = 0;
+        }
         self.staking_meter.unstake(stnear);
     }
 

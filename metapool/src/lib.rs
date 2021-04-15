@@ -1043,7 +1043,7 @@ mod tests {
       assert_eq!(rm.compute_rewards(0),0);
 
       rm.stake(10);
-      assert_eq!(rm.compute_rewards(10),5);
+      assert_eq!(rm.compute_rewards(11),6);
     }
   
 }

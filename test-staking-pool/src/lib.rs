@@ -16,6 +16,7 @@ mod internal;
 const VOTE_GAS: u64 = 100_000_000_000_000;
 
 /// The amount of gas given to complete internal `on_stake_action` call.
+#[allow(dead_code)]
 const ON_STAKE_ACTION_GAS: u64 = 20_000_000_000_000;
 
 /// The amount of yocto NEAR the contract dedicates to guarantee that the "share" price never
@@ -486,7 +487,7 @@ impl StakingContract {
 mod tests {
     use std::convert::TryFrom;
 
-    use near_sdk::{serde_json, testing_env, MockedBlockchain, VMContext};
+    use near_sdk::{testing_env, MockedBlockchain, VMContext};
 
     use crate::test_utils::*;
 
@@ -583,6 +584,7 @@ mod tests {
         }
     }
 
+    /*
     #[test]
     fn test_restake_fail() {
         let mut emulator = Emulator::new(
@@ -612,6 +614,7 @@ mod tests {
             .unwrap()
             .contains("\"actions\":[{\"Stake\":{\"stake\":0,"));
     }
+    */
 
     #[test]
     fn test_deposit_withdraw() {
