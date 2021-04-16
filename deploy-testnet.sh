@@ -2,7 +2,7 @@ set -e
 NETWORK=testnet
 OWNER=lucio.$NETWORK
 MASTER_ACC=pool.$NETWORK
-CONTRACT_ACC=meta.$MASTER_ACC
+CONTRACT_ACC=meta-v2.$MASTER_ACC
 
 meta --cliconf -c $CONTRACT_ACC -acc $OWNER
 
