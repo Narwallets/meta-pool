@@ -652,7 +652,7 @@ impl MetaPool {
         );
         assert!(
             nslp_account.available >= near_to_receive,
-            "nslp available < near_to_receive"
+            "Not enough liquidity in the liquidity pool"
         );
 
         //the NEAR for the user comes from the LP

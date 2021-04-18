@@ -228,6 +228,7 @@ impl MetaPool {
             nslp_current_discount_basis_points: self.internal_get_discount_basis_points(nslp_account.available, TEN_NEAR),
             nslp_min_discount_basis_points:self.nslp_min_discount_basis_points,
             nslp_max_discount_basis_points:self.nslp_max_discount_basis_points,
+            min_deposit_amount:self.min_deposit_amount.into(),
         };
     }
 

@@ -174,36 +174,36 @@ pub struct GetContractStateResult {
     /// This amount increments with attachedNEAR calls (inflow) and decrements with deposit_and_stake calls (outflow)
     /// increments with retrieve_from_staking_pool (inflow) and decrements with user withdrawals from the contract (outflow)
     /// It should match env::balance()
-    pub contract_account_balance: U128,
+    pub contract_account_balance: U128String,
 
     /// This amount increments with deposits and decrements when actual stake is performed
     /// increments with retrieve_funds and decrements with user withdrawals from the contract
     /// with the new simplified user flow, the only accounts with available should be NSLP and treasury
-    pub total_available: U128,
+    pub total_available: U128String,
 
     /// The total amount of tokens selected for staking by the users 
     /// not necessarily what's actually staked since staking can is done in batches
     /// Share price is computed using this number. share_price = total_for_staking/total_shares
-    pub total_for_staking: U128,
+    pub total_for_staking: U128String,
 
     /// The total amount of tokens actually staked (the tokens are in the staking pools)
     /// During heartbeat(), If !staking_paused && total_for_staking<total_actually_staked, then the difference gets unstaked in 100kN batches
-    pub total_actually_staked: U128,
+    pub total_actually_staked: U128String,
 
-    pub epoch_stake_orders: U128,
-    pub epoch_unstake_orders: U128,
-    pub total_unstaked_and_waiting: U128,
+    pub epoch_stake_orders: U128String,
+    pub epoch_unstake_orders: U128String,
+    pub total_unstaked_and_waiting: U128String,
 
     // how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the share price is computed so if he "sells" the shares on that moment he recovers the same near amount
     // staking produces rewards, so share_price = total_for_staking/total_shares
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
-    pub total_stake_shares: U128,
+    pub total_stake_shares: U128String,
 
     /// sum(accounts.unstake). Every time a user delayed-unstakes, this amount is incremented
     /// when the funds are withdrawn the amount is decremented.
     /// Control: total_unstaked_claims == reserve_for_unstaked_claims + total_unstaked_and_waiting
-    pub total_unstake_claims: U128,
+    pub total_unstake_claims: U128String,
 
     /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
     /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
@@ -213,19 +213,19 @@ pub struct GetContractStateResult {
     /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
     /// This amount decrements at unstake-withdraw, sending the NEAR to the user
     /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
-    pub reserve_for_unstake_claims: U128,
+    pub reserve_for_unstake_claims: U128String,
 
     /// total meta minted
-    pub total_meta: U128, 
+    pub total_meta: U128String, 
 
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulated amount only for stats purposes. This amount can only grow
-    pub accumulated_staked_rewards: U128, 
+    pub accumulated_staked_rewards: U128String, 
 
     /// How much NEAR is available to immediate unstake (sell stNEAR)
-    pub nslp_liquidity: U128,
-    pub nslp_target: U128,
-    pub nslp_stnear_balance: U128,
+    pub nslp_liquidity: U128String,
+    pub nslp_target: U128String,
+    pub nslp_stnear_balance: U128String,
     /// Current discount for immediate unstake (sell stNEAR)
     pub nslp_current_discount_basis_points: u16,
     pub nslp_min_discount_basis_points: u16,
@@ -237,6 +237,7 @@ pub struct GetContractStateResult {
     //count of pools to diversify in
     pub staking_pools_count: u16, 
 
+    pub min_deposit_amount: U128String,
 }
 
 /// Struct returned from get_contract_params
