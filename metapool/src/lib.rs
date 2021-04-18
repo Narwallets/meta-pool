@@ -298,71 +298,7 @@ pub struct MetaPool {
 //contract main state migration
 //-----------------------------
 
-mod migrations;
-#[near_bindgen]
-impl MetaPool {
-    #[init(ignore_state)]
-    pub fn migrate_state() -> Self {
-        let old: migrations::MetaPoolV1 = env::state_read().expect("Old state doesn't exist");
-        // Verify the migration can only be done by the owner.
-        assert_eq!(
-            &env::predecessor_account_id(),
-            &old.owner_account_id,
-            "Can only be called by the owner"
-        );
-
-        // Create the new contract using the data from the old contract.
-        Self { 
-            owner_account_id: old.owner_account_id,
-            contract_busy:false ,
-            staking_paused: old.staking_paused,
-            contract_account_balance: old.contract_account_balance,
-            reserve_for_unstake_claims: 0,
-            total_available: old.total_available,
-
-            //-- ORDERS
-            epoch_stake_orders: 0,
-            epoch_unstake_orders: 0,
-            epoch_last_clearing:0,
-
-            total_for_staking: old.total_for_staking,
-            total_actually_staked: old.total_actually_staked,
-            total_stake_shares: old.total_stake_shares,
-            total_meta: old.total_meta,
-            total_unstaked_and_waiting: old.total_unstaked_and_waiting,
-
-            total_unstake_claims: 0,
-
-            accumulated_staked_rewards: old.accumulated_staked_rewards,
-
-            accounts: old.accounts,
-
-            staking_pools: old.staking_pools,
-
-            loan_requests: old.loan_requests,
-            
-            nslp_liquidity_target: old.nslp_liquidity_target, 
-            nslp_max_discount_basis_points: old.nslp_max_discount_basis_points,
-            nslp_min_discount_basis_points: old.nslp_min_discount_basis_points,
-
-            staker_meta_mult_pct: old.staker_meta_mult_pct,
-            stnear_sell_meta_mult_pct: old.stnear_sell_meta_mult_pct,
-            lp_provider_meta_mult_pct: old.lp_provider_meta_mult_pct,
-
-            operator_account_id: old.operator_account_id,
-            operator_rewards_fee_basis_points: old.operator_rewards_fee_basis_points,
-            operator_swap_cut_basis_points: old.operator_swap_cut_basis_points,
-
-            treasury_account_id: old.treasury_account_id,
-            treasury_swap_cut_basis_points: old.treasury_swap_cut_basis_points,
-
-            // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-            web_app_url: old.web_app_url,
-            auditor_account_id: old.auditor_account_id,
-        }
-    }
-}
-
+//mod migrations;
 
 #[near_bindgen]
 impl MetaPool {
