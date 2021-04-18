@@ -234,7 +234,6 @@ impl MetaPool {
     /// Returns JSON representation of contract parameters
     pub fn get_contract_params(&self) -> ContractParamsJSON {
         return ContractParamsJSON {
-            staking_paused: self.staking_paused,
 
             nslp_liquidity_target: self.nslp_liquidity_target.into(),
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
@@ -247,7 +246,9 @@ impl MetaPool {
             operator_rewards_fee_basis_points: self.operator_rewards_fee_basis_points,
             operator_swap_cut_basis_points: self.operator_swap_cut_basis_points,
             treasury_swap_cut_basis_points: self.treasury_swap_cut_basis_points,
-            };
+
+            min_deposit_amount: self.min_deposit_amount.into(),
+        };
     }
 
     /// Sets contract parameters 
@@ -268,6 +269,7 @@ impl MetaPool {
         self.operator_swap_cut_basis_points = params.operator_swap_cut_basis_points;
         self.treasury_swap_cut_basis_points = params.treasury_swap_cut_basis_points;
 
+        self.min_deposit_amount = params.min_deposit_amount.0;
     }
     
     /// get sp (staking-pool) info

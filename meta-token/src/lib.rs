@@ -204,7 +204,6 @@ impl FungibleTokenMetadataProvider for Contract {
     }
 }
 
-
 #[ext_contract(ext_ft_receiver)]
 pub trait FungibleTokenReceiver {
     fn ft_on_transfer(

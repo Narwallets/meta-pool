@@ -246,9 +246,6 @@ pub struct GetContractStateResult {
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractParamsJSON {
 
-    /// no auto-staking. true while changing staking pools
-    pub staking_paused: bool, 
-
     ///NEAR/stNEAR Liquidity pool 1% fee target. If Liquidity=target, fee is 1%
     pub nslp_liquidity_target: U128String,
     ///NEAR/stNEAR Liquidity pool max fee
@@ -271,6 +268,7 @@ pub struct ContractParamsJSON {
     /// treasury_cut_basis_points. 
     pub treasury_swap_cut_basis_points: u16,
     
+    pub min_deposit_amount: U128String,
 }
 
 #[derive(Serialize)]

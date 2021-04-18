@@ -39,6 +39,8 @@ pub use validator_loans::*;
 
 pub mod fungible_token_standard;
 
+//mod migrations;
+
 // setup_alloc adds a #[cfg(target_arch = "wasm32")] to the global allocator, which prevents the allocator 
 // from being used when the contract's main file is used in simulation testing.
 near_sdk::setup_alloc!();
@@ -92,14 +94,19 @@ pub trait ExtMetaStakingPoolOwnerCallbacks {
 
     fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool;
 
-    //fn on_staking_pool_unstake_all(&mut self) -> bool;
-
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
     fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
     
     fn on_get_sp_unstaked_balance(&mut self, sp_inx: usize, #[callback] unstaked_balance: U128String);
 
+    fn after_minting_meta(&self, account_id:AccountId);
+
+}
+
+#[ext_contract(meta_token_mint)]
+pub trait MetaToken {
+    fn mint( &mut self, account_id: AccountId, amount: U128String );
 }
 
 
@@ -171,13 +178,13 @@ impl StakingPoolInfo {
 //------------------------
 //  Main Contract State --
 //------------------------
-// Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts.None
-// accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
+// Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts. 
+// Accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct MetaPool {
     /// Owner's account ID (it will be a DAO on phase II)
-    pub owner_account_id: String,
+    pub owner_account_id: AccountId,
 
     /// Avoid re-entry when async-calls are in-flight
     pub contract_busy: bool,
@@ -252,13 +259,13 @@ pub struct MetaPool {
     pub accumulated_staked_rewards: u128,
 
     //user's accounts
-    pub accounts: UnorderedMap<String, Account>,
+    pub accounts: UnorderedMap<AccountId, Account>,
 
     //list of pools to diversify in
     pub staking_pools: Vec<StakingPoolInfo>,
 
     //validator loan request
-    pub loan_requests: LookupMap<String, VLoanRequest>,
+    pub loan_requests: LookupMap<AccountId, VLoanRequest>,
 
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
@@ -278,91 +285,28 @@ pub struct MetaPool {
     ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
     pub lp_provider_meta_mult_pct: u16,
 
+    /// min amount accepted as deposit or stake
+    pub min_deposit_amount: u128,
+
     /// Operator account ID (who's in charge to call distribute_xx() on a periodic basis)
-    pub operator_account_id: String,
+    pub operator_account_id: AccountId,
     /// operator_rewards_fee_basis_points. (0.2% default) 100 basis point => 1%. E.g.: owner_fee_basis_points=30 => 0.3% owner's fee
     pub operator_rewards_fee_basis_points: u16,
     /// owner's cut on Liquid Unstake fee (3% default)
     pub operator_swap_cut_basis_points: u16,
     /// Treasury account ID (it will be controlled by a DAO on phase II)
-    pub treasury_account_id: String,
+    pub treasury_account_id: AccountId,
     /// treasury cut on Liquid Unstake (25% from the fees by default)
     pub treasury_swap_cut_basis_points: u16,
 
     // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
     pub web_app_url: Option<String>, 
-    pub auditor_account_id: Option<String>,
+    pub auditor_account_id: Option<AccountId>,
+
+    /// Where's the NEP-141 $META token contract
+    pub meta_token_account_id: AccountId,
+    
 }
-
-//-----------------------------
-//contract main state migration
-//-----------------------------
-
-mod migrations;
-#[near_bindgen]
-impl MetaPool {
-    #[init(ignore_state)]
-    pub fn migrate_state() -> Self {
-        let old: migrations::MetaPoolV1 = env::state_read().expect("Old state doesn't exist");
-        // Verify the migration can only be done by the owner.
-        assert_eq!(
-            &env::predecessor_account_id(),
-            &old.owner_account_id,
-            "Can only be called by the owner"
-        );
-
-        // Create the new contract using the data from the old contract.
-        Self { 
-            owner_account_id: old.owner_account_id,
-            contract_busy:false ,
-            staking_paused: old.staking_paused,
-            contract_account_balance: old.contract_account_balance,
-            reserve_for_unstake_claims: 0,
-            total_available: old.total_available,
-
-            //-- ORDERS
-            epoch_stake_orders: 0,
-            epoch_unstake_orders: 0,
-            epoch_last_clearing:0,
-
-            total_for_staking: old.total_for_staking,
-            total_actually_staked: old.total_actually_staked,
-            total_stake_shares: old.total_stake_shares,
-            total_meta: old.total_meta,
-            total_unstaked_and_waiting: old.total_unstaked_and_waiting,
-
-            total_unstake_claims: 0,
-
-            accumulated_staked_rewards: old.accumulated_staked_rewards,
-
-            accounts: old.accounts,
-
-            staking_pools: old.staking_pools,
-
-            loan_requests: old.loan_requests,
-            
-            nslp_liquidity_target: old.nslp_liquidity_target, 
-            nslp_max_discount_basis_points: old.nslp_max_discount_basis_points,
-            nslp_min_discount_basis_points: old.nslp_min_discount_basis_points,
-
-            staker_meta_mult_pct: old.staker_meta_mult_pct,
-            stnear_sell_meta_mult_pct: old.stnear_sell_meta_mult_pct,
-            lp_provider_meta_mult_pct: old.lp_provider_meta_mult_pct,
-
-            operator_account_id: old.operator_account_id,
-            operator_rewards_fee_basis_points: old.operator_rewards_fee_basis_points,
-            operator_swap_cut_basis_points: old.operator_swap_cut_basis_points,
-
-            treasury_account_id: old.treasury_account_id,
-            treasury_swap_cut_basis_points: old.treasury_swap_cut_basis_points,
-
-            // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-            web_app_url: old.web_app_url,
-            auditor_account_id: old.auditor_account_id,
-        }
-    }
-}
-
 
 #[near_bindgen]
 impl MetaPool {
@@ -390,6 +334,7 @@ impl MetaPool {
         owner_account_id: AccountId,
         treasury_account_id: AccountId,
         operator_account_id: AccountId,
+        meta_token_account_id: AccountId,
     ) -> Self {
         assert!(!env::state_exists(), "The contract is already initialized");
 
@@ -431,6 +376,7 @@ impl MetaPool {
             nslp_liquidity_target: 10_000*NEAR,
             nslp_max_discount_basis_points: 180, //1.8%
             nslp_min_discount_basis_points: 25,   //0.25%
+            min_deposit_amount: 10*NEAR,   
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. initial 5x, default:1x. reward META = discounted * mult_pct / 100
             stnear_sell_meta_mult_pct: 500, //1x
             ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. initial 10x, default:5x. reward META = rewards * mult_pct / 100
@@ -438,7 +384,7 @@ impl MetaPool {
             ///for each stNEAR paid as discount, reward LPs with g-stNEAR. initial 50x, default:20x. reward META = fee * mult_pct / 100
             lp_provider_meta_mult_pct: 5000, //50x
             staking_pools: Vec::new(),
-
+            meta_token_account_id,
         };
     }
 
@@ -759,7 +705,7 @@ impl MetaPool {
 
         // The rest of the stnear sold goes into the LP. Because it is a larger than NEARs removed, it will increase share value for all LP providers.
         // Adding value to the pool via adding more stNEAR than the NEAR removed, will be counted as rewards for the nslp_meter, 
-        // so $META for LP providers will be created. $META for LP providers are realized during add_liquidity(), remove_liquidity() or by calling harvest_meta_from_lp()
+        // so $META for LP providers will be created. $META for LP providers are realized during add_liquidity(), remove_liquidity() 
         debug!("nslp_account.add_stake_shares {} {}",
             stake_shares_to_burn - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
             to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut));
@@ -807,7 +753,6 @@ impl MetaPool {
     /// add liquidity - payable
     #[payable]
     pub fn nslp_add_liquidity(&mut self) -> u16{
-        assert_min_amount(env::attached_deposit());
         self.internal_deposit();
         return self.internal_nslp_add_liquidity(env::attached_deposit());
     }
@@ -824,7 +769,7 @@ impl MetaPool {
         let mut acc = self.internal_get_account(&account_id);
         let mut nslp_account = self.internal_get_nslp_account();
 
-        //use this LP operation to realize meta pending rewards (same as nslp_harvest_meta)
+        //use this LP operation to realize meta pending rewards
         acc.nslp_realize_meta(&nslp_account, self);
 
         //how much does this user owns
@@ -900,36 +845,52 @@ impl MetaPool {
     // HARVEST META
     //------------------
 
-    ///META rewards for stakers are realized during stake(), unstake() or by calling harvest_meta_from_staking()
-    //Realize pending meta rewards from staking
-    pub fn harvest_meta_from_staking(&mut self){
+    ///compute all $META rewards at this point and mint $META tokens in the meta-token NEP-141 contract for the user
+    pub fn harvest_meta(&mut self) -> Promise{
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
-        //realize and mint meta
+        //realize and mint $META from staking rewards
         acc.stake_realize_meta(self);
-
-        //--SAVE ACCOUNT
-        self.internal_update_account(&account_id, &acc);
-    }
-
-    ///meta rewards for LP providers are realized during add_liquidity(), remove_liquidity() or by calling harvest_meta_from_lp()
-    ///realize pending meta rewards from LP
-    pub fn harvest_meta_from_lp(&mut self){
-
-        let account_id = env::predecessor_account_id();
-        let mut acc = self.internal_get_account(&account_id);
 
         //get NSLP account
         let nslp_account = self.internal_get_nslp_account();
-        
-        //realize and mint meta
+        //realize and mint meta from LP rewards
         acc.nslp_realize_meta(&nslp_account, self);
         
         //--SAVE ACCOUNT
         self.internal_update_account(&account_id, &acc);
+
+        //schedule async to mint the $META-tokens for the user
+        meta_token_mint::mint(
+            account_id.clone(), // to whom
+            acc.realized_meta.into(), //how much meta
+            // extra call args
+            &self.meta_token_account_id,
+            NO_DEPOSIT,
+            gas::BASE_GAS,
+        )
+        .then(ext_self_owner::after_minting_meta(
+            account_id, // to whom
+            // extra call args
+            &env::current_account_id(),
+            NO_DEPOSIT,
+            gas::BASE_GAS,
+        ))
+  }
+  //prev fn continues here
+  #[private]
+  pub fn after_minting_meta(&mut self, account_id:&AccountId){
+
+    if is_promise_success() {
+        //minting $META succeeded
+        let mut acc = self.internal_get_account(&account_id);
+        acc.realized_meta = 0;
+        self.internal_update_account(&account_id, &acc);
     }
+
+  }
 
 }
 
@@ -964,7 +925,7 @@ mod tests {
     }
 
     fn new_contract() -> MetaPool {
-        MetaPool::new(owner_account(), treasury_account(), operator_account())
+        MetaPool::new(owner_account(), treasury_account(), operator_account(), meta_token_account())
     }
 
     fn contract_only_setup() -> (VMContext, MetaPool) {

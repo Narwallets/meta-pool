@@ -183,7 +183,7 @@ impl Simulation {
         //   operator_account_id: AccountId,
       deposit:500*NEAR,
       gas:25*TGAS,
-      init_method:new(owner.account_id(), treasury.account_id(), operator.account_id())
+      init_method:new(owner.account_id(), treasury.account_id(), operator.account_id(), "meta_token_contract_account".into())
       );
 
     //deploy all the staking pools

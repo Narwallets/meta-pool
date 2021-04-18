@@ -1,9 +1,16 @@
+//-----------------------------
+//-----------------------------
+//contract main state migration
+//-----------------------------
+
 use near_sdk::{near_bindgen};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap,LookupMap};
 
+
 //------------------------
-//  Main Contract State V1 //------------------------
+//  Main Contract State V1 
+//------------------------
 // Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts.None
 // accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
 #[near_bindgen]
@@ -102,4 +109,71 @@ pub struct MetaPoolV1 {
     pub treasury_account_id: String,
     /// treasury cut on Liquid Unstake (25% from the fees by default)
     pub treasury_swap_cut_basis_points: u16,
+}
+
+
+#[near_bindgen]
+impl MetaPool {
+    #[init(ignore_state)]
+    pub fn migrate_state() -> Self {
+        let old: migrations::MetaPoolV1 = env::state_read().expect("Old state doesn't exist");
+        // Verify the migration can only be done by the owner.
+        assert_eq!(
+            &env::predecessor_account_id(),
+            &old.owner_account_id,
+            "Can only be called by the owner"
+        );
+
+        // Create the new contract using the data from the old contract.
+        Self { 
+            owner_account_id: old.owner_account_id,
+            contract_busy:false ,
+            staking_paused: old.staking_paused,
+            contract_account_balance: old.contract_account_balance,
+            reserve_for_unstake_claims: 0,
+            total_available: old.total_available,
+
+            //-- ORDERS
+            epoch_stake_orders: 0,
+            epoch_unstake_orders: 0,
+            epoch_last_clearing:0,
+
+            total_for_staking: old.total_for_staking,
+            total_actually_staked: old.total_actually_staked,
+            total_stake_shares: old.total_stake_shares,
+            total_meta: old.total_meta,
+            total_unstaked_and_waiting: old.total_unstaked_and_waiting,
+
+            total_unstake_claims: 0,
+
+            accumulated_staked_rewards: old.accumulated_staked_rewards,
+
+            accounts: old.accounts,
+
+            staking_pools: old.staking_pools,
+
+            loan_requests: old.loan_requests,
+            
+            nslp_liquidity_target: old.nslp_liquidity_target, 
+            nslp_max_discount_basis_points: old.nslp_max_discount_basis_points,
+            nslp_min_discount_basis_points: old.nslp_min_discount_basis_points,
+
+            staker_meta_mult_pct: old.staker_meta_mult_pct,
+            stnear_sell_meta_mult_pct: old.stnear_sell_meta_mult_pct,
+            lp_provider_meta_mult_pct: old.lp_provider_meta_mult_pct,
+
+            operator_account_id: old.operator_account_id,
+            operator_rewards_fee_basis_points: old.operator_rewards_fee_basis_points,
+            operator_swap_cut_basis_points: old.operator_swap_cut_basis_points,
+
+            treasury_account_id: old.treasury_account_id,
+            treasury_swap_cut_basis_points: old.treasury_swap_cut_basis_points,
+
+            // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+            web_app_url: old.web_app_url,
+            auditor_account_id: old.auditor_account_id,
+
+            meta_token_account_id: format!("token.{}", env::current_account_id())
+        }
+    }
 }

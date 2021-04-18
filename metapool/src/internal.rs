@@ -26,10 +26,11 @@ impl MetaPool {
         assert!(!self.contract_busy, "Contract is busy. Try again later");
     }
 
-}
-
-pub fn assert_min_amount(amount: u128) {
-    assert!(amount >= NEAR, "minimum amount is 1N");
+    pub fn assert_min_deposit_amount(&self,amount: u128) {
+        assert!(amount >= self.min_deposit_amount, "minimum deposit amount is {}",self.min_deposit_amount);
+    }
+    
+    
 }
 
 
@@ -39,7 +40,7 @@ pub fn assert_min_amount(amount: u128) {
 impl MetaPool {
 
     pub(crate) fn internal_deposit(&mut self) {
-        assert_min_amount(env::attached_deposit());
+        self.assert_min_deposit_amount(env::attached_deposit());
         self.internal_deposit_attached_near_into(env::predecessor_account_id());
     }
 
@@ -103,17 +104,17 @@ impl MetaPool {
     //------------------------------
     /// takes from account.available and mints stNEAR
     /// actual stake ins staking-pool is made by the meta-pool-heartbeat before the end of the epoch
-    pub(crate) fn internal_stake(&mut self, amount_requested: Balance) {
+    pub(crate) fn internal_stake(&mut self, user_amount: Balance) {
 
         self.assert_not_busy();
 
-        assert_min_amount(amount_requested);
+        self.assert_min_deposit_amount(user_amount);
 
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
         //take from the account "available" balance
-        let amount = acc.take_from_available(amount_requested, self);
+        let amount = acc.take_from_available(user_amount, self);
 
         //use this operation to realize meta pending rewards
         acc.stake_realize_meta(self);
@@ -209,7 +210,7 @@ impl MetaPool {
         //get NSLP account
         let mut nslp_account = self.internal_get_nslp_account();
 
-        //use this LP operation to realize meta pending rewards (same as nslp_harvest_meta)
+        //use this LP operation to realize meta pending rewards 
         acc.nslp_realize_meta(&nslp_account, self);
 
         // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
