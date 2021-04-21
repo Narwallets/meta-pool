@@ -5,33 +5,30 @@
 This contract provides the following value items for the NEAR community:
 
 #### Helps stakers avoid putting all eggs in one basket
- This contract acts as a staking-pool that distributes it's delegated funds to several validators. By delegating to this contract, you greatly reduce the risk of getting no-rewards due to validator outages and you contribute to decentralization and censorship-resistance. Besides staking rewards, while staking you will receive $META governance tokens. (Automatic Farming) 
+ This contract acts as a staking-pool that distributes it's delegated funds to several validators. By delegating to this contract, you greatly reduce the risk of getting no-rewards due to validator outages and you contribute to decentralization and censorship-resistance. Besides staking rewards, while staking you will receive $META  tokens. (Automatic Farming) 
+
+#### Provides Liquid Unstaking
+This contract allows users to skip the unstaking waiting period by providing a liquidity pool for *liquid unstaking*. This simplifies NEAR staking, making staking and unstaking simple and immediate.
 
 #### Tokenizes Stake
-This contract **tokenizes, liberates, your stake** while it keeps generating staking rewards. It allows you to use it to operate on markets or [use it as collateral](https://github.com/luciotato/usdnear-stable).
-#### Provides Liquid Unstaking
-This contract allows users to skip the unstaking waiting period by providing a liquidity pool for *liquid unstaking*. This simplifies staking, making staking and unstaking simple and immediate.
+This contract **tokenizes, liberates your stake** while keeping it generating staking rewards. It allows you to use it to operate on markets or to [use it as collateral](https://github.com/luciotato/usdnear-stable).
 
 #### Contributes to decentralization for the NEAR network
- This contract helps decentralization by distributing its delegated funds to several validators. If you own a lockup-contract with considerable funds, you can greatly contribute to the decentralization and censorship-resistance of the network and reduce your risk at the same time. Funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
+ This contract helps decentralization by distributing its delegated funds to several validators. This contract implements the stake-pool interface, so if you own a lockup-contract with considerable funds, you can greatly contribute to the decentralization and censorship-resistance of the network and reduce your risk at the same time. Funds will be automatically distributed between several validators ensuring increased decentralization and continuous rewards.
 
 #### Creates a Liquidity Pool and fees for Liquidity Providers
-This contract includes a liquidity pool and the opportunity for liquidity providers to earn fees. The liquidity pool is a stNEAR->NEAR pool, providing the *Liquid Unstake* functionality and generating fees for the Liquidity Providers.
+This contract includes a liquidity pool and the opportunity for liquidity providers to earn fees. The liquidity pool is a stNEAR->NEAR swap pool, providing the *Liquid Unstake* functionality and generating fees for the Liquidity Providers.
 
 #### Automatic Farming
-This contract integrates two NEP-141 tokens: stNEAR, *staked-NEAR* and $META, the project governance token. $METAs are farmed automatically. If you use the liquid unstake function, you'll receive $META; if you stake, you'll get $META with your staking rewards; if you are a Liquidity Provider, you'll get $META with your fees. There's also a $META multiplier: *early liquidity providers will receive more $META than late adopters*. At launch time the multipliers are:
+This contract integrates two NEP-141 tokens: stNEAR, *staked-NEAR* and $META, the project token. $METAs are farmed automatically. If you use the liquid unstake function, you'll receive $META; if you stake, you'll get $META with your staking rewards; if you are a Liquidity Provider, you'll get $META with your fees. There's also a $META multiplier: *early liquidity providers will receive more $META than late adopters*. 
+
+At launch time and for a limited period, the multipliers are:
 * 5x: Liquid unstakers get 5 $META per each NEAR they pay in fees
 * 10x: Stakers get 10 $META per each NEAR they receive from staking rewards
 * 50x: Liquidity Providers get 50 $META per each NEAR fee generated
 
 #### Validator Loans: a safety-net to avoid losing validators on the seat-price cliff 
-* This contract will allow struggling validators to keep a seat and keep validating in case of sudden rises in seat price. There will be staking-loans available for whitelisted validators and also emergencies stakes from the liquidity pool. Pools requiring staking will have to pay x-epoch rewards in advance. Fees paid will be distributed as rewards between the stNEAR holders and/or the Liquidity providers.
-
-## stNEAR Tokens
-
-This contract tokenizes your stake, allowing users to manage staked near as a NEP-141 TOKEN, called **stNEAR**.
-
-stNEARs represent staked NEAR, and can be transferred between users and sold for NEAR in the NEAR/stNEAR Liquidity Pool (paying a fee to skip the unstaking wait period). **The amount of stNEAR you hold is automatically incremented each epoch when staking rewards are paid**. This contract also includes a trip-meter functionality, so you can precisely measure rewards received.
+This contract will allow struggling validators to keep a seat and keep validating in case of sudden rises in seat price. There will be staking-loans available for whitelisted validators and also emergencies stakes from the liquidity pool. Pools requiring staking will have to pay x-epoch rewards in advance. Fees paid will be distributed as rewards between the stNEAR holders and/or the Liquidity providers.
 
 ## Liquid Unstake
 
@@ -41,9 +38,20 @@ In the Liquidity Pool:
  * Users providing liquidity can earn fees on each sell
  * Users wanting to unstake without the waiting period can do so for a fee.
 
-The *stNEAR->NEAR Liquidity Pool* is a one-sided Liquidity pool. Liquidity providers add only NEAR to the liquidity pool. The pool allows other users to have "Liquid Unstakes". During a "Liquid Unstake" users sell stNEAR and take NEAR from the liquidity pool, paying a fee. The fee represents how much users value skipping the 39-52hs waiting period to receive their funds. The fee varies with the amount of NEAR in the Liquidity Pool, but the curve is capped at the extremes. Initially, discount fees are in the range 1.8%-0.25%, but the curve parameters can be adjusted by DAO governance (by the vote of $META token holders).
+The *stNEAR->NEAR Liquidity Pool* is a one-sided Liquidity pool. Liquidity providers add only NEAR to the liquidity pool. The pool allows other users to perform "Liquid Unstakes". During a "Liquid Unstake" users send stNEAR and receive NEAR from the liquidity pool, minus a fee. The fee represents how much users value skipping the 39-52hs waiting period to receive their funds. The fee varies with the amount of NEAR in the Liquidity Pool, but the curve is capped at the extremes. Initially, discount fees are in the range 3%-0.3%, but the curve parameters can be adjusted by DAO governance.
 
 ![example-fee-curve](images/example-fee-curve.png)
+
+## stNEAR Tokens
+
+This contract tokenizes your stake, allowing users to use their staked near as a NEP-141 TOKEN, called **stNEAR**.
+
+stNEARs represent staked NEAR. **The amount of stNEAR you hold is automatically incremented each epoch when staking rewards are paid**. 
+
+## Trip-meter 
+
+This contract also includes a trip-meter functionality, so you can precisely measure staking rewards received, regardless of stake and unstake movements you can make. 
+The rewards trip-meter will show you the exact amount of your staking rewards without being affected by staking and unstaking movements in your account.
 
 ## Standard staking-pool and Lockup-Contract accounts
 
@@ -58,17 +66,16 @@ The contract pools all users' funds and keeps a balanced distribution of those f
 
 Staking and unstaking distribution is done by periodically calling `distribute_staking()/distribute_unstaking()`, so actual staking and unstaking are delayed. 
 
-Users can choose to "sell" some of their stNEAR to Liquidity Providers for a fee. Liquidity Providers get the stNEAR+fee and deliver NEAR. No stake/unstake is performed at that point.
+The contract includes a swap pool called the Liquidity-Pool. When users perform a liquid-unstake, the swap some of their stNEAR for NEAR in the liquidity pool, providing a fee to Liquidity Providers. Liquidity Providers indirectly get the stNEAR+fee and deliver NEAR. No stake/unstake is performed in that process.
 
 ### Guarantees
 
-(To verify)
 - The users can not lose tokens or block contract operations by using methods under staking section.
 - Users owning stNEARs will accrue rewards on each epoch, except in the extreme unlikely case that ALL validators go offline during that epoch.
 
 ## Use Cases
 
-Definitions:
+#### Definitions:
 
 stNEAR: one stNEAR represents one staked NEAR. A stNEAR is a virtual token computed from the user’s share in the total staked funds. By staking in the Meta-pool a user mints stNEAR, by unstaking, stNEARs are burned. When staking rewards are paid, new stNEARs are minted and distributed.
 
@@ -78,17 +85,17 @@ stNEAR: one stNEAR represents one staked NEAR. A stNEAR is a virtual token compu
 
 There are two ways to unstake: (from more convenient to less convenient)
 
-1. Liquid Unstake: You unstake by selling stNEAR in the Liquidity Pool. Since you’re unstaking without waiting 39-54hs (you’re passing that waiting penalty to other users) you pay a small fee. The fee is the value of not-waiting 39-54hs. Example: You liquid-unstake 100 stNEAR for 99.8 NEAR *and* 1 $META, and you get your NEAR immediately without waiting 39-54hs. 
+1. Liquid Unstake: You unstake by swapping stNEAR->NEAR in the Liquidity Pool. Since you’re unstaking without waiting 39-54hs (you’re passing the wait penalty to other users) you pay a small fee. The fee is the value of not-waiting 39-54hs. Example: You liquid-unstake 100 stNEAR for 99.8 NEAR, and you get your NEAR immediately without waiting 39-54hs. Note: Liquid unstakers receive NEAR *and* $META rewards in the operation.
 
-2. Delayed Unstake. The contract unstakes your NEAR from the staking-pools. You burn stNEAR tokens and get unstaked-near. You don’t pay a fee, but you must wait 39-54hs to move those funds to your account. Your funds remain unstated in the staking-pool for 3 or 4 epochs (39-54hs) before you can withdraw, finishing the unstake. E.g. you unstake 100 stNEAR, and you get 100 unstaked-near, 4 days later you can move your unstaked-near to your own near account.
+2. Delayed Unstake. You burn stNEAR tokens and get unstaked-near. The contract unstakes your NEAR from the staking-pools. You don’t pay a fee, but you must wait 4-8 epochs to withdraw those funds to your account. Your funds remain unstated in the staking-pool for 3 to 8 epochs (39-104hs) before you can withdraw. E.g. you unstake 100 stNEAR, and you get 100 unstaked-near, 4 days later you can withdraw your unstaked-near to your own near account.
 
-These operations are reflected in the UI in two steps that the user must complete with 39-54hs between the two: [START Delayed Unstake] and [FINISH Delayed Unstake]
+These operations are reflected in the UI in two steps that the user must complete with 39-104hs between them: [Delayed-Unstake::start] and [Delayed-Unstake::withdraw]. The UI informs the user the waiting period before confirmation, and also the remaining hours during the wait period.
 
-**Liquid Unstake**
+**Liquidity Pool**
 
 In order to provide Liquid Unstake a Liquidity Pool is maintained by the contract:
 
-* The unstaker enters the amount of stNEAR they want to unstake and the contract replies with the amount of NEAR & $META they will receive, normally with a fee between 0.25% and 1.8% depending on the liquidity pool balance and the fee curve parameters.
+* The unstaker enters the amount of stNEAR they want to unstake and the contract replies with the amount of NEAR & $META they will receive, normally with a fee between 0.3% and 3% depending on the available liquidity and the fee curve parameters.
 
 ## Treasury
 Part of the LP fees go to the DAO Treasury. Treasury funds are always stNEARs and used for:
@@ -129,27 +136,26 @@ $META governance tokens are minted and distributed to:
 
 ## Operational costs
 
-Periodic calls to `distribute_staking()/distribute_unstaking()/withdraw_from_a_pool()` are required for this contract operation. These calls consume considerable amounts of gas that is paid by the operator account. To fund this operational cost, a operator's fee percentage (0.3% by default) is taken from rewards distributions. It can be adjusted by $META governance token holders.
+Periodic calls to `distribute_staking()/distribute_unstaking()/withdraw_from_a_pool()` are required for this contract operation. These calls consume considerable amounts of gas that is paid by the operator account. To fund this operational cost, a operator's fee percentage (0.3% by default) is taken from rewards distributions. It can be adjusted by DAO governance.
 
 ## Maintenance
 
-The contract has a configurable parameter `dev_maintenance_amount`, initially 400 stNEAR, to be transferred monthly to the account `developers.near`. By DAO governance, this value can be increased and $META token holders can also re-direct up to 50% of maintenance funds to other maintainers and contributors.
+The contract has a configurable parameter `dev_maintenance_amount`, initially 400 stNEAR, to be transferred monthly to the account `developers.near`. By DAO governance, this value can be increased and up to 50% can be redirected to other maintainers and contributors.
 
 
 ## User stories:
 ### Alice 
 
 Alice wants to stake her NEAR with low risk, and also help the community by promoting decentralization and censorship-resistance for the network.
-Alice opens an account in the contract: meta.pool.near
 
-Alice stakes 750,000 NEAR. Her 750,000 NEAR are distributed between the staking-pools by an automatic distribution mechanism to keep the validators balanced. She gets 750,000 stNEAR tokens. 
+Alice stakes 750,000 NEAR in the meta-pool. Her 750,000 NEAR are distributed between the staking-pools by an automatic distribution mechanism to keep the validators balanced. She gets 750,000 stNEAR tokens. 
 
 She starts earning staking rewards on her stNEAR, she can track precisely her rewards. She will also get $META tokens on each reward distribution.
-By having stNEAR she has tokenized her stake, she can participate in other markets, and also seh can Liquid-Unstake some of her stNEAR skipping the waiting period if the need arises.
+By having stNEAR she has tokenized her stake, she can participate in other markets, and also she can Liquid-Unstake some of her stNEAR skipping the waiting period if the need arises.
 
 ### Bob 
 
-Bob already has an account in the meta-pool contract. He holds 10,000 stNEAR earning staking rewards. 
+Bob already has staked in the meta-pool. He holds 10,000 stNEAR earning staking rewards. 
 
 Bob needs to unstake 5,000 NEAR to use in an emergency. He can’t wait 4 days to get his NEAR. 
 
@@ -177,7 +183,7 @@ Dave enters 100,000 NEAR to the Liquidity Pool, he gets shares of the Liquidity 
 Eve swaps 50,500 stNEAR for 50,000 NEAR. She pays a 1% fee price to get her NEAR immediately.
 
 The Liquidity Pool delivers 50,000 NEAR to Eve and acquires 50,500 stNEAR from Eve.
-The Liquidity Pool has a low amount of NEAR now. After a few minutes, the liquidity pool automatically unstakes stNEAR. (Also the LP can use an internal clearing mechanism to acquire NEAR and restore liquidity automatically). After unstaking all, the pool will have liquidity restored at 100,500 NEAR.
+The Liquidity Pool has a low amount of NEAR now. During the epoch the liquidity pool uses an internal clearing mechanism to acquire NEAR by selling stNEAR and restore liquidity automatically. After several operations, the liq-pool will have liquidity restored at 100,500 NEAR.
 
 As the Liquidity Pool operates, the NEAR amount grows, so do Dave’s share value. With each operation $META tokens are also minted for Liquidity Providers, so Dave and the other providers get $META tokens besides the fees.
 
@@ -186,7 +192,6 @@ As the Liquidity Pool operates, the NEAR amount grows, so do Dave’s share valu
 ## Future Expansions
 
 * USDNEAR: Create a collateral-based stable coin similar to Compound's DAI, using stNEAR as collateral
-
 
 -------------------------
 
