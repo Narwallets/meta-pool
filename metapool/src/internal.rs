@@ -242,9 +242,11 @@ impl MetaPool {
     //--------------------------------------------------
     /// computes unstaking delay on current situation
     pub fn internal_compute_current_unstaking_delay(&self, amount:u128) -> u64 {
+        let mut total_staked:u128 =0;
         let mut normal_wait_staked_available:u128 =0;
         for (_,sp) in self.staking_pools.iter().enumerate() {
             //if the pool has no unstaking in process
+            total_staked += sp.staked;
             if !sp.busy_lock && sp.staked>0 && sp.wait_period_ended() { 
                 normal_wait_staked_available += sp.staked;
                 if normal_wait_staked_available > amount {
@@ -252,6 +254,7 @@ impl MetaPool {
                 }
             }
         }
+        if total_staked==0 { return NUM_EPOCHS_TO_UNLOCK}; //initial stake, nothing staked, someone delay-unstaking in contract epoch 0
         //all pools are in unstaking-delay, it will take double the time
         return 2 * NUM_EPOCHS_TO_UNLOCK; 
     }
