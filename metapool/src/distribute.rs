@@ -128,9 +128,7 @@ impl MetaPool {
 
         assert_callback_calling();
 
-        self.contract_busy=false;
         let sp = &mut self.staking_pools[sp_inx];
-        sp.busy_lock = false;
 
         let stake_succeeded = is_promise_success();
 
@@ -166,6 +164,10 @@ impl MetaPool {
             self.epoch_stake_orders += amount; //undo preventively reduce stake orders 
         }
         log!("Staking of {} at @{} {}", amount, sp.account_id, result);
+
+        sp.busy_lock = false;
+        self.contract_busy=false;
+
         return stake_succeeded;
     }
 
@@ -246,9 +248,7 @@ impl MetaPool {
 
         assert_callback_calling();
 
-        self.contract_busy=false;
         let sp = &mut self.staking_pools[sp_inx];
-        sp.busy_lock = false;
 
         let unstake_succeeded = is_promise_success();
 
@@ -268,6 +268,9 @@ impl MetaPool {
         }
 
         log!("Unstaking of {} at @{} {}", amount, sp.account_id, result);
+
+        sp.busy_lock = false;
+        self.contract_busy=false;
 
     }
     
@@ -355,9 +358,7 @@ impl MetaPool {
 
         assert_callback_calling();
 
-        self.contract_busy=false;
         let sp = &mut self.staking_pools[sp_inx];
-        sp.busy_lock = false;
 
         // real unstaked amount for this pool
         let real_unstaked_balance: u128 = unstaked_balance.0;
@@ -380,6 +381,9 @@ impl MetaPool {
             sp.unstaked = real_unstaked_balance;
             sp.staked += difference; //the difference was in "our" record of "staked"
         }
+
+        sp.busy_lock = false;
+        self.contract_busy=false;
 
     }
 
@@ -485,13 +489,9 @@ impl MetaPool {
 
         assert_callback_calling();
 
-        self.contract_busy = false;
-
         //store the new staked amount for this pool
         let new_total_balance: u128;
         let sp = &mut self.staking_pools[sp_inx];
-
-        sp.busy_lock = false;
 
         sp.last_asked_rewards_epoch_height = env::epoch_height();
 
@@ -538,6 +538,10 @@ impl MetaPool {
             &self.add_extra_minted_shares(DEVELOPERS_ACCOUNT_ID.into(), developers_fee_shares);
 
         }
+
+        sp.busy_lock = false;
+        self.contract_busy = false;
+
     }
 
     //----------------------------------------------------------------------
@@ -620,9 +624,7 @@ impl MetaPool {
 
         assert_callback_calling();
 
-        self.contract_busy = false;
         let sp = &mut self.staking_pools[inx as usize];
-        sp.busy_lock = false;
         
         let amount = sp.unstaked; //we retrieved all
 
@@ -650,6 +652,10 @@ impl MetaPool {
             "The withdrawal of {} from @{} {}",
             amount, &sp.account_id, result
         );
+
+        sp.busy_lock = false;
+        self.contract_busy = false;
+
         return withdrawn_amount.into();
     }
 
