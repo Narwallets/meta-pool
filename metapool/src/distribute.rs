@@ -271,11 +271,23 @@ impl MetaPool {
 
     }
     
-    //utility to set busy flag manually by operator.
+    //utility to set contract busy flag manually by operator.
     pub fn set_busy(&mut self, value: bool) {
         assert_one_yocto();
         self.assert_owner_calling();
         self.contract_busy=value;
+    }
+    //operator manual set sp.busy_lock
+    pub fn sp_busy(&mut self, sp_inx: u16, value:bool) {
+        assert_one_yocto();
+        self.assert_operator_or_owner();
+
+        let inx = sp_inx as usize;
+        assert!(inx < self.staking_pools.len());
+
+        let sp = &mut self.staking_pools[inx];
+        sp.busy_lock = value;
+
     }
 
     //-- check If extra balance has accumulated (30% of tx fees by near-protocol)
