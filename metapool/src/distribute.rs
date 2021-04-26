@@ -273,6 +273,8 @@ impl MetaPool {
     
     //utility to set busy flag manually by operator.
     pub fn set_busy(&mut self, value: bool) {
+        assert_one_yocto();
+        self.assert_owner_calling();
         self.contract_busy=value;
     }
 
