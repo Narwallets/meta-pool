@@ -165,6 +165,8 @@ impl MetaPool {
         }
         log!("Staking of {} at @{} {}", amount, sp.account_id, result);
 
+        //WARN: This is a callback after-cross-contract-call method
+        //busy locks must be saved false in the state, this method SHOULD NOT PANIC
         sp.busy_lock = false;
         self.contract_busy=false;
 
@@ -269,6 +271,8 @@ impl MetaPool {
 
         log!("Unstaking of {} at @{} {}", amount, sp.account_id, result);
 
+        //WARN: This is a callback after-cross-contract-call method
+        //busy locks must be saved false in the state, this method SHOULD NOT PANIC
         sp.busy_lock = false;
         self.contract_busy=false;
 
@@ -382,6 +386,8 @@ impl MetaPool {
             sp.staked += difference; //the difference was in "our" record of "staked"
         }
 
+        //WARN: This is a callback after-cross-contract-call method
+        //busy locks must be saved false in the state, this method SHOULD NOT PANIC
         sp.busy_lock = false;
         self.contract_busy=false;
 
@@ -493,6 +499,11 @@ impl MetaPool {
         let new_total_balance: u128;
         let sp = &mut self.staking_pools[sp_inx];
 
+        //WARN: This is a callback after-cross-contract-call method
+        //busy locks must be saved false in the state, this method SHOULD NOT PANIC
+        sp.busy_lock = false;
+        self.contract_busy = false;
+
         sp.last_asked_rewards_epoch_height = env::epoch_height();
 
         //total_balance informed is staking-pool.staked + staking-pool.unstaked
@@ -538,9 +549,6 @@ impl MetaPool {
             &self.add_extra_minted_shares(DEVELOPERS_ACCOUNT_ID.into(), developers_fee_shares);
 
         }
-
-        sp.busy_lock = false;
-        self.contract_busy = false;
 
     }
 
@@ -653,6 +661,8 @@ impl MetaPool {
             amount, &sp.account_id, result
         );
 
+        //WARN: This is a callback after-cross-contract-call method
+        //busy locks must be saved false in the state, this method SHOULD NOT PANIC
         sp.busy_lock = false;
         self.contract_busy = false;
 
