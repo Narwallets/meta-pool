@@ -678,4 +678,19 @@ impl MetaPool {
         event!(r#"{{"event":"clr.ord","keep":"{}"}}"#, to_keep);
     }
 
+    //--FIXES
+    //operator manual set sp.busy
+    pub fn sp_busy(&mut self, sp_inx: u16, value:bool) {
+        
+        self.assert_operator_or_owner();
+
+        let inx = sp_inx as usize;
+        assert!(inx < self.staking_pools.len());
+
+        let sp = &mut self.staking_pools[inx];
+        assert!(sp.busy_lock != value);
+        sp.busy_lock = value;
+
+    }
+
 }
