@@ -371,8 +371,7 @@ impl MetaPool {
             let difference = real_unstaked_balance - sp.unstaked;
             log!("positive difference {}",difference);
             sp.unstaked = real_unstaked_balance;
-            assert!(sp.staked>=difference);
-            sp.staked -= difference; //the difference was in "our" record of "staked"
+            sp.staked = sp.staked.saturating_sub(difference); //the difference was in "our" record of "staked"
         }
         else if real_unstaked_balance < sp.unstaked {
             //negative difference
