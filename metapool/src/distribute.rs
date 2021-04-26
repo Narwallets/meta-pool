@@ -274,6 +274,18 @@ impl MetaPool {
     pub fn set_busy(&mut self, value: bool) {
         self.contract_busy=value;
     }
+    //operator manual set sp.busy
+    pub fn sp_busy(&mut self, sp_inx: u16, value:bool) {
+        
+        self.assert_operator_or_owner();
+
+        let inx = sp_inx as usize;
+        assert!(inx < self.staking_pools.len());
+
+        let sp = &mut self.staking_pools[inx];
+        sp.busy_lock = value;
+
+    }
 
     //-- check If extra balance has accumulated (30% of tx fees by near-protocol)
     pub fn extra_balance_accumulated(&self) -> U128String {
@@ -678,19 +690,5 @@ impl MetaPool {
         event!(r#"{{"event":"clr.ord","keep":"{}"}}"#, to_keep);
     }
 
-    //--FIXES
-    //operator manual set sp.busy
-    pub fn sp_busy(&mut self, sp_inx: u16, value:bool) {
-        
-        self.assert_operator_or_owner();
-
-        let inx = sp_inx as usize;
-        assert!(inx < self.staking_pools.len());
-
-        let sp = &mut self.staking_pools[inx];
-        assert!(sp.busy_lock != value);
-        sp.busy_lock = value;
-
-    }
 
 }
