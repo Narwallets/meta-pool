@@ -2,6 +2,7 @@
 members = [
     "metapool",
     "meta-token",
+    "fixed-price-pool",
     "test-staking-pool",
     "test-get-epoch-contract",
 ]

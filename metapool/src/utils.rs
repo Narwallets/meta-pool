@@ -46,7 +46,7 @@ pub fn apply_multiplier(amount:u128, percentage:u16) -> u128 {
 }
 
 
-//-- SHARES COMPUTATIONS
+//-- SHARED COMPUTATIONS
 
 /// returns amount * numerator/denominator
 pub fn proportional(amount:u128, numerator:u128, denominator:u128) -> u128{

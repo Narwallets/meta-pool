@@ -1,7 +1,6 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-//use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, near_bindgen};
-//use near_sdk::json_types::{U128};
+use near_sdk::{env, log, near_bindgen, ext_contract, is_promise_success, PanicOnDefault, Promise, Gas, Balance};
+use near_sdk::json_types::{U128};
 
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
@@ -13,7 +12,7 @@ static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INI
 
 //contract state
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct TestContract {
     //current request id
     pub saved_message: String,
@@ -22,10 +21,58 @@ pub struct TestContract {
     pub last_epoch: u64
 }
 
-impl Default for TestContract {
-    fn default() -> Self {
-        env::panic(b"This contract should be initialized before usage")  
-    }
+const ONE_NEAR: Balance  = 1_000_000_000_000_000_000_000_000;
+const NEAR: Balance = ONE_NEAR;
+const TGAS: Gas = 1_000_000_000_000;
+const NO_DEPOSIT:u128 = 0;
+
+type U128String = U128;
+
+#[ext_contract(ext_staking_pool)]
+pub trait ExtStakingPool {
+    fn get_account_staked_balance(&self, account_id: AccountId) -> U128String;
+
+    fn get_account_unstaked_balance(&self, account_id: AccountId) -> U128String;
+
+    fn get_account_total_balance(&self, account_id: AccountId) -> U128String;
+
+    fn deposit(&mut self);
+
+    fn deposit_and_stake(&mut self);
+
+    fn withdraw(&mut self, amount: U128String);
+    fn withdraw_all(&mut self);
+
+    fn stake(&mut self, amount: U128String);
+
+    fn unstake(&mut self, amount: U128String);
+
+    fn unstake_all(&mut self);
+}
+
+#[ext_contract(ext_self_owner)]
+pub trait ExtMetaStakingPoolOwnerCallbacks {
+    fn on_staking_pool_deposit(&mut self, amount: U128String) -> bool;
+
+    fn on_retrieve_from_staking_pool(&mut self, inx: u16) -> bool;
+
+    fn on_staking_pool_stake_maybe_deposit(
+        &mut self,
+        sp_inx: usize,
+        amount: u128,
+        included_deposit: bool,
+    ) -> bool;
+
+    fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool;
+
+    fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
+
+    fn on_get_sp_total_balance(&mut self, big_amount: u128, #[callback] total_balance: U128String);
+    
+    fn on_get_sp_unstaked_balance(&mut self, sp_inx: usize, #[callback] unstaked_balance: U128String);
+
+    fn after_minting_meta(&self, account_id:AccountId);
+
 }
 
 #[near_bindgen]
@@ -67,6 +114,32 @@ impl TestContract {
     ///Make a request to the dia-gateway smart contract
     pub fn get_block_index(&self)-> u64 {
         return env::block_index()
+    }
+
+    ///Test u128 as callback param
+    pub fn test_callbacks(&self)-> Promise {
+
+        let big_amount:u128 = u128::MAX; 
+        //query our current balance (includes staked+unstaked+staking rewards)
+        ext_staking_pool::get_account_total_balance(
+            String::from("lucio.testnet"),
+            //promise params
+            &String::from("meta.pool.testnet"),
+            NO_DEPOSIT,
+            10*TGAS,
+        )
+        .then(ext_self_owner::on_get_sp_total_balance(
+            big_amount,
+            //promise params
+            &env::current_account_id(),
+            NO_DEPOSIT,
+            10*TGAS,
+        ))
+    }
+    //prev-fn continues here
+    pub fn on_get_sp_total_balance(big_amount:u128, #[callback] balance:U128String){
+        log!("is_promise_success:{} big_amount:{} big_amount(nears):{} balance:{}",
+            is_promise_success(), big_amount, big_amount/NEAR, balance.0);
     }
 
 }
