@@ -1,24 +1,29 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, log, near_bindgen, ext_contract, is_promise_success, PanicOnDefault, Promise, Gas, Balance};
+use near_sdk::{env, log, near_bindgen, ext_contract, is_promise_success, PanicOnDefault, PromiseOrValue, Gas, Balance};
 use near_sdk::json_types::{U128};
+use near_sdk::env::BLOCKCHAIN_INTERFACE;
 
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
-// const ONE_NEAR:u128 = 1_000_000_000_000_000_000_000_000;
-// const ONE_NEAR_CENT:u128 = ONE_NEAR/100;
-// const DEPOSIT_FOR_REQUEST: u128 = ONE_NEAR_CENT; // amount that clients have to attach to make a request to the api
-// const GAS_FOR_REQUEST: Gas = 50_000_000_000_000;
+mod upgrade;
+
+const CONTRACT_VERSION:&str = "0.0.1"; //to test Sputnik V2 remote-upgrade
+
+#[cfg(target_arch = "wasm32")]
+const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
+
+const GAS_FOR_UPGRADE_CODE_AND_MIGRATE:u64 = 150;
 
 //contract state
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct TestContract {
-    //current request id
+    //test state
     pub saved_message: String,
     pub saved_i32: i32,
     //last response received
-    pub last_epoch: u64
+    pub last_epoch: u64,
 }
 
 const ONE_NEAR: Balance  = 1_000_000_000_000_000_000_000_000;
@@ -51,28 +56,8 @@ pub trait ExtStakingPool {
 }
 
 #[ext_contract(ext_self_owner)]
-pub trait ExtMetaStakingPoolOwnerCallbacks {
-    fn on_staking_pool_deposit(&mut self, amount: U128String) -> bool;
-
-    fn on_retrieve_from_staking_pool(&mut self, inx: u16) -> bool;
-
-    fn on_staking_pool_stake_maybe_deposit(
-        &mut self,
-        sp_inx: usize,
-        amount: u128,
-        included_deposit: bool,
-    ) -> bool;
-
-    fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool;
-
-    fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
-
+pub trait SelfCallbacks {
     fn on_get_sp_total_balance(&mut self, big_amount: u128, #[callback] total_balance: U128String);
-    
-    fn on_get_sp_unstaked_balance(&mut self, sp_inx: usize, #[callback] unstaked_balance: U128String);
-
-    fn after_minting_meta(&self, account_id:AccountId);
-
 }
 
 #[near_bindgen]
@@ -89,10 +74,15 @@ impl TestContract {
          };
     }
 
+    // ------------------------------
+    // test Sputnik V2 remote-upgrade
+    // ------------------------------
+    /// get version ()
+    pub fn get_version()->String { CONTRACT_VERSION.into() }
 
-    /****************/
-    /* Main methods */
-    /****************/
+    // ------------------------------
+    // Main methods
+    // ------------------------------
     #[payable]
     pub fn set_message(&mut self, message: String){
         self.saved_message = message;
@@ -116,8 +106,10 @@ impl TestContract {
         return env::block_index()
     }
 
-    ///Test u128 as callback param
-    pub fn test_callbacks(&self)-> Promise {
+    // ------------------------------
+    //Test u128 as argument type in a callback 
+    // ------------------------------
+    pub fn test_callbacks(&self)-> PromiseOrValue<u128> {
 
         let big_amount:u128 = u128::MAX; 
         //query our current balance (includes staked+unstaked+staking rewards)
@@ -134,19 +126,89 @@ impl TestContract {
             &env::current_account_id(),
             NO_DEPOSIT,
             10*TGAS,
-        ))
+        )).into()
     }
     //prev-fn continues here
-    pub fn on_get_sp_total_balance(big_amount:u128, #[callback] balance:U128String){
+    #[private]
+    pub fn on_get_sp_total_balance(big_amount:u128, #[callback] balance:U128String) -> U128String {
         log!("is_promise_success:{} big_amount:{} big_amount(nears):{} balance:{}",
             is_promise_success(), big_amount, big_amount/NEAR, balance.0);
+        return balance;
+    }
+
+    /// upgrade_code_and_migrate, called from Sputnik V2
+    #[cfg(target_arch = "wasm32")]
+    pub fn upgrade_code_and_migrate(code:Option<Vec<u8>>) {
+        assert!(env::predecessor_account_id()=="");
+        log!("bytes.length {}",code.unwrap().len() );
+        let current_id = env::current_account_id().into_bytes();
+        let method_name = "migrate".as_bytes().to_vec();
+        let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE_CODE_AND_MIGRATE;
+        unsafe {
+            BLOCKCHAIN_INTERFACE.with(|b| {
+                // Load input (new contract code) into register 0
+                b.borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .input(0); 
+                
+                //prepare self-call promise
+                let promise_id = b
+                    .borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .promise_batch_create(current_id.len() as _, current_id.as_ptr() as _);
+
+                //1st item, upgrade code (takes data from register 0)
+                b.borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
+
+                //2nd item, schedule a call to "migrate".- (will execute on the *new code*)
+                b.borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .promise_batch_action_function_call(
+                        promise_id,
+                        method_name.len() as _,
+                        method_name.as_ptr() as _,
+                        0 as _,
+                        0 as _,
+                        0 as _,
+                        attached_gas,
+                    );
+            });
+        }
+
+    }
+
+    //-----------------
+    //-- migration called after code upgrade
+    //-----------------
+    /// Should only be called by this contract on migration.
+    /// This is NOOP implementation. KEEP IT if you haven't changed contract state.
+    /// If you have changed state, you need to implement migration from old state (keep the old struct with different name to deserialize it first).
+    /// After migrate goes live on MainNet, return this implementation for next updates.
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        assert_eq!(
+            env::predecessor_account_id(),
+            env::current_account_id(),
+            "ERR_NOT_ALLOWED"
+        );
+        //read old state (old structure with different name)
+        let old: TestContract = env::state_read().expect("ERR_CONTRACT_IS_NOT_INITIALIZED");
+        //Create the new contract using the data from the old contract.
+        let new: TestContract = old;
+        return new; //return new struct, will be stored as contract state
     }
 
 }
 
-/**************/
-/* Unit tests */
-/**************/
+// ------------------------------
+// Unit tests
+// ------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -192,4 +254,5 @@ mod tests {
         contract.set_message(msg.clone());
         assert_eq!(contract.get_message(), msg.clone(), "Contract message is different from the expected");
     }
+
 }

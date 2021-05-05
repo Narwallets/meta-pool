@@ -2,11 +2,8 @@ set -e
 NETWORK=testnet
 OWNER=lucio.$NETWORK
 MASTER_ACC=pool.$NETWORK
-CONTRACT_ACC=devmeta.$MASTER_ACC
-GOV_TOKEN=token.devmeta.$MASTER_ACC
-
-#set meta-cli target
-meta --cliconf -c $CONTRACT_ACC -acc $OWNER
+CONTRACT_ACC=test.$MASTER_ACC
+GOV_TOKEN=token.$MASTER_ACC
 
 export NODE_ENV=$NETWORK
 
@@ -15,15 +12,10 @@ export NODE_ENV=$NETWORK
 #read input
 #near delete $CONTRACT_ACC $MASTER_ACC
 #near create-account $CONTRACT_ACC --masterAccount $MASTER_ACC
-#meta deploy ./res/metapool.wasm
-meta new { owner_account_id:$OWNER, treasury_account_id:treasury$OPERATOR_ACC_SUFFIX, operator_account_id:operator$OPERATOR_ACC_SUFFIX, meta_token_account_id:$GOV_TOKEN } --accountId $MASTER_ACC
-## set params@meta set_params
-meta default_pools_testnet
+#near deploy $CONTRACT_ACC ./res/get_epoch_contract.wasm
+#near call $CONTRACT_ACC new  --accountId $MASTER_ACC
 
 
 ## redeploy code only
-#meta deploy ./res/metapool.wasm  --accountId $MASTER_ACC
+near deploy $CONTRACT_ACC ./res/get_epoch_contract.wasm
 
-#save last deployment  (to be able to recover state/tokens)
-#cp ./res/metapool.wasm ./res/metapool.`date +%F.%T`.wasm
-#date +%F.%T
