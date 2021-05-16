@@ -1,24 +1,24 @@
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{AccountId};
+use near_sdk::AccountId;
 use uint::construct_uint;
 
 // default token
-pub const STNEAR:&str = "stNEAR";
+pub const STNEAR: &str = "stNEAR";
 
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
 pub const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 pub const ONE_NEAR: u128 = NEAR;
-pub const NEAR_CENT: u128 = NEAR/100;
-pub const ONE_MILLI_NEAR : u128 = NEAR/1_000;
-pub const ONE_MICRO_NEAR : u128 = NEAR/1_000_000;
+pub const NEAR_CENT: u128 = NEAR / 100;
+pub const ONE_MILLI_NEAR: u128 = NEAR / 1_000;
+pub const ONE_MICRO_NEAR: u128 = NEAR / 1_000_000;
 pub const TWO_NEAR: u128 = 2 * NEAR;
 pub const FIVE_NEAR: u128 = 5 * NEAR;
 pub const TEN_NEAR: u128 = 10 * NEAR;
 pub const K_NEAR: u128 = 1_000 * NEAR;
 
-pub const MIN_MOVEMENT : u128 = ONE_NEAR; //if there's less than 0.20 NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
+pub const MIN_MOVEMENT: u128 = ONE_NEAR; //if there's less than 0.20 NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
 
 pub const TGAS: u64 = 1_000_000_000_000;
 
@@ -33,19 +33,18 @@ pub const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4; //0 for testing in guild-net, 4
 /// contract code storage and some internal state.
 pub const MIN_BALANCE_FOR_STORAGE: u128 = 35_000_000_000_000_000_000_000_000;
 /// if the remainder falls below this amount, it's included in the current movement
-pub const MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT: u128 = 5*K_NEAR;
+pub const MIN_STAKE_UNSTAKE_AMOUNT_MOVEMENT: u128 = 5 * K_NEAR;
 
 //cut on swap fees
-pub const DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS : u16 = 2500; // 25% swap fees go to Treasury
-pub const DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS : u16 = 300; // 3% swap fees go to operator
-//Fee on staking rewards
-pub const DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS : u16 = 50; // 0.5% -- CANT BE HIGHER THAN 1000 / 10%
+pub const DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS: u16 = 2500; // 25% swap fees go to Treasury
+pub const DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS: u16 = 300; // 3% swap fees go to operator
+                                                             //Fee on staking rewards
+pub const DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS: u16 = 50; // 0.5% -- CANT BE HIGHER THAN 1000 / 10%
 
 //Note: Licence forbids you to change the following 3 constants and/or the developer's distribution mechanism
-pub const DEVELOPERS_ACCOUNT_ID: &str = "developers.near"; 
-pub const DEVELOPERS_REWARDS_FEE_BASIS_POINTS: u16 = 20; // 0.2% from rewards 
-pub const DEVELOPERS_SWAP_CUT_BASIS_POINTS : u16 = 200; // 2% swap fees go to authors
-
+pub const DEVELOPERS_ACCOUNT_ID: &str = "developers.near";
+pub const DEVELOPERS_REWARDS_FEE_BASIS_POINTS: u16 = 20; // 0.2% from rewards
+pub const DEVELOPERS_SWAP_CUT_BASIS_POINTS: u16 = 200; // 2% swap fees go to authors
 
 construct_uint! {
     /// 256-bit unsigned integer.
@@ -73,14 +72,14 @@ pub type Hash = Vec<u8>;
 #[serde(crate = "near_sdk::serde")]
 #[allow(non_snake_case)]
 pub struct NEP129Response {
-    pub dataVersion:u16,
-    pub name:String,
-    pub version:String,
-    pub source:String,
-    pub standards:Vec<String>,
-    pub webAppUrl:Option<String>,
-    pub developersAccountId:String,
-    pub auditorAccountId:Option<String>,
+    pub dataVersion: u16,
+    pub name: String,
+    pub version: String,
+    pub source: String,
+    pub standards: Vec<String>,
+    pub webAppUrl: Option<String>,
+    pub developersAccountId: String,
+    pub auditorAccountId: Option<String>,
 }
 
 /// Rewards fee fraction structure for the staking pool contract.
@@ -116,8 +115,10 @@ pub struct GetAccountInfoResult {
     /// The available balance that can be withdrawn
     pub available: U128,
 
-    /// The amount of stNEAR owned (computed from the shares owned)
-    pub stnear: U128,
+    /// The amount of stNEAR owned (shares owned)
+    pub st_near: U128,
+    ///stNEAR owned valued in NEAR
+    pub valued_st_near: U128, // st_near * stNEAR_price
 
     //META owned (including pending rewards)
     pub meta: U128,
@@ -131,7 +132,6 @@ pub struct GetAccountInfoResult {
     pub unstake_full_epochs_wait_left: u16,
     ///if env::epoch_height()>=unstaked_requested_unlock_epoch
     pub can_withdraw: bool,
-    
     /// total amount the user holds in this contract: account.available + account.staked + current_rewards + account.unstaked
     pub total: U128,
 
@@ -140,7 +140,7 @@ pub struct GetAccountInfoResult {
     // These fields works as a car's "trip meter". The user can reset them to zero.
     /// trip_start: (unix timestamp) this field is set at account creation, so it will start metering rewards
     pub trip_start: U64,
-    /// How many stnear the user had at "trip_start". 
+    /// How many stnear the user had at "trip_start".
     pub trip_start_stnear: U128,
     /// how much the user staked since trip start. always incremented
     pub trip_accum_stakes: U128,
@@ -156,10 +156,7 @@ pub struct GetAccountInfoResult {
     pub nslp_share_value: U128,
     pub nslp_share_bp: u16, //basis points, % user owned
 
-    //control: shares from the stake_pool
-    pub stake_shares: U128,
 }
-
 
 /// Struct returned from get_contract_state
 /// div-pool state info
@@ -181,7 +178,7 @@ pub struct GetContractStateResult {
     /// with the new simplified user flow, the only accounts with available should be NSLP and treasury
     pub total_available: U128String,
 
-    /// The total amount of tokens selected for staking by the users 
+    /// The total amount of tokens selected for staking by the users
     /// not necessarily what's actually staked since staking can is done in batches
     /// Share price is computed using this number. share_price = total_for_staking/total_shares
     pub total_for_staking: U128String,
@@ -200,6 +197,11 @@ pub struct GetContractStateResult {
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
     pub total_stake_shares: U128String,
 
+    // How much NEAR 1 stNEAR represents, normally>1
+    // staking produces rewards, so share_price = total_for_staking/total_shares
+    // when someone "unstakes" she "burns" X shares at current price to recoup Y near
+    pub st_near_price: U128String,
+
     /// sum(accounts.unstake). Every time a user delayed-unstakes, this amount is incremented
     /// when the funds are withdrawn the amount is decremented.
     /// Control: total_unstaked_claims == reserve_for_unstaked_claims + total_unstaked_and_waiting
@@ -207,7 +209,7 @@ pub struct GetContractStateResult {
 
     /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
     /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
-    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now. 
+    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now.
     /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
     /// This amount also increments at retrieve_from_staking_pool
     /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
@@ -216,11 +218,11 @@ pub struct GetContractStateResult {
     pub reserve_for_unstake_claims: U128String,
 
     /// total meta minted
-    pub total_meta: U128String, 
+    pub total_meta: U128String,
 
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulated amount only for stats purposes. This amount can only grow
-    pub accumulated_staked_rewards: U128String, 
+    pub accumulated_staked_rewards: U128String,
 
     /// How much NEAR is available to immediate unstake (sell stNEAR)
     pub nslp_liquidity: U128String,
@@ -235,7 +237,7 @@ pub struct GetContractStateResult {
     pub accounts_count: U64,
 
     //count of pools to diversify in
-    pub staking_pools_count: u16, 
+    pub staking_pools_count: u16,
 
     pub min_deposit_amount: U128String,
 }
@@ -246,7 +248,6 @@ pub struct GetContractStateResult {
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractParamsJSON {
-
     ///NEAR/stNEAR Liquidity pool 1% fee target. If Liquidity=target, fee is 1%
     pub nslp_liquidity_target: U128String,
     ///NEAR/stNEAR Liquidity pool max fee
@@ -264,11 +265,10 @@ pub struct ContractParamsJSON {
 
     /// operator_fee_basis_points. 100 basis point => 1%. E.g.: owner_fee_basis_points=50 => 0.5% owner's fee
     pub operator_rewards_fee_basis_points: u16,
-    /// operator_cut_basis_points. 
+    /// operator_cut_basis_points.
     pub operator_swap_cut_basis_points: u16,
-    /// treasury_cut_basis_points. 
+    /// treasury_cut_basis_points.
     pub treasury_swap_cut_basis_points: u16,
-    
     pub min_deposit_amount: U128String,
 }
 
@@ -276,7 +276,7 @@ pub struct ContractParamsJSON {
 #[serde(crate = "near_sdk::serde")]
 pub struct RemoveLiquidityResult {
     pub near: U128String,
-    pub st_near: U128String
+    pub st_near: U128String,
 }
 
 #[derive(Serialize)]
@@ -296,8 +296,7 @@ pub struct StakingPoolJSONInfo {
     pub weight_basis_points: u16,
     pub staked: U128String,
     pub unstaked: U128String,
-    pub unstaked_requested_epoch_height: U64String, 
+    pub unstaked_requested_epoch_height: U64String,
     //EpochHeight where we asked the sp what were our staking rewards
     pub last_asked_rewards_epoch_height: U64String,
 }
-

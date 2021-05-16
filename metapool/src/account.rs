@@ -1,5 +1,5 @@
-use near_sdk::log;
 use crate::*;
+use near_sdk::log;
 
 pub use crate::types::*;
 pub use crate::utils::*;
@@ -18,14 +18,14 @@ pub struct Account {
     /// so the only users of this field are lockup-contracts and advanced-users when they perform "Classic Unstakes"
     pub available: u128,
 
-    /// The amount of shares of the total staked balance in the pool(s) this user owns.
-    /// Before someone stakes share-price is computed and shares are "sold" to the user so he only owns what he's staking and no rewards yet
+    /// The amount of st_near (stake shares) of the total staked balance in the pool(s) this user owns.
+    /// When someone stakes, share-price is computed and shares are "sold" to the user so he only owns what he's staking and no rewards yet
     /// When a user request a transfer to other user, shares from the origin are moved to shares of the destination
     /// The share_price can be computed as total_for_staking/total_stake_shares
-    /// shares * share_price = stNEARs
-    pub stake_shares: u128,
+    /// stNEAR price = total_for_staking/total_stake_shares
+    pub stake_shares: u128, //st_near this account owns
 
-    /// Incremented when the user asks for Classic-Unstaking. The amount of unstaked near in the pools
+    /// Incremented when the user asks for Delayed-Unstaking. The amount of unstaked near in the pools
     pub unstaked: u128,
 
     /// The epoch height when the unstaked will be available
@@ -96,7 +96,9 @@ impl Account {
     }
 
     #[inline]
-    pub fn valued_nslp_shares(&self, main: &MetaPool, nslp_account: &Account) -> u128 { main.amount_from_nslp_shares(self.nslp_shares, &nslp_account) }
+    pub fn valued_nslp_shares(&self, main: &MetaPool, nslp_account: &Account) -> u128 {
+        main.amount_from_nslp_shares(self.nslp_shares, &nslp_account)
+    }
 
     /// return realized meta plus pending rewards
     pub fn total_meta(&self, main: &MetaPool) -> u128 {
@@ -110,49 +112,83 @@ impl Account {
             + self.lp_meter.compute_rewards(valued_lp_shares);
     }
 
-
     //---------------------------------
-    pub fn stake_realize_meta(&mut self, main:&mut MetaPool) {
+    /// realize meta from staking rewards
+    pub fn stake_realize_meta(&mut self, main: &mut MetaPool) {
         //realize meta pending rewards on LP operation
         let valued_actual_shares = main.amount_from_stake_shares(self.stake_shares);
-        let pending_meta = self.staking_meter.realize(valued_actual_shares, main.staker_meta_mult_pct);
+        let pending_meta = self
+            .staking_meter
+            .realize(valued_actual_shares, main.staker_meta_mult_pct);
         self.realized_meta += pending_meta;
         main.total_meta += pending_meta;
     }
 
-    pub fn nslp_realize_meta(&mut self, nslp_account:&Account, main:&mut MetaPool)  {
+    /// realize meta from nslp fees
+    pub fn nslp_realize_meta(&mut self, nslp_account: &Account, main: &mut MetaPool) {
         //realize meta pending rewards on LP operation
         let valued_actual_shares = self.valued_nslp_shares(main, &nslp_account);
-        let pending_meta = self.lp_meter.realize(valued_actual_shares, main.lp_provider_meta_mult_pct);
+        let pending_meta = self
+            .lp_meter
+            .realize(valued_actual_shares, main.lp_provider_meta_mult_pct);
         self.realized_meta += pending_meta;
         main.total_meta += pending_meta;
     }
 
     //----------------
-    pub fn add_stake_shares(&mut self, num_shares:u128, stnear:u128){
+    // add st_nears, considering it as "a stake" for trip-meter purposes
+    pub fn add_st_near(&mut self, st_near_amount: u128, main: &MetaPool) {
+        self.add_stake_shares(
+            st_near_amount,
+            main.amount_from_stake_shares(st_near_amount),
+        )
+    }
+    pub fn add_stake_shares(&mut self, num_shares: u128, near_amount: u128) {
         self.stake_shares += num_shares;
         //to buy stnear is stake
-        self.trip_accum_stakes += stnear;
-        self.staking_meter.stake(stnear);
+        self.trip_accum_stakes += near_amount;
+        self.staking_meter.stake(near_amount);
     }
-    pub fn sub_stake_shares(&mut self, num_shares:u128, stnear:u128){
-        assert!(self.stake_shares>=num_shares,"sub_stake_shares self.stake_shares {} < num_shares {}",self.stake_shares,num_shares);
+
+    // remove st_near considering is "an unstake" for trip-meter purposes
+    pub fn sub_st_near(&mut self, st_near_amount: u128, main: &MetaPool) {
+        self.sub_stake_shares(
+            st_near_amount,
+            main.amount_from_stake_shares(st_near_amount),
+        )
+    }
+    pub fn sub_stake_shares(&mut self, num_shares: u128, near_amount: u128) {
+        assert!(
+            self.stake_shares >= num_shares,
+            "sub_stake_shares self.stake_shares {} < num_shares {}",
+            self.stake_shares,
+            num_shares
+        );
         self.stake_shares -= num_shares;
         //to sell stnear is to unstake
-        self.trip_accum_unstakes += stnear;
-        if self.trip_accum_unstakes<self.trip_accum_stakes { //keep just the delta
+        self.trip_accum_unstakes += near_amount;
+        if self.trip_accum_unstakes < self.trip_accum_stakes {
+            //keep just the delta
             self.trip_accum_stakes -= self.trip_accum_unstakes;
             self.trip_accum_unstakes = 0;
         }
-        self.staking_meter.unstake(stnear);
+        self.staking_meter.unstake(near_amount);
     }
 
     /// user method
     /// completes unstake action by moving from acc.unstaked & main.reserve_for_unstaked_claims -> acc.available & main.total_available
-    pub fn in_memory_try_finish_unstaking(&mut self, account_id:&str, amount:u128, main:&mut MetaPool) -> u128 {
+    pub fn in_memory_try_finish_unstaking(
+        &mut self,
+        account_id: &str,
+        amount: u128,
+        main: &mut MetaPool,
+    ) -> u128 {
+        assert!(
+            amount <= self.unstaked,
+            "Not enough unstaked balance {}",
+            self.unstaked
+        );
 
-        assert!(amount <= self.unstaked, "Not enough unstaked balance {}",self.unstaked);
-        
         let epoch = env::epoch_height();
         assert!( epoch >= self.unstaked_requested_unlock_epoch,
             "The unstaked balance is not yet available due to unstaking delay. You need to wait at least {} epochs"
@@ -162,22 +198,33 @@ impl Account {
         self.unstaked -= amount; //Zeroes, claimed
         self.available += amount;
         //check the heart beat has really moved the funds
-        assert!(main.reserve_for_unstake_claims >= amount, "Funds are not yet available due to unstaking delay. Epoch:{}",env::epoch_height());
+        assert!(
+            main.reserve_for_unstake_claims >= amount,
+            "Funds are not yet available due to unstaking delay. Epoch:{}",
+            env::epoch_height()
+        );
         // in the contract, move from reserve_for_unstaked_claims to total_available
         main.reserve_for_unstake_claims -= amount;
-        assert!(main.total_unstake_claims>=amount,"ITUC");
+        assert!(main.total_unstake_claims >= amount, "ITUC");
         main.total_unstake_claims -= amount;
         main.total_available += amount;
 
-        event!(r#"{{"event":"D-WITHD","account_id":"{}","amount":"{}"}}"#, account_id, amount);
+        event!(
+            r#"{{"event":"D-WITHD","account_id":"{}","amount":"{}"}}"#,
+            account_id,
+            amount
+        );
 
-        log!("{} unstaked moved to available",amount);
+        log!("{} unstaked moved to available", amount);
 
         return amount;
     }
 
-    pub(crate) fn take_from_available(&mut self, amount_requested: u128, main:&mut MetaPool) -> u128 {
-        
+    pub(crate) fn take_from_available(
+        &mut self,
+        amount_requested: u128,
+        main: &mut MetaPool,
+    ) -> u128 {
         let to_withdraw:u128 =
         // if the amount is close to user's total, remove user's total
         // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow some yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
@@ -190,15 +237,14 @@ impl Account {
 
         assert!(
             self.available >= to_withdraw,
-            "Not enough available balance {} for the requested amount", self.available
+            "Not enough available balance {} for the requested amount",
+            self.available
         );
         self.available -= to_withdraw;
-        
-        assert!(main.total_available >= to_withdraw,"i_s_Inconsistency");
+
+        assert!(main.total_available >= to_withdraw, "i_s_Inconsistency");
         main.total_available -= to_withdraw;
 
         return to_withdraw;
     }
-
-
 }

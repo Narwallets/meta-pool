@@ -240,8 +240,8 @@ pub struct MetaPool {
     // the buy share price is computed so if she "sells" the shares on that moment she recovers the same near amount
     // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards 
     // share_price = total_for_staking/total_shares
-    // when someone "unstakes" she "burns" X shares at current price to recoup Y near
-    pub total_stake_shares: u128,
+    // when someone "unstakes" they "burns" X shares at current price to recoup Y near
+    pub total_stake_shares: u128, //total stNEAR minted
 
     /// META is the governance token. Total meta minted
     pub total_meta: u128,
@@ -435,9 +435,8 @@ impl MetaPool {
         self.internal_stake(env::attached_deposit());
     }
 
-    /// Stakes all available unstaked balance from the inner account of the predecessor.
-    /// staking-pool "unstaked" is equivalent to diversified-pool "available", but here
-    /// we keep the staking-pool logic because we're implementing the staking-pool trait
+    /// Stakes all "unstaked" balance from the inner account of the predecessor.
+    /// here we keep the staking-pool logic because we're implementing the staking-pool trait
     pub fn stake_all(&mut self) {
         let account_id = env::predecessor_account_id();
         let account = self.internal_get_account(&account_id);
@@ -607,12 +606,12 @@ impl MetaPool {
     }
 
     /// user method
-    /// Sells-stnear at discount in the Liquidity Pool
-    /// returns near transferred
+    /// swaps stNEAR->NEAR in the Liquidity Pool
+    /// returns nears transferred
     //#[payable]
     pub fn liquid_unstake(
         &mut self,
-        stnear_to_burn: U128String,
+        st_near_to_burn: U128String,
         min_expected_near: U128String,
     ) -> LiquidUnstakeResult {
 
@@ -622,30 +621,31 @@ impl MetaPool {
         let account_id = env::predecessor_account_id();
         let mut user_account = self.internal_get_account(&account_id);
 
-        let stnear_owned = self.amount_from_stake_shares(user_account.stake_shares);
+        let stnear_owned = user_account.stake_shares;
 
-        let mut to_sell:u128 = stnear_to_burn.0;
-        let stake_shares_to_burn:u128;
+        let st_near_to_sell:u128 = 
         // if the amount is close to user's total, remove user's total
         // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow 10 yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
-        if is_close(to_sell, stnear_owned) { // allow for rounding simplification
-            to_sell = stnear_owned;
-            stake_shares_to_burn =  user_account.stake_shares; // close enough to all shares, burn-it all (avoid leaving "dust" shares)
+        if is_close(st_near_to_burn.0, stnear_owned) { // allow for rounding simplification
+            stnear_owned
         }
-        else {
-            //use amount_requested
-            // Calculate the number shares that the account will burn based on the amount requested
-            stake_shares_to_burn = self.stake_shares_from_amount(to_sell);
-        }
+        else  {
+            st_near_to_burn.0
+        };
 
-        assert!(stnear_owned >= to_sell, "Not enough stNEAR {} to unstake the requested amount", stnear_owned );
-        assert!(stake_shares_to_burn > 0 && stake_shares_to_burn <= user_account.stake_shares);
+        debug!("st_near owned:{}, to_sell:{}",user_account.stake_shares ,st_near_to_sell);
 
-        debug!("stake_shares:{}, to_burn:{}",user_account.stake_shares ,stake_shares_to_burn);
+        assert!(stnear_owned >= st_near_to_sell, "Not enough stNEAR. You own {}", stnear_owned );
 
         let mut nslp_account = self.internal_get_nslp_account();
-        let near_to_receive =
-            self.internal_get_near_amount_sell_stnear(nslp_account.available, to_sell);
+
+        //compute how many nears are the st_near valued at
+        let nears_out = self.amount_from_stake_shares(st_near_to_sell);
+        let swap_fee_basis_points = self.internal_get_discount_basis_points(nslp_account.available, nears_out);
+        assert!(swap_fee_basis_points < 10000, "inconsistency d>1");
+        let fee = apply_pct(swap_fee_basis_points, nears_out);
+        
+        let near_to_receive = nears_out - fee;
         assert!(
             near_to_receive >= min_expected_near.0,
             "Price changed, your min amount {} is not satisfied {}. Try again", min_expected_near.0, near_to_receive
@@ -659,11 +659,8 @@ impl MetaPool {
         nslp_account.available -= near_to_receive;
         user_account.available += near_to_receive;
 
-        //the fee is the difference between stNEAR sold and NEAR received
-        assert!(near_to_receive < to_sell);
-        let fee_in_stnear = to_sell - near_to_receive;
         // compute how many shares the swap fee represent
-        let fee_in_shares = self.stake_shares_from_amount(fee_in_stnear);
+        let fee_in_st_near = self.stake_shares_from_amount(fee);
 
         // involved accounts
         assert!(&account_id!=&self.treasury_account_id,"can't use treasury account");
@@ -674,55 +671,44 @@ impl MetaPool {
         let mut developers_account = self.internal_get_account(&DEVELOPERS_ACCOUNT_ID.into());
 
         // The treasury cut in stnear-shares (25% by default)
-        let treasury_stake_shares_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_shares);
-        let treasury_stnear_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_stnear);
-        treasury_account.add_stake_shares(treasury_stake_shares_cut,treasury_stnear_cut);
+        let treasury_st_near_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_st_near);
+        treasury_account.add_st_near(treasury_st_near_cut, &self);
         
         // The cut that the contract owner (operator) takes. (3% of 1% normally)
-        let operator_stake_shares_cut = apply_pct( self.operator_swap_cut_basis_points,fee_in_shares);
-        let operator_stnear_cut = apply_pct( self.operator_swap_cut_basis_points, fee_in_stnear);
-        operator_account.add_stake_shares(operator_stake_shares_cut,operator_stnear_cut);
+        let operator_st_near_cut = apply_pct( self.operator_swap_cut_basis_points,fee_in_st_near);
+        operator_account.add_st_near(operator_st_near_cut, &self);
 
         // The cut that the developers take. (2% of 1% normally)
-        let developers_stake_shares_cut = apply_pct(DEVELOPERS_SWAP_CUT_BASIS_POINTS, fee_in_shares);
-        let developers_stnear_cut = apply_pct(DEVELOPERS_SWAP_CUT_BASIS_POINTS, fee_in_stnear);
-        developers_account.add_stake_shares(developers_stake_shares_cut,developers_stnear_cut);
+        let developers_st_near_cut = apply_pct(DEVELOPERS_SWAP_CUT_BASIS_POINTS, fee_in_st_near);
+        developers_account.add_st_near(developers_st_near_cut, &self);
 
         // all the realized meta from non-liq.provider cuts (30%), send to operator & developers
-        let stnear_non_lp_cut = treasury_stnear_cut+operator_stnear_cut+developers_stnear_cut;
-        let meta_from_operation = apply_multiplier(stnear_non_lp_cut, self.lp_provider_meta_mult_pct);
+        let st_near_non_lp_cut = treasury_st_near_cut+operator_st_near_cut+developers_st_near_cut;
+        let meta_from_operation = apply_multiplier(st_near_non_lp_cut, self.lp_provider_meta_mult_pct);
         self.total_meta += meta_from_operation;
         operator_account.realized_meta += meta_from_operation/2;
         developers_account.realized_meta += meta_from_operation/2;
 
-        debug!("treasury_stake_shares_cut:{} operator_stake_shares_cut:{} developers_stake_shares_cut:{} fee_in_stake_shares:{}",
-            treasury_stake_shares_cut,operator_stake_shares_cut,developers_stake_shares_cut,fee_in_shares);
+        debug!("treasury_st_near_cut:{} operator_st_near_cut:{} developers_st_near_cut:{} fee_in_st_near:{}",
+            treasury_st_near_cut,operator_st_near_cut,developers_st_near_cut,fee_in_st_near);
 
-        debug!("treasury_stnear_cut:{} operator_stnear_cut:{} developers_stnear_cut:{} fee_in_stnear:{} stnear_non_lp_cut:{} ",
-            treasury_stnear_cut,operator_stnear_cut,developers_stnear_cut,fee_in_stnear,stnear_non_lp_cut);
+        assert!(fee_in_st_near > treasury_st_near_cut + developers_st_near_cut + operator_st_near_cut);
 
-        assert!(fee_in_shares > treasury_stake_shares_cut + developers_stake_shares_cut + operator_stake_shares_cut);
-
-        // The rest of the stnear sold goes into the LP. Because it is a larger than NEARs removed, it will increase share value for all LP providers.
-        // Adding value to the pool via adding more stNEAR than the NEAR removed, will be counted as rewards for the nslp_meter, 
-        // so $META for LP providers will be created. $META for LP providers are realized during add_liquidity(), remove_liquidity() 
-        debug!("nslp_account.add_stake_shares {} {}",
-            stake_shares_to_burn - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
-            to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut));
-
+        // The rest of the st_near sold goes into the liq-pool. Because it is a larger amount than NEARs removed, it will increase share value for all LP providers.
+        // Adding value to the pool via adding more stNEAR value than the NEAR removed, will be counted as rewards for the nslp_meter, 
+        // so $META for LP providers will be created. $METAs for LP providers are realized during add_liquidity(), remove_liquidity() 
+        let st_near_to_liq_pool = st_near_to_sell - (treasury_st_near_cut + operator_st_near_cut + developers_st_near_cut);
+        debug!("nslp_account.add_st_near {}", st_near_to_liq_pool);
         // major part of stNEAR sold goes to the NSLP
-        nslp_account.add_stake_shares( 
-            stake_shares_to_burn - (treasury_stake_shares_cut + operator_stake_shares_cut + developers_stake_shares_cut),
-            to_sell - (treasury_stnear_cut + operator_stnear_cut + developers_stnear_cut ));
+        nslp_account.add_st_near( st_near_to_liq_pool, &self);
 
         //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
-        user_account.sub_stake_shares(stake_shares_to_burn, to_sell);
+        user_account.sub_st_near(st_near_to_sell, &self);
         //mint $META for the selling user 
-        let meta_to_seller = apply_multiplier(fee_in_stnear, self.stnear_sell_meta_mult_pct);
+        let meta_to_seller = apply_multiplier(fee_in_st_near, self.stnear_sell_meta_mult_pct);
         self.total_meta += meta_to_seller;
         user_account.realized_meta += meta_to_seller;
         
-
         //Save involved accounts
         self.internal_update_account(&self.treasury_account_id.clone(), &treasury_account);
         self.internal_update_account(&self.operator_account_id.clone(), &operator_account);
@@ -738,12 +724,12 @@ impl MetaPool {
         //Save user account
         self.internal_update_account(&account_id, &user_account);
 
-        log!("@{} liquid-unstaked {} stNEAR, got {} NEAR and {} $META",&account_id, to_sell, transfer_amount, meta_to_seller);
-        event!(r#"{{"event":"LIQ.U","account_id":"{}","stnear":"{}","near":"{}"}}"#, &account_id, to_sell, transfer_amount);
+        log!("@{} liquid-unstaked {} stNEAR, got {} NEAR and {} $META",&account_id, st_near_to_sell, transfer_amount, meta_to_seller);
+        event!(r#"{{"event":"LIQ.U","account_id":"{}","stnear":"{}","near":"{}"}}"#, &account_id, st_near_to_sell, transfer_amount);
 
         return LiquidUnstakeResult {
             near: transfer_amount.into(),
-            fee: fee_in_stnear.into(),
+            fee: fee_in_st_near.into(),
             meta: meta_to_seller.into()
         }
 
@@ -799,28 +785,28 @@ impl MetaPool {
 
         //compute proportionals stNEAR/NEAR
         //1st: stNEAR how much stNEAR from the Liq-Pool represents the ratio: nslp_shares_to_burn relative to total nslp_shares
-        let stake_shares_to_remove = proportional(
+        let st_near_to_remove_from_pool = proportional(
             nslp_account.stake_shares,
             nslp_shares_to_burn,
             nslp_account.nslp_shares,
         );
-        let stnear_to_remove_from_pool = self.amount_from_stake_shares(stake_shares_to_remove);
         //2nd: NEAR, by difference
+        let near_value_of_st_near = self.amount_from_stake_shares(st_near_to_remove_from_pool);
         assert!(
-            to_remove >= stnear_to_remove_from_pool,
+            to_remove >= near_value_of_st_near,
             "inconsistency NTR<STR+UTR"
         );
-        let near_to_remove = to_remove - stnear_to_remove_from_pool;
+        let near_to_remove = to_remove - near_value_of_st_near;
 
         //update user account
         //remove first from stNEAR in the pool, proportional to shares being burned
-        //NOTE: To simplify user-operations, the LIQ.POOL DO NOT carry "unstaked". The NSLP balances only by internal-clearing on `deposit_and_stake`
+        //NOTE: To simplify user-operations, the LIQ.POOL DO NOT carry "unstaked". The NSLP self-balances only by internal-clearing on `deposit_and_stake`
         acc.available += near_to_remove;
-        acc.add_stake_shares(stake_shares_to_remove, stnear_to_remove_from_pool); //add stnear to user acc
+        acc.add_st_near(st_near_to_remove_from_pool, &self); //add stnear to user acc
         acc.nslp_shares -= nslp_shares_to_burn; //shares this user burns
         //update NSLP account
         nslp_account.available -= near_to_remove;
-        nslp_account.sub_stake_shares(stake_shares_to_remove,stnear_to_remove_from_pool); //remove stnear from the pool
+        nslp_account.sub_st_near(st_near_to_remove_from_pool, &self); //remove stnear from the pool
         nslp_account.nslp_shares -= nslp_shares_to_burn; //burn from total nslp shares
 
         //simplify user-flow
@@ -832,11 +818,11 @@ impl MetaPool {
         self.internal_update_account(&account_id, &acc);
         self.internal_save_nslp_account(&nslp_account);
 
-        event!(r#"{{"event":"REM.L","account_id":"{}","near":"{}","stnear":"{}"}}"#, account_id, transfer_amount, stnear_to_remove_from_pool);
+        event!(r#"{{"event":"REM.L","account_id":"{}","near":"{}","stnear":"{}"}}"#, account_id, transfer_amount, st_near_to_remove_from_pool);
 
         return RemoveLiquidityResult {
             near: transfer_amount.into(),
-            st_near: stnear_to_remove_from_pool.into()
+            st_near: st_near_to_remove_from_pool.into()
         }
     }
 
