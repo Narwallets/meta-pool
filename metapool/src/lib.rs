@@ -955,20 +955,23 @@ mod tests {
         
         let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_stnear_y);
         
-        let near_amount_y =contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
+        let near_amount_received_y =contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
 
-        assert!(near_amount_y <= sell_stnear_y);
-        let discounted_y = sell_stnear_y - near_amount_y;
+        let st_near_price = contract.amount_from_stake_shares(ONE_NEAR);
+        let sold_value_near = st_near_price * sell_stnear_y;
+
+        assert!(near_amount_received_y <= sold_value_near); //we were charged a fee
+
+        let discounted_y = sold_value_near - near_amount_received_y;
         let _discounted_display_n = ytof(discounted_y);
         let _sell_stnear_display_n = ytof(sell_stnear_y);
-        assert!(discounted_y == apply_pct(discount_bp, sell_stnear_y));
-        assert!(near_amount_y == sell_stnear_y - discounted_y);
+        assert!(discounted_y == apply_pct(discount_bp, sold_value_near));
+        assert!(near_amount_received_y == sold_value_near - discounted_y);
     }
 
 
-
-
     #[test]
+    #[ignore]
     #[should_panic(expected = "Can only be called by the owner")]
     fn test_call_by_non_owner() {
         let (mut context, mut contract) = contract_only_setup();

@@ -11,12 +11,12 @@ use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::{
     assert_one_yocto, env, ext_contract, log, near_bindgen, AccountId, Balance, Gas,
-    PanicOnDefault, PromiseOrValue, 
+    PanicOnDefault, PromiseOrValue,
 };
 
 const TGAS: Gas = 1_000_000_000_000;
-const GAS_FOR_RESOLVE_TRANSFER: Gas = 5*TGAS;
-const GAS_FOR_FT_TRANSFER_CALL: Gas = 25*TGAS + GAS_FOR_RESOLVE_TRANSFER;
+const GAS_FOR_RESOLVE_TRANSFER: Gas = 5 * TGAS;
+const GAS_FOR_FT_TRANSFER_CALL: Gas = 25 * TGAS + GAS_FOR_RESOLVE_TRANSFER;
 const NO_DEPOSIT: Balance = 0;
 
 type U128String = U128;
@@ -37,7 +37,6 @@ pub struct Contract {
     pub minters: Vec<AccountId>,
 
     pub total_supply: Balance,
-    
 }
 
 #[near_bindgen]
@@ -46,15 +45,13 @@ impl Contract {
 
     #[init]
     pub fn new(owner_id: AccountId) -> Self {
-        
         //validate default metadata
         internal::default_ft_metadata().assert_valid();
-        
         Self {
             owner_id: owner_id.clone(),
             metadata: LazyOption::new(b"m".to_vec(), None),
             accounts: LookupMap::new(b"a".to_vec()),
-            minters: vec!(owner_id),
+            minters: vec![owner_id],
             total_supply: 0,
         }
     }
@@ -66,7 +63,7 @@ impl Contract {
 
     //owner can mint more into their account
     #[payable]
-    pub fn mint(&mut self, account_id:&AccountId, amount:U128String){
+    pub fn mint(&mut self, account_id: &AccountId, amount: U128String) {
         assert_one_yocto();
         self.assert_minter(env::predecessor_account_id());
         self.mint_into(account_id, amount.0);
@@ -74,10 +71,10 @@ impl Contract {
 
     //owner can add/remove minters
     #[payable]
-    pub fn add_minter(&mut self, account_id:AccountId){
+    pub fn add_minter(&mut self, account_id: AccountId) {
         assert_one_yocto();
         self.assert_owner_calling();
-        if let Some(_) = self.minters.iter().position(|x| *x==account_id) {
+        if let Some(_) = self.minters.iter().position(|x| *x == account_id) {
             //found
             panic!("already in the list");
         }
@@ -85,23 +82,24 @@ impl Contract {
     }
 
     #[payable]
-    pub fn remove_minter(&mut self, account_id:&AccountId){
+    pub fn remove_minter(&mut self, account_id: &AccountId) {
         assert_one_yocto();
         self.assert_owner_calling();
-        if let Some(inx) = self.minters.iter().position(|x| x==account_id) {
+        if let Some(inx) = self.minters.iter().position(|x| x == account_id) {
             //found
             let _removed = self.minters.swap_remove(inx);
-        }
-        else { 
-            panic!("not a minter") 
+        } else {
+            panic!("not a minter")
         }
     }
 
-    pub fn get_minters(self)->Vec<AccountId> { self.minters }
+    pub fn get_minters(self) -> Vec<AccountId> {
+        self.minters
+    }
 
     /// Returns account ID of the staking pool owner.
     #[payable]
-    pub fn set_metadata_icon(&mut self, svg_string: String)  {
+    pub fn set_metadata_icon(&mut self, svg_string: String) {
         assert_one_yocto();
         self.assert_owner_calling();
         let mut m = self.internal_get_ft_metadata();
@@ -111,7 +109,7 @@ impl Contract {
 
     /// Returns account ID of the staking pool owner.
     #[payable]
-    pub fn set_metadata_reference(&mut self, reference: String, reference_hash:String)  {
+    pub fn set_metadata_reference(&mut self, reference: String, reference_hash: String) {
         assert_one_yocto();
         self.assert_owner_calling();
         let mut m = self.internal_get_ft_metadata();
@@ -120,7 +118,6 @@ impl Contract {
         m.assert_valid();
         self.metadata.set(&m);
     }
-
 }
 
 #[near_bindgen]
@@ -224,6 +221,7 @@ trait FungibleTokenResolver {
     ) -> U128;
 }
 
+/*
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
@@ -295,3 +293,4 @@ mod tests {
         assert_eq!(contract.ft_balance_of(accounts(1)).0, transfer_amount);
     }
 }
+*/

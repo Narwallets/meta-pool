@@ -11,9 +11,9 @@ use near_sdk::env::BLOCKCHAIN_INTERFACE;
 #[global_allocator]
 static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;
 
-const CONTRACT_VERSION: &str = "2.0.0"; //to test Sputnik V2 remote-upgrade
+const CONTRACT_VERSION: &str = "2.0.0 BLOCKCHAIN_INTERFACE"; //to test Sputnik V2 remote-upgrade
 
-mod migration;
+mod owner;
 
 const TGAS: u64 = 1_000_000_000_000;
 
@@ -27,7 +27,7 @@ pub struct TestContract {
     //last response received
     pub last_epoch: u64,
     // dao
-    pub controlling_dao:String,
+    pub owner_id: String,
 }
 
 const ONE_NEAR: Balance = 1_000_000_000_000_000_000_000_000;
@@ -74,7 +74,7 @@ impl TestContract {
             saved_message: String::from("init"),
             saved_i32: 0,
             last_epoch: env::epoch_height(),
-            controlling_dao: "dao.pool.testnet".into()
+            owner_id: "dao2.pool.testnet".into(),
         };
     }
 
@@ -152,7 +152,7 @@ impl TestContract {
 
     #[cfg(target_arch = "wasm32")]
     pub fn upgrade(self) {
-        assert!(env::predecessor_account_id() == self.controlling_dao);
+        assert!(env::predecessor_account_id() == self.owner_id);
         //input is code:<Vec<u8> on REGISTER 0
         //log!("bytes.length {}", code.unwrap().len());
         const GAS_FOR_UPGRADE: u64 = 10 * TGAS; //gas occupied by this fn
@@ -198,7 +198,6 @@ impl TestContract {
             });
         }
     }
-
 }
 
 // ------------------------------
