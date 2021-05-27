@@ -3,8 +3,15 @@ use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::AccountId;
 use uint::construct_uint;
 
-// default token
+//----------------------------------------
+// CONSTANTS, types and interface structs
+//----------------------------------------
+
+// this contract token symbol
 pub const STNEAR: &str = "stNEAR";
+
+// internal pseudo-account (must be an invalid near-account-id)
+pub const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
 
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
@@ -18,7 +25,8 @@ pub const FIVE_NEAR: u128 = 5 * NEAR;
 pub const TEN_NEAR: u128 = 10 * NEAR;
 pub const K_NEAR: u128 = 1_000 * NEAR;
 
-pub const MIN_MOVEMENT: u128 = ONE_NEAR; //if there's less than 0.20 NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
+///if there's less than MIN_MOVEMENT NEAR to stake/unstake, wait until there's more to justify the call & tx-fees
+pub const MIN_MOVEMENT: u128 = ONE_NEAR; 
 
 pub const TGAS: u64 = 1_000_000_000_000;
 
@@ -155,7 +163,6 @@ pub struct GetAccountInfoResult {
     pub nslp_shares: U128,
     pub nslp_share_value: U128,
     pub nslp_share_bp: u16, //basis points, % user owned
-
 }
 
 /// Struct returned from get_contract_state

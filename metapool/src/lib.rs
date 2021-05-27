@@ -16,18 +16,25 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::collections::{UnorderedMap,LookupMap};
 
-pub use crate::account::*;
-pub use crate::internal::*;
-pub use crate::owner::*;
-pub use crate::types::*;
-pub use crate::utils::*;
+//-- Sputnik DAO remote upgrade requires BLOCKCHAIN_INTERFACE low-level access
+#[cfg(target_arch = "wasm32")]
+use near_sdk::env::BLOCKCHAIN_INTERFACE;
 
 pub mod gas;
 pub mod types;
 pub mod utils;
+pub use crate::types::*;
+pub use crate::utils::*;
+pub use crate::owner::*;
 
-pub mod account;
 pub mod internal;
+pub mod account;
+pub mod staking_pools;
+pub use crate::internal::*;
+pub use crate::account::*;
+pub use crate::staking_pools::*;
+
+
 pub mod distribute;
 pub mod owner;
 
@@ -45,40 +52,7 @@ pub mod fungible_token_standard;
 // from being used when the contract's main file is used in simulation testing.
 near_sdk::setup_alloc!();
 
-pub const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
-
-#[cfg(not(prod))]
-macro_rules! debug {
-    ($($arg:tt)*) => ({
-        env::log(format!($($arg)*).as_bytes());
-    });
-}
-#[cfg(prod)]
-macro_rules! debug { }
-
-
-#[ext_contract(ext_staking_pool)]
-pub trait ExtStakingPool {
-    fn get_account_staked_balance(&self, account_id: AccountId) -> U128String;
-
-    fn get_account_unstaked_balance(&self, account_id: AccountId) -> U128String;
-
-    fn get_account_total_balance(&self, account_id: AccountId) -> U128String;
-
-    fn deposit(&mut self);
-
-    fn deposit_and_stake(&mut self);
-
-    fn withdraw(&mut self, amount: U128String);
-    fn withdraw_all(&mut self);
-
-    fn stake(&mut self, amount: U128String);
-
-    fn unstake(&mut self, amount: U128String);
-
-    fn unstake_all(&mut self);
-}
-
+//self-callbacks
 #[ext_contract(ext_self_owner)]
 pub trait ExtMetaStakingPoolOwnerCallbacks {
     fn on_staking_pool_deposit(&mut self, amount: U128String) -> bool;
@@ -107,71 +81,6 @@ pub trait ExtMetaStakingPoolOwnerCallbacks {
 #[ext_contract(meta_token_mint)]
 pub trait MetaToken {
     fn mint( &mut self, account_id: AccountId, amount: U128String );
-}
-
-
-
-//-------------------------
-//--  STAKING POOLS LIST --
-//-------------------------
-/// items in the Vec of staking pools
-#[derive(Default)]
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct StakingPoolInfo {
-    pub account_id: AccountId,
-
-    //how much of the meta-pool must be staked in this pool
-    //0=> do not stake, only unstake
-    //100 => 1% , 250=>2.5%, etc. -- max: 10000=>100%
-    pub weight_basis_points: u16,
-
-    //if we've made an async call to this pool
-    pub busy_lock: bool,
-
-    //total staked here
-    pub staked: u128,
-
-    //total unstaked in this pool
-    pub unstaked: u128,
-
-    //set when the unstake command is passed to the pool
-    //waiting period is until env::EpochHeight == unstaked_requested_epoch_height+NUM_EPOCHS_TO_UNLOCK
-    //We might have to block users from unstaking if all the pools are in a waiting period
-    pub unstk_req_epoch_height: EpochHeight, // = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK
-
-    //EpochHeight where we asked the sp what were our staking rewards
-    pub last_asked_rewards_epoch_height: EpochHeight,
-}
-
-impl StakingPoolInfo {
-
-    pub fn is_empty(&self) -> bool {
-        return self.busy_lock == false
-            && self.weight_basis_points == 0
-            && self.staked == 0
-            && self.unstaked == 0
-    }
-    pub fn new(account_id:AccountId, weight_basis_points: u16) -> Self {
-        return Self {
-            account_id,
-            weight_basis_points,
-            busy_lock: false,
-            staked:0,
-            unstaked:0,
-            unstk_req_epoch_height:0,
-            last_asked_rewards_epoch_height:0
-        }
-    }
-    pub fn total_balance(&self)->u128 { self.staked+self.unstaked }
-
-    pub fn wait_period_ended(&self) -> bool {
-        let epoch_height = env::epoch_height();
-        if self.unstk_req_epoch_height>epoch_height { //bad data at unstk_req_epoch_height or there was a hard-fork
-            return true;
-        }
-        //true if we reached epoch_requested+NUM_EPOCHS_TO_UNLOCK
-        return epoch_height >= self.unstk_req_epoch_height + NUM_EPOCHS_TO_UNLOCK;
-    }
 }
 
 
@@ -877,6 +786,62 @@ impl MetaPool {
     }
 
   }
+
+
+  //---------------------------------------------------------------------------
+  /// Sputnik DAO remote-upgrade receiver
+  /// can be called by a remote-upgrade proposal
+  /// 
+  #[cfg(target_arch = "wasm32")]
+  pub fn upgrade(self) {
+      assert!(env::predecessor_account_id() == self.owner_account_id);
+      //input is code:<Vec<u8> on REGISTER 0
+      //log!("bytes.length {}", code.unwrap().len());
+      const GAS_FOR_UPGRADE: u64 = 10 * TGAS; //gas occupied by this fn
+      const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
+      //after upgrade we call *pub fn migrate()* on the NEW CODE
+      let current_id = env::current_account_id().into_bytes();
+      let migrate_method_name = "migrate".as_bytes().to_vec();
+      let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
+      unsafe {
+          BLOCKCHAIN_INTERFACE.with(|b| {
+              // Load input (new contract code) into register 0
+              b.borrow()
+                  .as_ref()
+                  .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                  .input(0);
+
+              //prepare self-call promise
+              let promise_id = b
+                  .borrow()
+                  .as_ref()
+                  .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                  .promise_batch_create(current_id.len() as _, current_id.as_ptr() as _);
+
+              //1st action, deploy/upgrade code (takes code from register 0)
+              b.borrow()
+                  .as_ref()
+                  .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                  .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
+
+              //2nd action, schedule a call to "migrate()". 
+              //Will execute on the **new code**
+              b.borrow()
+                  .as_ref()
+                  .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                  .promise_batch_action_function_call(
+                      promise_id,
+                      migrate_method_name.len() as _,
+                      migrate_method_name.as_ptr() as _,
+                      0 as _,
+                      0 as _,
+                      0 as _,
+                      attached_gas,
+                  );
+          });
+      }
+  }
+
 
 }
 

@@ -8,6 +8,17 @@ macro_rules! event {
     });
 }
 
+#[macro_export]
+#[cfg(not(prod))]
+macro_rules! debug {
+    ($($arg:tt)*) => ({
+        env::log(format!($($arg)*).as_bytes());
+    });
+}
+#[macro_export]
+#[cfg(prod)]
+macro_rules! debug { }
+
 
 pub fn assert_min_balance(amount:u128){
     assert!(amount > 0, "Amount should be positive");
