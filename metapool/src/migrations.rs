@@ -8,14 +8,14 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap,LookupMap};
 
 
-//------------------------------------------------
-//  OLD Main Contract State for state migrations
-//------------------------------------------------
-// Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts.None
-// accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
+//---------------------------------------------------
+//  PREVIOUS Main Contract State for state migrations
+//---------------------------------------------------
+// uncomment when state migration is required on upgrade
+/*
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct MetaPoolPrevStateStruct {
+    pub struct MetaPoolPrevStateStruct {
     /// Owner's account ID (it will be a DAO on phase II)
     pub owner_account_id: String,
 
@@ -110,7 +110,7 @@ pub struct MetaPoolPrevStateStruct {
     /// treasury cut on Liquid Unstake (25% from the fees by default)
     pub treasury_swap_cut_basis_points: u16,
 }
-
+*/
 
 #[near_bindgen]
 impl MetaPool {
@@ -121,22 +121,29 @@ impl MetaPool {
     //-- executed after upgrade to NEW CODE
     //-----------------
     /// This fn WILL be called by this contract from `pub fn upgrade` (started from DAO)
-    /// Originally a NOOP implementation. KEEP IT if you haven't changed contract state.
+    /// Originally a **NOOP implementation. KEEP IT if you haven't changed contract state.**
     /// If you have changed state, you need to implement migration from old state (keep the old struct with different name to deserialize it first).
     /// 
     #[init(ignore_state)] //do not auto-load state before this function
     pub fn migrate() -> Self {
-        //
-        // read state with old struct
-        let old: migrations::MetaPoolPrevStateStruct = env::state_read().expect("Old state doesn't exist");
-        
-        // the migration can only be done by the owner.
+        // read state with OLD struct 
+        // uncomment when state migration is required on upgrade
+        //let old: migrations::MetaPoolPrevStateStruct = env::state_read().expect("Old state doesn't exist");
+        let old: migrations::MetaPool = env::state_read().expect("Old state doesn't exist");
+
+        // can only be called by the owner (taken from old-struct)
         assert_eq!(
             &env::predecessor_account_id(),
             &old.owner_account_id,
             "Can only be called by the owner"
         );
 
+        // uncomment when state migration is required on upgrade
+        // NOOP mode, returns this struct that gets stored as contract state
+        return old;
+
+        // uncomment when state migration is required on upgrade
+        /*
         // Create the new contract state using the data from the old contract state.
         // returns this struct that gets stored as contract state
         return Self { 
@@ -189,5 +196,6 @@ impl MetaPool {
 
             meta_token_account_id: format!("token.{}", env::current_account_id())
         }
+        */
     }
 }
