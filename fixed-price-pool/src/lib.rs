@@ -13,7 +13,8 @@ const ONE_NEAR: Balance = 1_000_000_000_000_000_000_000_000;
 const NEAR: Balance = ONE_NEAR;
 const TGAS: Gas = 1_000_000_000_000;
 
-const GAS_FOR_OPEN: Gas = 10 * TGAS;
+// FIXED: You need 20 TGAS for 2 function calls and 1 .then
+const GAS_FOR_OPEN: Gas = 10 * TGAS + 20 * TGAS;
 const GAS_FOR_BUY: Gas = 25 * TGAS;
 const GAS_FOR_AFTER_FT_BALANCE: Gas = 10 * TGAS;
 const GAS_FOR_AFTER_BUY: Gas = 5 * TGAS;
@@ -157,9 +158,12 @@ impl Contract {
     #[private]
     pub fn after_ft_balance(&mut self, #[callback] token_balance: U128String) {
         //check that we have enough tokens
+        // NOTE: is_promise_success() is not needed, because `#[callback]` fails at deserialization
+        //     for failed promises
         if is_promise_success() {
             assert!(
-                token_balance.0 != self.total_tokens,
+                // Fixed
+                token_balance.0 == self.total_tokens,
                 "Incorrect tokens at account {}: {}. Expected exactly {}",
                 env::current_account_id(),
                 self.token_contract,
@@ -210,12 +214,18 @@ impl Contract {
             //easy mode
             proportional(attached_near, 1000, self.initial_price_e3)
         } else {
+            // NOTE: This seems a bit unfair and makes buying in small batches a better price.
             let delta_price = self.final_price_e3 - self.initial_price_e3;
             let near_after = self.near_received + attached_near;
             let price_after_e3 =
                 self.initial_price_e3 + proportional(delta_price, near_after, self.total_near);
             proportional(attached_near, 1000, price_after_e3)
         };
+
+        // TODO: Since this methods doesn't update `near_received` and `tokens_left`, it's possible
+        //    to call it multiple times and buy at low price multiple times.
+        //    Instead, `near_received` and `tokens_left` should be updated immediately and rolled back
+        //    in case `ft_transfer` fails.
 
         //transfer tokens to user
         ext_ft_contract::ft_transfer(
@@ -252,6 +262,8 @@ impl Contract {
             return token_amount.into();
         } else {
             //return NEAR to the user
+            // NOTE: Subscribing ONE_YOCTO spends more gas and generates more in 30% gas reward,
+            //    than not doing it. So it's better just to ignore this ONE_YOCTO.
             Promise::new(user_account).transfer(near_amount - ONE_YOCTO);
             return 0.into();
         }
@@ -262,11 +274,16 @@ impl Contract {
     // and the ft_transfer_call from the token calls here
     // ft_on_transfer(  sender_id.clone(),  amount.into(),  msg ) -> PromiseOrValue<U128>
     //-------------------//-------------------
+    #[allow(unused_variables)]
     pub fn ft_on_transfer(
         &mut self,
         sender_id: AccountId,
         amount: U128String,
-        _msg: String,
+        // FIXED: `msg` is expected by the standard, so `_msg` will not be found and will generate a
+        //    deserialization error. You can fixed it by using `#[allow(unused_variables)]` on the
+        //    method. But since JSON parsing is permissive, it's also possible to drop `msg`
+        //    completely from the list of arguments.
+        msg: String,
     ) -> PromiseOrValue<U128> {
         self.assert_can_operate();
         assert!(!self.sell_only, "You can only buy on this pool");
@@ -296,6 +313,8 @@ impl Contract {
                 self.initial_price_e3 + proportional(delta_price, token_after, self.total_tokens);
             proportional(token_amount, price_after_e3, 1000)
         };
+
+        // TODO: Similar to `buy` method, it has to update `near_received` and `tokens_left` now.
 
         //transfer NEAR to the user
         Promise::new(sender_id)

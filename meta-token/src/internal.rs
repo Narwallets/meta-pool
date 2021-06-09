@@ -37,6 +37,10 @@ impl Contract {
     pub fn internal_unwrap_balance_of(&self, account_id: &AccountId) -> Balance {
         match self.accounts.get(&account_id) {
             Some(balance) => balance,
+            // Q: This makes the contract vulnerable to the sybil attack on storage.
+            // Since `ft_transfer` is cheaper than storage for 1 account, you can send
+            // 1 token to a ton randomly generated accounts and it will require 125 bytes per
+            // such account. So it would require 800 transactions to block 1 NEAR of the account.
             None => 0,
         }
     }

@@ -511,6 +511,8 @@ impl MetaPool {
             // if the pool is not busy, has stake
             if !sp.busy_lock && sp.staked > 0 {
                 //if has not unstaked balance waiting for withdrawal, or wait started in this same epoch (no harm in unstaking more)
+                // TODO: Unstaking in the same epoch is only an issue, if you hit the last block of the epoch.
+                //    In this case the receipt may be executed at the next epoch.
                 if sp.wait_period_ended() || sp.unstk_req_epoch_height == env::epoch_height() {
                     // if this pool has an unbalance requiring un-staking
                     let should_have = apply_pct(sp.weight_basis_points, self.total_for_staking);

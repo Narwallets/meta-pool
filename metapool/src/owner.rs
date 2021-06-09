@@ -75,6 +75,10 @@ impl MetaPool {
         if sp.busy_lock {
             panic!("sp is busy")
         }
+        // TODO: If `weight_basis_points` is invalid, the owner can break the contract.
+        //    Ideally, the owner shouldn't have any power to break the contract and instead should
+        //    should only manipulate the pools with verification that it's a real pool, but it's
+        //    difficult to enforce.
         sp.weight_basis_points = weight_basis_points;
     }
 
