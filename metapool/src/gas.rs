@@ -1,5 +1,5 @@
 pub const TGAS: u64 = 1_000_000_000_000;
-pub const BASE_GAS: u64 = 25*TGAS;
+pub const BASE_GAS: u64 = 25 * TGAS;
 
 pub mod whitelist {
     /// Gas attached to the promise to check whether the given staking pool Account ID is
@@ -108,4 +108,3 @@ pub mod owner_callbacks {
     pub const ON_GET_ACCOUNT_UNSTAKED_BALANCE_TO_WITHDRAW_BY_OWNER: u64 =
         super::BASE_GAS + super::staking_pool::WITHDRAW + ON_STAKING_POOL_WITHDRAW;
 }
-

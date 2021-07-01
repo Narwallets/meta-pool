@@ -11,8 +11,7 @@ pub use crate::utils::*;
 //--  STAKING POOL Info  --
 //-------------------------
 /// items in the Vec of staking pools
-#[derive(Default)]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(Default, BorshDeserialize, BorshSerialize)]
 pub struct StakingPoolInfo {
     pub account_id: AccountId,
 
@@ -40,29 +39,31 @@ pub struct StakingPoolInfo {
 }
 
 impl StakingPoolInfo {
-
     pub fn is_empty(&self) -> bool {
         return self.busy_lock == false
             && self.weight_basis_points == 0
             && self.staked == 0
-            && self.unstaked == 0
+            && self.unstaked == 0;
     }
-    pub fn new(account_id:AccountId, weight_basis_points: u16) -> Self {
+    pub fn new(account_id: AccountId, weight_basis_points: u16) -> Self {
         return Self {
             account_id,
             weight_basis_points,
             busy_lock: false,
-            staked:0,
-            unstaked:0,
-            unstk_req_epoch_height:0,
-            last_asked_rewards_epoch_height:0
-        }
+            staked: 0,
+            unstaked: 0,
+            unstk_req_epoch_height: 0,
+            last_asked_rewards_epoch_height: 0,
+        };
     }
-    pub fn total_balance(&self)->u128 { self.staked+self.unstaked }
+    pub fn total_balance(&self) -> u128 {
+        self.staked + self.unstaked
+    }
 
     pub fn wait_period_ended(&self) -> bool {
         let epoch_height = env::epoch_height();
-        if self.unstk_req_epoch_height>epoch_height { //bad data at unstk_req_epoch_height or there was a hard-fork
+        if self.unstk_req_epoch_height > epoch_height {
+            //bad data at unstk_req_epoch_height or there was a hard-fork
             return true;
         }
         //true if we reached epoch_requested+NUM_EPOCHS_TO_UNLOCK
@@ -94,4 +95,3 @@ pub trait ExtStakingPool {
 
     fn unstake_all(&mut self);
 }
-

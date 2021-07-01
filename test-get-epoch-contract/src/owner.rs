@@ -1,6 +1,6 @@
 use crate::*;
 
-use near_sdk::{AccountId};
+use near_sdk::AccountId;
 
 // /// Amount of gas used for upgrade function itself.
 // pub const GAS_FOR_UPGRADE_CALL: Gas = 50_000_000_000_000;

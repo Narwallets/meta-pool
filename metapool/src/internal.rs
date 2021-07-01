@@ -419,7 +419,8 @@ impl MetaPool {
     ) -> u128 {
         //compute how many nears are the st_near valued at
         let nears_out = self.amount_from_stake_shares(st_near_to_sell);
-        let swap_fee_basis_points = self.internal_get_discount_basis_points(available_near, nears_out);
+        let swap_fee_basis_points =
+            self.internal_get_discount_basis_points(available_near, nears_out);
         assert!(swap_fee_basis_points < 10000, "inconsistency d>1");
         let fee = apply_pct(swap_fee_basis_points, nears_out);
         return (nears_out - fee).into(); //when stNEAR is sold user pays a swap fee (the user skips the waiting period)

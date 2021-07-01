@@ -1,4 +1,3 @@
-
 use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::{AccountId, Balance, PromiseResult};
 
@@ -12,7 +11,9 @@ pub fn default_ft_metadata() -> FungibleTokenMetadata {
         spec: FT_METADATA_SPEC.to_string(),
         name: "Meta Token".to_string(),
         symbol: "$META".to_string(),
-        icon: Some(String::from(r###"<svg viewBox="0 0 468 325"><path transform="translate(0 0)scale(0.06 -0.07)" d="m2.4-155v-75h170 170v-925-924l-32-17c-25-13-67-19-170-22l-138-5v-73-74h425 425v75 75h-125c-127 0-176 10-203 42-9 12-12 203-10 904l3 889 34-70c18-38 73-158 121-265s176-388 285-625c109-236 251-551 316-700 125-281 152-325 205-325 49 0 81 27 113 95 43 91 586 1288 744 1640 71 160 131 292 133 294s4-419 4-937v-942h-170-170v-75-75h545 545v75 75h-175-175v945 945h175 175v75 76l-394-3c-452-3-418 4-466-103-15-33-176-388-358-790-414-914-393-868-396-864-2 2-97 211-211 464-414 917-547 1211-566 1241-10 17-30 36-44 42-18 9-137 12-405 12h-380v-75z"/></svg>"###)),
+        icon: Some(String::from(
+            r###"<svg viewBox="0 0 468 325"><path transform="translate(0 0)scale(0.06 -0.07)" d="m2.4-155v-75h170 170v-925-924l-32-17c-25-13-67-19-170-22l-138-5v-73-74h425 425v75 75h-125c-127 0-176 10-203 42-9 12-12 203-10 904l3 889 34-70c18-38 73-158 121-265s176-388 285-625c109-236 251-551 316-700 125-281 152-325 205-325 49 0 81 27 113 95 43 91 586 1288 744 1640 71 160 131 292 133 294s4-419 4-937v-942h-170-170v-75-75h545 545v75 75h-175-175v945 945h175 175v75 76l-394-3c-452-3-418 4-466-103-15-33-176-388-358-790-414-914-393-868-396-864-2 2-97 211-211 464-414 917-547 1211-566 1241-10 17-30 36-44 42-18 9-137 12-405 12h-380v-75z"/></svg>"###,
+        )),
         reference: None, // TODO
         reference_hash: None,
         decimals: 24,
@@ -20,7 +21,6 @@ pub fn default_ft_metadata() -> FungibleTokenMetadata {
 }
 
 impl Contract {
-
     pub fn assert_owner_calling(&self) {
         assert!(
             env::predecessor_account_id() == self.owner_id,
@@ -28,13 +28,13 @@ impl Contract {
         );
     }
 
-    pub fn assert_minter(&self, account_id:String) {
-        assert!(self.minters.contains(&account_id),"not a minter");
+    pub fn assert_minter(&self, account_id: String) {
+        assert!(self.minters.contains(&account_id), "not a minter");
     }
 
     //get stored metadata or default
     pub fn internal_get_ft_metadata(&self) -> FungibleTokenMetadata {
-        self.metadata.get().unwrap_or( default_ft_metadata() )
+        self.metadata.get().unwrap_or(default_ft_metadata())
     }
 
     pub fn internal_unwrap_balance_of(&self, account_id: &AccountId) -> Balance {

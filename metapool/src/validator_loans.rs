@@ -15,13 +15,13 @@ pub const FEE_PAID: u8 = 4;
 pub const EXECUTING: u8 = 5;
 pub const COMPLETED: u8 = 6;
 
-const ACTIVATION_FEE:u128= 5*NEAR;
-const MIN_REQUEST:u128 = 10*K_NEAR;
+const ACTIVATION_FEE: u128 = 5 * NEAR;
+const MIN_REQUEST: u128 = 10 * K_NEAR;
 
 //------------------------
 //  Validator Loan Req
 //------------------------
-#[derive(BorshDeserialize, BorshSerialize,Serialize, Deserialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct VLoanRequest {
     //total requested
@@ -108,7 +108,6 @@ pub struct VLoanRequestInfo {
 
 #[near_bindgen]
 impl MetaPool {
-
     /// get loan_request
     pub fn get_vloan_request(&self, account_id: AccountId) -> VLoanInfo {
         let request = self.loan_requests.get(&account_id).unwrap_or_default();
@@ -131,79 +130,132 @@ impl MetaPool {
         staking_pool_account_id: String,
         committed_fee: u16,
         committed_fee_duration: u16,
-        information_url: String
+        information_url: String,
     ) {
-        let mut request = self.loan_requests.get(&env::predecessor_account_id()).unwrap_or_default();
+        let mut request = self
+            .loan_requests
+            .get(&env::predecessor_account_id())
+            .unwrap_or_default();
         //check status transition
-        //check status 
-        assert!(request.status==DRAFT,"You can only modify DRAFT requests");
+        //check status
+        assert!(
+            request.status == DRAFT,
+            "You can only modify DRAFT requests"
+        );
         request.staking_pool_account_id = staking_pool_account_id;
         request.amount_requested = amount_requested.0;
         request.committed_fee = committed_fee;
         request.committed_fee_duration = committed_fee_duration;
         request.information_url = information_url;
-        
-        self.loan_requests.insert(&env::predecessor_account_id(), &request);
+
+        self.loan_requests
+            .insert(&env::predecessor_account_id(), &request);
     }
 
     // activate a loan_request
     #[payable]
-    pub fn vloan_activate(&mut self){
+    pub fn vloan_activate(&mut self) {
         //get request
-        let mut request = self.loan_requests.get(&env::predecessor_account_id()).unwrap_or_default();
-        //check status 
-        assert!(request.status==DRAFT,"You can only activate DRAFT requests");
+        let mut request = self
+            .loan_requests
+            .get(&env::predecessor_account_id())
+            .unwrap_or_default();
+        //check status
+        assert!(
+            request.status == DRAFT,
+            "You can only activate DRAFT requests"
+        );
         //check fee
-        assert!(env::attached_deposit()==ACTIVATION_FEE,"Activation fee MUST be {}",ACTIVATION_FEE);
-        assert!(env::is_valid_account_id(&request.staking_pool_account_id.as_bytes()),"invalid staking pool account id");
-        assert!(request.amount_requested >= MIN_REQUEST, "Min amount is {}",MIN_REQUEST);
-        assert!(request.committed_fee<2000,"invalid committed fee. Max 20%");
-        assert!(request.committed_fee_duration>0,"invalid committed fee duration");
+        assert!(
+            env::attached_deposit() == ACTIVATION_FEE,
+            "Activation fee MUST be {}",
+            ACTIVATION_FEE
+        );
+        assert!(
+            env::is_valid_account_id(&request.staking_pool_account_id.as_bytes()),
+            "invalid staking pool account id"
+        );
+        assert!(
+            request.amount_requested >= MIN_REQUEST,
+            "Min amount is {}",
+            MIN_REQUEST
+        );
+        assert!(
+            request.committed_fee < 2000,
+            "invalid committed fee. Max 20%"
+        );
+        assert!(
+            request.committed_fee_duration > 0,
+            "invalid committed fee duration"
+        );
         request.activated_epoch_height = env::epoch_height();
         //update
-        self.loan_requests.insert(&env::predecessor_account_id(), &request);
+        self.loan_requests
+            .insert(&env::predecessor_account_id(), &request);
         //consume fee
         self.internal_deposit_attached_near_into(self.treasury_account_id.clone());
-    }   
+    }
 
     //deactivate a loan request
-    pub fn vloan_convert_back_to_draft(&mut self){
+    pub fn vloan_convert_back_to_draft(&mut self) {
         //check status
-        let mut request = self.loan_requests.get(&env::predecessor_account_id()).unwrap_or_default();
+        let mut request = self
+            .loan_requests
+            .get(&env::predecessor_account_id())
+            .unwrap_or_default();
         //check time
-        assert!(env::epoch_height()>=request.activated_epoch_height+1,"you must wait 2 Epochs to deactivate a request");
+        assert!(
+            env::epoch_height() >= request.activated_epoch_height + 1,
+            "you must wait 2 Epochs to deactivate a request"
+        );
         //check status transition
         match request.status {
-            ACTIVE|APPROVED|COMPLETED => { request.status = DRAFT },
-            _ => { panic!("You can only convert to DRAFT if status is ACTIVE|APPROVED|COMPLETED") }
+            ACTIVE | APPROVED | COMPLETED => request.status = DRAFT,
+            _ => {
+                panic!("You can only convert to DRAFT if status is ACTIVE|APPROVED|COMPLETED")
+            }
         }
         //update
-        self.loan_requests.insert(&env::predecessor_account_id(), &request);
-    }   
+        self.loan_requests
+            .insert(&env::predecessor_account_id(), &request);
+    }
 
-    pub fn vloan_delete(&mut self){
+    pub fn vloan_delete(&mut self) {
         //check status
-        let mut request = self.loan_requests.get(&env::predecessor_account_id()).unwrap_or_default();
+        let mut request = self
+            .loan_requests
+            .get(&env::predecessor_account_id())
+            .unwrap_or_default();
         //check time
         match request.status {
-            DRAFT|COMPLETED => { request.status = DRAFT },
-            _ => { panic!("You can only delete the request if the status is DRAFT|COMPLETED. Deactivate it first") }
+            DRAFT | COMPLETED => request.status = DRAFT,
+            _ => {
+                panic!("You can only delete the request if the status is DRAFT|COMPLETED. Deactivate it first")
+            }
         }
         //delete
         self.loan_requests.remove(&env::predecessor_account_id());
-    }   
+    }
 
     #[payable]
-    pub fn vloan_take(&mut self){
-        let mut request = self.loan_requests.get(&env::predecessor_account_id()).unwrap_or_default();
+    pub fn vloan_take(&mut self) {
+        let mut request = self
+            .loan_requests
+            .get(&env::predecessor_account_id())
+            .unwrap_or_default();
         //check status
-        assert!(request.status==APPROVED,"Request is not APPROVED");
+        assert!(request.status == APPROVED, "Request is not APPROVED");
         //check fee
-        assert!(env::attached_deposit()==request.loan_fee,"Attached Loan Fee MUST be {}",request.loan_fee);
+        assert!(
+            env::attached_deposit() == request.loan_fee,
+            "Attached Loan Fee MUST be {}",
+            request.loan_fee
+        );
         request.status = FEE_PAID;
         //update
-        self.loan_requests.insert(&env::predecessor_account_id(), &request);
+        self.loan_requests
+            .insert(&env::predecessor_account_id(), &request);
         //consume fee
         self.internal_deposit_attached_near_into(self.treasury_account_id.clone());
-    }   
+    }
 }

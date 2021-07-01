@@ -1,30 +1,26 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 use near_sdk_sim::{
-    account::AccessKey, call, deploy, init_simulator, 
-    near_crypto::{Signer,SecretKey, KeyType},
-    to_yocto, view,
-    ContractAccount, ExecutionResult, UserAccount, DEFAULT_GAS, STORAGE_AMOUNT,
-    ViewResult
-  };
+    account::AccessKey,
+    call, deploy, init_simulator,
+    near_crypto::{KeyType, SecretKey, Signer},
+    to_yocto, view, ContractAccount, ExecutionResult, UserAccount, ViewResult, DEFAULT_GAS,
+    STORAGE_AMOUNT,
+};
 
-  use near_sdk::{
-      serde_json::Value
-  };
+use near_sdk::serde_json::Value;
 
 use metapool::*;
 
 /// Helper to log ExecutionResult outcome of a call/view
 pub fn print_exec_result_single(res: &ExecutionResult) {
-
     let is_ok = res.is_ok();
 
     for line in &res.outcome().logs {
         if !is_ok && line.starts_with("{\"") {
             //add a prefix to event lines if the transaction failed
             println!("(failed) {:?}", line);
-        }
-        else {
+        } else {
             println!("{:?}", line);
         }
     }
@@ -33,8 +29,10 @@ pub fn print_exec_result_single(res: &ExecutionResult) {
     }
 }
 /// Helper to log ExecutionResult outcome of a call/view
-pub fn print_exec_result_promise(inx:u64, res: &ExecutionResult) {
-    if res.outcome().logs.len() == 0 || res.is_ok() { return }
+pub fn print_exec_result_promise(inx: u64, res: &ExecutionResult) {
+    if res.outcome().logs.len() == 0 || res.is_ok() {
+        return;
+    }
     println!("--promise #{}", inx);
     print_exec_result_single(&res);
 }
@@ -105,10 +103,9 @@ pub fn ntoy(near: u64) -> u128 {
     to_yocto(&near.to_string())
 }
 #[allow(non_snake_case)]
-pub fn ntoU128(near: u64) -> String { 
-    ntoy(near).to_string() 
+pub fn ntoU128(near: u64) -> String {
+    ntoy(near).to_string()
 }
-
 
 pub fn yton(yoctos: u128) -> String {
     let mut str = format!("{:0>25}", yoctos);
@@ -170,27 +167,44 @@ pub fn call(
 }
 
 #[allow(dead_code)]
-pub fn show_balance(ua:&UserAccount) { 
-    println!("@{} balance: {}", ua.account_id(), balance(ua) ); 
+pub fn show_balance(ua: &UserAccount) {
+    println!("@{} balance: {}", ua.account_id(), balance(ua));
 }
 
-pub fn assert_less_than_one_milli_near_diff_balance(action:&str, bal:u128, expected:u128) -> bool {
-    if bal==expected {return true};
-    if bal>expected {
-      panic!("{} failed MORE THAN EXPECTED diff:{} bal:{} expected:{}", 
-            action,yton(bal-expected), yton(bal), yton(expected));
+pub fn assert_less_than_one_milli_near_diff_balance(
+    action: &str,
+    bal: u128,
+    expected: u128,
+) -> bool {
+    if bal == expected {
+        return true;
+    };
+    if bal > expected {
+        panic!(
+            "{} failed MORE THAN EXPECTED diff:{} bal:{} expected:{}",
+            action,
+            yton(bal - expected),
+            yton(bal),
+            yton(expected)
+        );
     }
-    let differ = expected-bal;
-    if differ < ONE_MILLI_NEAR {return true};
-    panic!("{} failed LESS THAN EXPECTED by more than 0.001 diff:{} bal:{} expected:{}", 
-          action,yton(differ), yton(bal), yton(expected));
-  }
-  
-  pub fn balance(acc:&UserAccount) -> u128 { 
-    if let Some(data) = acc.account() {
-      data.amount+data.locked
-    }
-    else { 0 }
-  }
-  
+    let differ = expected - bal;
+    if differ < ONE_MILLI_NEAR {
+        return true;
+    };
+    panic!(
+        "{} failed LESS THAN EXPECTED by more than 0.001 diff:{} bal:{} expected:{}",
+        action,
+        yton(differ),
+        yton(bal),
+        yton(expected)
+    );
+}
 
+pub fn balance(acc: &UserAccount) -> u128 {
+    if let Some(data) = acc.account() {
+        data.amount + data.locked
+    } else {
+        0
+    }
+}
