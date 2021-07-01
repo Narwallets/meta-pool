@@ -39,8 +39,13 @@ pub trait FungibleToken {
 #[ext_contract(ext_self_callback)]
 pub trait ExtContract {
     fn after_ft_balance(&mut self);
-    fn after_buy(&mut self, user_account: AccountId, near_amount: u128, token_amount: u128);
-    fn after_sell(&mut self, near_amount: u128, token_amount: u128);
+    fn after_buy(
+        &mut self,
+        user_account: AccountId,
+        near_amount: U128String,
+        token_amount: U128String,
+    );
+    fn after_sell(&mut self, near_amount: U128String, token_amount: U128String);
 }
 
 near_sdk::setup_alloc!();
@@ -128,7 +133,7 @@ impl Contract {
         return self.owner_id.clone();
     }
 
-    /// Opens
+    /// Open
     pub fn open(&self) -> Promise {
         self.assert_owner_calling();
         assert!(!self.is_open);
@@ -160,20 +165,18 @@ impl Contract {
         //check that we have enough tokens
         // NOTE: is_promise_success() is not needed, because `#[callback]` fails at deserialization
         //     for failed promises
-        if is_promise_success() {
-            assert!(
-                // Fixed
-                token_balance.0 == self.total_tokens,
-                "Incorrect tokens at account {}: {}. Expected exactly {}",
-                env::current_account_id(),
-                self.token_contract,
-                self.total_tokens
-            );
+        assert!(
+            // Fixed
+            token_balance.0 == self.total_tokens,
+            "Incorrect tokens at account {}: {}. Expected exactly {}",
+            env::current_account_id(),
+            self.token_contract,
+            self.total_tokens
+        );
 
-            self.tokens_left = token_balance.0;
+        self.tokens_left = token_balance.0;
 
-            self.is_open = true;
-        }
+        self.is_open = true;
     }
 
     pub fn can_operate(&self) -> bool {
@@ -214,7 +217,8 @@ impl Contract {
             //easy mode
             proportional(attached_near, 1000, self.initial_price_e3)
         } else {
-            // NOTE: This seems a bit unfair and makes buying in small batches a better price.
+            // NOTE: This seems a bit unfair and makes buying in small batches a better price,
+            // but it is normal uniswap-like price calculation for operations that affect a large portion of the pool
             let delta_price = self.final_price_e3 - self.initial_price_e3;
             let near_after = self.near_received + attached_near;
             let price_after_e3 =
@@ -222,10 +226,12 @@ impl Contract {
             proportional(attached_near, 1000, price_after_e3)
         };
 
-        // TODO: Since this methods doesn't update `near_received` and `tokens_left`, it's possible
+        // This methods update `near_received` and `tokens_left`, so it's not possible
         //    to call it multiple times and buy at low price multiple times.
-        //    Instead, `near_received` and `tokens_left` should be updated immediately and rolled back
+        //    `near_received` and `tokens_left` are updated immediately and rolled back
         //    in case `ft_transfer` fails.
+        self.near_received += attached_near;
+        self.tokens_left -= token_amount;
 
         //transfer tokens to user
         ext_ft_contract::ft_transfer(
@@ -239,8 +245,8 @@ impl Contract {
         )
         .then(ext_self_callback::after_buy(
             user_account,
-            attached_near,
-            token_amount,
+            attached_near.into(),
+            token_amount.into(),
             //promise params:
             &env::current_account_id(), //callback
             NO_DEPOSIT,                 //attached native NEAR amount
@@ -252,19 +258,21 @@ impl Contract {
     pub fn after_buy(
         &mut self,
         user_account: AccountId,
-        near_amount: u128,
-        token_amount: u128,
+        near_amount: U128String,
+        token_amount: U128String,
     ) -> U128String {
         if is_promise_success() {
             //transfer was ok
-            self.near_received += near_amount;
-            self.tokens_left -= token_amount;
             return token_amount.into();
         } else {
-            //return NEAR to the user
+            // ft_transfer failed
+            // rollback changes
+            self.near_received -= near_amount.0;
+            self.tokens_left += token_amount.0;
+            // return NEAR to the user
             // NOTE: Subscribing ONE_YOCTO spends more gas and generates more in 30% gas reward,
             //    than not doing it. So it's better just to ignore this ONE_YOCTO.
-            Promise::new(user_account).transfer(near_amount - ONE_YOCTO);
+            Promise::new(user_account).transfer(near_amount.0 - ONE_YOCTO);
             return 0.into();
         }
     }
@@ -279,8 +287,8 @@ impl Contract {
         &mut self,
         sender_id: AccountId,
         amount: U128String,
-        // FIXED: `msg` is expected by the standard, so `_msg` will not be found and will generate a
-        //    deserialization error. You can fixed it by using `#[allow(unused_variables)]` on the
+        // Note: `msg` is expected by the standard, so `_msg` will not be found and will generate a
+        //    deserialization error. That's why the `#[allow(unused_variables)]` on the
         //    method. But since JSON parsing is permissive, it's also possible to drop `msg`
         //    completely from the list of arguments.
         msg: String,
@@ -314,14 +322,16 @@ impl Contract {
             proportional(token_amount, price_after_e3, 1000)
         };
 
-        // TODO: Similar to `buy` method, it has to update `near_received` and `tokens_left` now.
+        // Similar to `buy` method, we update `near_received` and `tokens_left` now, and rollback in case of error
+        self.near_received -= near_amount;
+        self.tokens_left += token_amount;
 
         //transfer NEAR to the user
         Promise::new(sender_id)
             .transfer(near_amount)
             .then(ext_self_callback::after_sell(
-                near_amount,
-                token_amount,
+                near_amount.into(),
+                token_amount.into(),
                 //promise params:
                 &env::current_account_id(), //callback
                 NO_DEPOSIT,                 //attached native NEAR amount
@@ -331,14 +341,15 @@ impl Contract {
     }
     //prev fn continues here
     #[private]
-    pub fn after_sell(&mut self, near_amount: u128, token_amount: u128) -> U128String {
+    pub fn after_sell(&mut self, near_amount: U128String, token_amount: U128String) -> U128String {
         if is_promise_success() {
-            //transfer was ok
-            self.near_received -= near_amount;
-            self.tokens_left += token_amount;
+            // transfer was ok
             return 0.into(); //we used all user's the tokens
         } else {
-            //NEAR transfer failed
+            // NEAR transfer failed
+            // rollback changes
+            self.near_received += near_amount.0;
+            self.tokens_left -= token_amount.0;
             return token_amount.into(); //return tokens to user
         }
     }

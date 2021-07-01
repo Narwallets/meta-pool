@@ -120,7 +120,9 @@ impl Contract {
     }
 }
 
-// Q: Is ignoring storage costs the only reason for the reimplementation?
+// Q: Is ignoring storage costs the only reason for the re-implementation?
+// making the user manage storage costs adds too much friction to account creation
+// it's better to impede sybil attacks by other means
 #[near_bindgen]
 impl FungibleTokenCore for Contract {
     #[payable]

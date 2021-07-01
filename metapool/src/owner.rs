@@ -75,10 +75,14 @@ impl MetaPool {
         if sp.busy_lock {
             panic!("sp is busy")
         }
+        // max is 50% for a single pool
+        assert!(weight_basis_points < 5_000);
         // TODO: If `weight_basis_points` is invalid, the owner can break the contract.
-        //    Ideally, the owner shouldn't have any power to break the contract and instead should
+        //    Ideally, the owner shouldn't have any power to break the contract and instead
         //    should only manipulate the pools with verification that it's a real pool, but it's
         //    difficult to enforce.
+        // option: store "score" for each validator & compute weight_basis_points as score*10_000/total_score
+        // by doing that there's no "invalid" score. Note: In order to do that, we should keep total_score on contract state
         sp.weight_basis_points = weight_basis_points;
     }
 
@@ -174,8 +178,6 @@ impl MetaPool {
             nslp_shares: acc.nslp_shares.into(),
             nslp_share_value: nslp_share_value.into(),
             nslp_share_bp, //% owned as basis points
-
-
         };
     }
 
@@ -235,7 +237,8 @@ impl MetaPool {
             nslp_liquidity: nslp_account.available.into(),
             nslp_stnear_balance: nslp_account.stake_shares.into(), //how much stnear does the nslp have?
             nslp_target: self.nslp_liquidity_target.into(),
-            nslp_current_discount_basis_points: self.internal_get_discount_basis_points(nslp_account.available, TEN_NEAR),
+            nslp_current_discount_basis_points: self
+                .internal_get_discount_basis_points(nslp_account.available, TEN_NEAR),
             nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
             min_deposit_amount: self.min_deposit_amount.into(),

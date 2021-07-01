@@ -66,16 +66,19 @@ pub trait ExtMetaStakingPoolOwnerCallbacks {
         included_deposit: bool,
     ) -> bool;
 
-    fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) -> bool;
+    fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: U128String) -> bool;
 
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
     fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
 
-    fn on_get_sp_unstaked_balance(&mut self, sp_inx: usize, #[callback] unstaked_balance: U128String);
+    fn on_get_sp_unstaked_balance(
+        &mut self,
+        sp_inx: usize,
+        #[callback] unstaked_balance: U128String,
+    );
 
-    fn after_minting_meta(&self, account_id:AccountId);
-
+    fn after_minting_meta(self, account_id: AccountId, to_mint: U128String);
 }
 
 #[ext_contract(meta_token_mint)]
@@ -527,7 +530,8 @@ impl MetaPool {
     ) -> LiquidUnstakeResult {
 
         self.assert_not_busy();
-        // Q: Why not?
+        // Q: Why not? - R: liquid_unstake It's not as problematic as transfer, because it moves tokens between accounts of the same user
+        // so let's remove the one_yocto_requirement, waiting for a better solution for the function-call keys NEP-141 problem
         //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
@@ -759,43 +763,44 @@ impl MetaPool {
         //realize and mint meta from LP rewards
         acc.nslp_realize_meta(&nslp_account, self);
 
+        // Note: we make `acc.realized_meta = 0` here and rollback the changes in
+        //    `Self::after_minting_meta` in case the transfer fails.
+        //    This is to not be vulnerable to the multi-call attack.
+        //    If we don't, While `mint` is still pending, the attacker may call `harvest_meta`
+        //    again and get `realized_meta` transferred multiple times.
+        let to_mint = acc.realized_meta;
         //--SAVE ACCOUNT
+        acc.realized_meta = 0;
         self.internal_update_account(&account_id, &acc);
-
-        // TODO: This seems to be vulnerable to the multi-call attack. While `mint` is still pending,
-        //    the attacker may call `harvest_meta` again and get `realized_meta` transferred multiple
-        //    times. You should make `acc.realized_meta = 0` here and increase it back in
-        //    `Self::after_minting_meta` in case the transfer has failed.
 
         //schedule async to mint the $META-tokens for the user
         meta_token_mint::mint(
             account_id.clone(), // to whom
-            acc.realized_meta.into(), //how much meta
+            to_mint.into(),     //how much meta
             // extra call args
             &self.meta_token_account_id,
             NO_DEPOSIT,
             gas::BASE_GAS,
         )
         .then(ext_self_owner::after_minting_meta(
-            account_id, // to whom
+            account_id,     // to whom
+            to_mint.into(), // how much
             // extra call args
             &env::current_account_id(),
             NO_DEPOSIT,
             gas::BASE_GAS,
         ))
-  }
-  //prev fn continues here
-  #[private]
-  pub fn after_minting_meta(&mut self, account_id:&AccountId){
-
-    if is_promise_success() {
-        //minting $META succeeded
-        let mut acc = self.internal_get_account(&account_id);
-        acc.realized_meta = 0;
-        self.internal_update_account(&account_id, &acc);
     }
-
-  }
+    //prev fn continues here
+    #[private]
+    pub fn after_minting_meta(&mut self, account_id: AccountId, to_mint: U128String) {
+        if !is_promise_success() {
+            //minting $META failed, rollback
+            let mut acc = self.internal_get_account(&account_id);
+            acc.realized_meta = to_mint.0;
+            self.internal_update_account(&account_id, &acc);
+        }
+    }
 
 
   //---------------------------------------------------------------------------

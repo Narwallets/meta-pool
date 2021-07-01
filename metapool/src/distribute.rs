@@ -40,7 +40,7 @@ impl MetaPool {
             self.epoch_stake_orders,
             self.total_for_staking - self.total_actually_staked,
         );
-        if total_amount_to_stake < MIN_MOVEMENT {
+        if total_amount_to_stake < MIN_STAKE_AMOUNT {
             log!("amount too low {}", total_amount_to_stake);
             return false;
         }
@@ -251,7 +251,7 @@ impl MetaPool {
             )
             .then(ext_self_owner::on_staking_pool_unstake(
                 sp_inx,
-                amount_to_unstake,
+                amount_to_unstake.into(),
                 //extra async call args
                 &env::current_account_id(),
                 NO_DEPOSIT,
@@ -267,7 +267,7 @@ impl MetaPool {
     /// The prev fn continues here
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
-    pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: u128) {
+    pub fn on_staking_pool_unstake(&mut self, sp_inx: usize, amount: U128String) {
         assert_callback_calling();
 
         let sp = &mut self.staking_pools[sp_inx];
@@ -277,22 +277,22 @@ impl MetaPool {
         let result: &str;
         if unstake_succeeded {
             result = "succeeded";
-            sp.staked -= amount;
-            sp.unstaked += amount;
+            sp.staked -= amount.0;
+            sp.unstaked += amount.0;
             sp.unstk_req_epoch_height = env::epoch_height();
-            self.total_unstaked_and_waiting += amount; //contract total
+            self.total_unstaked_and_waiting += amount.0; //contract total
             event!(
                 r#"{{"event":"dist.unstk","sp":"{}","amount":"{}"}}"#,
                 sp.account_id,
-                amount
+                amount.0
             );
         } else {
             result = "has failed";
-            self.total_actually_staked += amount; //undo preventive action considering the amount unstaked
-            self.epoch_unstake_orders += amount; //undo preventive action considering the amount unstaked
+            self.total_actually_staked += amount.0; //undo preventive action considering the amount unstaked
+            self.epoch_unstake_orders += amount.0; //undo preventive action considering the amount unstaked
         }
 
-        log!("Unstaking of {} at @{} {}", amount, sp.account_id, result);
+        log!("Unstaking of {} at @{} {}", amount.0, sp.account_id, result);
 
         //WARN: This is a callback after-cross-contract-call method
         //busy locks must be saved false in the state, this method SHOULD NOT PANIC
@@ -344,20 +344,17 @@ impl MetaPool {
     /// the same amount requested (a minor, few yoctoNEARS difference)
     /// this fn syncs sp.unstaked with the real, current unstaked amount informed by the sp
     pub fn sync_unstaked_balance(&mut self, sp_inx: u16) -> Promise {
-        // TODO: This method locks the contract, so someone may spam it to prevent operator from
-        //    issuing a command. Assuming there will be a way to front-run a transaction, it can
-        //    block the contract. Should this be limited to be called once per epoch per pool?
-        //    Another option is to not lock the pool and the contract at all, but if the callback
-        //    is called at the moment when the pool or the contract is locked, ignore the result.
+        // Note: We avoid locking the contract here (busy_flag), to close the possibility of someone spamming this method
+        //  to prevent operator from issuing a command. Assuming there will be a way to front-run a transaction, it can
+        //    block the contract. We do not lock the pool and the contract at all, but if the callback
+        //    is called at the moment when the pool or the contract is locked, the result is ignored.
+
         let inx = sp_inx as usize;
         assert!(inx < self.staking_pools.len());
 
         self.assert_not_busy();
-        self.contract_busy = true;
-
         let sp = &mut self.staking_pools[inx];
         assert!(!sp.busy_lock, "sp is busy");
-        sp.busy_lock = true;
 
         // SUGGESTION: Maybe better to call `get_account` to get information about `staked` and
         //    `unstaked` balance at the same time. Sometimes the staking pool may throw yoctoNEAR
@@ -388,8 +385,10 @@ impl MetaPool {
         sp_inx: usize,
         #[callback] unstaked_balance: U128String,
     ) {
-        // TODO: Relying on `#[callback]` here is not safe. If the pool view call fails for some
-        //    reason the entire contract will be locked until the owner calls make non-busy.
+        // NOTE: be careful on `#[callback]` here. If the pool view call fails for some
+        //    reason this call will not be entered, because #[callback] fails for failed_promises
+        //    So *never* add a pair of lock/unlock if the callback uses #[callback] params
+        //    because the entire contract will be locked until the owner calls make non-busy.
         //    E.g. if owner makes a mistake adding a new pool and adds an invalid pool.
 
         //we enter here after asking the staking-pool how much do we have *unstaked*
@@ -409,6 +408,13 @@ impl MetaPool {
             sp.unstaked,
             real_unstaked_balance
         );
+        // we're not locking at the start, so we check there's no in-flight transaction if we need to
+        // adjust the unstaked in a few yoctos
+        if real_unstaked_balance != sp.unstaked && (self.contract_busy || sp.busy_lock) {
+            // do not proceed to update if another operation is in mid-flight
+            panic!("cant not update unstaked, contract or sp is busy, another operation is in mid-flight");
+        }
+
         if real_unstaked_balance > sp.unstaked {
             //positive difference
             let difference = real_unstaked_balance - sp.unstaked;
@@ -422,11 +428,6 @@ impl MetaPool {
             sp.unstaked = real_unstaked_balance;
             sp.staked += difference; //the difference was in "our" record of "staked"
         }
-
-        //WARN: This is a callback after-cross-contract-call method
-        //busy locks must be saved false in the state, this method SHOULD NOT PANIC
-        sp.busy_lock = false;
-        self.contract_busy = false;
     }
 
     //------------------------------------------------------------------------
@@ -736,7 +737,7 @@ impl MetaPool {
             return;
         }
 
-        // NOTE: Is `to_keep` just `min(self.epoch_stake_orders, self.epoch_unstake_orders)`
+        // NOTE: `to_keep` can also be computed as `min(self.epoch_stake_orders, self.epoch_unstake_orders)`
         let delta: u128;
         let to_keep: u128;
         if self.epoch_stake_orders >= self.epoch_unstake_orders {
@@ -747,13 +748,13 @@ impl MetaPool {
             to_keep = self.epoch_unstake_orders - delta;
         }
 
-        //we will keep this NEAR (no need to send to the pools), but keep it reserved for unstake_claims, 4 epochs from now
+        //we will keep this NEAR (no need to send to the pools). We keep it reserved for unstake_claims, 4 epochs from now
         self.reserve_for_unstake_claims += to_keep;
         //clear opposing orders
         self.epoch_stake_orders -= to_keep;
         self.epoch_unstake_orders -= to_keep;
 
-        // TODO: What is this used for?
+        // Note: epoch_last_clearing is not being used right now
         self.epoch_last_clearing = env::epoch_height();
         event!(r#"{{"event":"clr.ord","keep":"{}"}}"#, to_keep);
     }

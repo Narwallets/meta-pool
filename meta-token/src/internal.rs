@@ -4,6 +4,9 @@ use near_sdk::{AccountId, Balance, PromiseResult};
 
 use crate::*;
 
+const ONE_NEAR: Balance = 1_000_000_000_000_000_000_000_000;
+pub const MIN_TRANSFER_UNIT: u128 = 1000; // to make sibyl attacks more expensive in terms of tokens
+
 pub fn default_ft_metadata() -> FungibleTokenMetadata {
     FungibleTokenMetadata {
         spec: FT_METADATA_SPEC.to_string(),
@@ -41,6 +44,9 @@ impl Contract {
             // Since `ft_transfer` is cheaper than storage for 1 account, you can send
             // 1 token to a ton randomly generated accounts and it will require 125 bytes per
             // such account. So it would require 800 transactions to block 1 NEAR of the account.
+            // R: making the user manage storage costs adds too much friction to account creation
+            // it's better to impede sybil attacks by other means
+            // there's a MIN_TRANSFER of 1/1000 to make sibyl attacks more expensive in terms of tokens
             None => 0,
         }
     }
@@ -62,10 +68,14 @@ impl Contract {
             sender_id, receiver_id,
             "Sender and receiver should be different"
         );
-        assert!(amount > 0, "The amount should be a positive number");
+        let sender_balance = self.internal_unwrap_balance_of(sender_id);
+        assert!(
+            amount == sender_balance || amount > ONE_NEAR / MIN_TRANSFER_UNIT,
+            "The amount should be at least 1/{}",
+            MIN_TRANSFER_UNIT
+        );
         // remove from sender
         {
-            let sender_balance = self.internal_unwrap_balance_of(sender_id);
             assert!(
                 amount <= sender_balance,
                 "The account doesn't have enough balance {}",
