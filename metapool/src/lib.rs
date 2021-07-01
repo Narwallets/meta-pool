@@ -48,7 +48,7 @@ pub mod fungible_token_standard;
 
 //mod migrations;
 
-// setup_alloc adds a #[cfg(target_arch = "wasm32")] to the global allocator, which prevents the allocator 
+// setup_alloc adds a #[cfg(target_arch = "wasm32")] to the global allocator, which prevents the allocator
 // from being used when the contract's main file is used in simulation testing.
 near_sdk::setup_alloc!();
 
@@ -71,7 +71,7 @@ pub trait ExtMetaStakingPoolOwnerCallbacks {
     fn on_get_result_from_transfer_poll(&mut self, #[callback] poll_result: PollResult) -> bool;
 
     fn on_get_sp_total_balance(&mut self, sp_inx: usize, #[callback] total_balance: U128String);
-    
+
     fn on_get_sp_unstaked_balance(&mut self, sp_inx: usize, #[callback] unstaked_balance: U128String);
 
     fn after_minting_meta(&self, account_id:AccountId);
@@ -87,7 +87,7 @@ pub trait MetaToken {
 //------------------------
 //  Main Contract State --
 //------------------------
-// Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts. 
+// Note: Because this contract holds a large liquidity-pool, there are no `min_account_balance` required for accounts.
 // Accounts are automatically removed (converted to default) where available & staked & shares & meta = 0. see: internal_update_account
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -109,7 +109,7 @@ pub struct MetaPool {
 
     /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
     /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
-    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now. 
+    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now.
     /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
     /// This amount also increments at retrieve_from_staking_pool
     /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
@@ -131,7 +131,7 @@ pub struct MetaPool {
     /// The total amount of "delayed-unstake" orders in the current epoch
     pub epoch_unstake_orders: u128,
     // this two amounts can cancel each other at end_of_epoch_clearing
-    
+
     /// The epoch when the last end_of_epoch_clearing was performed. To avoid calling it twice in the same epoch.
     pub epoch_last_clearing: EpochHeight,
 
@@ -147,7 +147,7 @@ pub struct MetaPool {
 
     /// how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the buy share price is computed so if she "sells" the shares on that moment she recovers the same near amount
-    // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards 
+    // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards
     // share_price = total_for_staking/total_shares
     // when someone "unstakes" they "burns" X shares at current price to recoup Y near
     pub total_stake_shares: u128, //total stNEAR minted
@@ -209,12 +209,12 @@ pub struct MetaPool {
     pub treasury_swap_cut_basis_points: u16,
 
     // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    pub web_app_url: Option<String>, 
+    pub web_app_url: Option<String>,
     pub auditor_account_id: Option<AccountId>,
 
     /// Where's the NEP-141 $META token contract
     pub meta_token_account_id: AccountId,
-    
+
 }
 
 #[near_bindgen]
@@ -247,7 +247,7 @@ impl MetaPool {
     ) -> Self {
         assert!(!env::state_exists(), "The contract is already initialized");
 
-        //all accounts must be different 
+        //all accounts must be different
         // not all combinations tested, we assume the owner deploying the contract knows that accounts must be different
         // it does not make sense to burn fees checking all possible combinations
         assert!(&owner_account_id!=&treasury_account_id);
@@ -258,7 +258,7 @@ impl MetaPool {
 
         return Self {
             owner_account_id,
-            contract_busy: false, 
+            contract_busy: false,
             operator_account_id,
             treasury_account_id,
             contract_account_balance: 0,
@@ -267,11 +267,11 @@ impl MetaPool {
             operator_rewards_fee_basis_points: DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS,
             operator_swap_cut_basis_points: DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS,
             treasury_swap_cut_basis_points: DEFAULT_TREASURY_SWAP_CUT_BASIS_POINTS,
-            staking_paused: false, 
+            staking_paused: false,
             total_available: 0,
             total_for_staking: 0,
             total_actually_staked: 0,
-            total_unstaked_and_waiting: 0, 
+            total_unstaked_and_waiting: 0,
             reserve_for_unstake_claims: 0,
             total_unstake_claims:0,
             epoch_stake_orders:0,
@@ -285,7 +285,7 @@ impl MetaPool {
             nslp_liquidity_target: 10_000*NEAR,
             nslp_max_discount_basis_points: 180, //1.8%
             nslp_min_discount_basis_points: 25,   //0.25%
-            min_deposit_amount: 10*NEAR,   
+            min_deposit_amount: 10*NEAR,
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. initial 5x, default:1x. reward META = discounted * mult_pct / 100
             stnear_sell_meta_mult_pct: 500, //1x
             ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. initial 10x, default:5x. reward META = rewards * mult_pct / 100
@@ -303,7 +303,7 @@ impl MetaPool {
 
     /// staking-pool's ping is moot here
     pub fn ping(&mut self) {
-        
+
     }
 
     /// Deposits the attached amount into the inner account of the predecessor.
@@ -316,6 +316,8 @@ impl MetaPool {
 
     /// Withdraws from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool* .- core-contracts/staking-pool only has "unstaked" to withdraw from
     pub fn withdraw(&mut self, amount: U128String) -> Promise {
+        // NOTE: While ability to withdraw close to all available helps, it prevents lockup contracts from using this in a replacement to a staking pool,
+        // because the lockup contracts relies on exact precise amount being withdrawn.
         self.internal_withdraw_use_unstaked(amount.0)
     }
     /// Withdraws ALL from from "UNSTAKED" balance *TO MIMIC core-contracts/staking-pool .- core-contracts/staking-pool only has "unstaked" to withdraw from
@@ -404,7 +406,7 @@ impl MetaPool {
         let acc = self.internal_get_account(&account_id);
         return acc.available.into();
     }
-    
+
 
     /// Returns `true` if the given account can withdraw tokens in the current epoch.
     pub fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool {
@@ -525,6 +527,7 @@ impl MetaPool {
     ) -> LiquidUnstakeResult {
 
         self.assert_not_busy();
+        // Q: Why not?
         //assert_one_yocto();
 
         let account_id = env::predecessor_account_id();
@@ -532,7 +535,7 @@ impl MetaPool {
 
         let stnear_owned = user_account.stake_shares;
 
-        let st_near_to_sell:u128 = 
+        let st_near_to_sell:u128 =
         // if the amount is close to user's total, remove user's total
         // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow 10 yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
         if is_close(st_near_to_burn.0, stnear_owned) { // allow for rounding simplification
@@ -553,7 +556,7 @@ impl MetaPool {
         let swap_fee_basis_points = self.internal_get_discount_basis_points(nslp_account.available, nears_out);
         assert!(swap_fee_basis_points < 10000, "inconsistency d>1");
         let fee = apply_pct(swap_fee_basis_points, nears_out);
-        
+
         let near_to_receive = nears_out - fee;
         assert!(
             near_to_receive >= min_expected_near.0,
@@ -582,7 +585,7 @@ impl MetaPool {
         // The treasury cut in stnear-shares (25% by default)
         let treasury_st_near_cut = apply_pct(self.treasury_swap_cut_basis_points,fee_in_st_near);
         treasury_account.add_st_near(treasury_st_near_cut, &self);
-        
+
         // The cut that the contract owner (operator) takes. (3% of 1% normally)
         let operator_st_near_cut = apply_pct( self.operator_swap_cut_basis_points,fee_in_st_near);
         operator_account.add_st_near(operator_st_near_cut, &self);
@@ -604,8 +607,8 @@ impl MetaPool {
         assert!(fee_in_st_near > treasury_st_near_cut + developers_st_near_cut + operator_st_near_cut);
 
         // The rest of the st_near sold goes into the liq-pool. Because it is a larger amount than NEARs removed, it will increase share value for all LP providers.
-        // Adding value to the pool via adding more stNEAR value than the NEAR removed, will be counted as rewards for the nslp_meter, 
-        // so $META for LP providers will be created. $METAs for LP providers are realized during add_liquidity(), remove_liquidity() 
+        // Adding value to the pool via adding more stNEAR value than the NEAR removed, will be counted as rewards for the nslp_meter,
+        // so $META for LP providers will be created. $METAs for LP providers are realized during add_liquidity(), remove_liquidity()
         let st_near_to_liq_pool = st_near_to_sell - (treasury_st_near_cut + operator_st_near_cut + developers_st_near_cut);
         debug!("nslp_account.add_st_near {}", st_near_to_liq_pool);
         // major part of stNEAR sold goes to the NSLP
@@ -613,11 +616,11 @@ impl MetaPool {
 
         //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
         user_account.sub_st_near(st_near_to_sell, &self);
-        //mint $META for the selling user 
+        //mint $META for the selling user
         let meta_to_seller = apply_multiplier(fee_in_st_near, self.stnear_sell_meta_mult_pct);
         self.total_meta += meta_to_seller;
         user_account.realized_meta += meta_to_seller;
-        
+
         //Save involved accounts
         self.internal_update_account(&self.treasury_account_id.clone(), &treasury_account);
         self.internal_update_account(&self.operator_account_id.clone(), &operator_account);
@@ -648,6 +651,8 @@ impl MetaPool {
     /// add liquidity - payable
     #[payable]
     pub fn nslp_add_liquidity(&mut self) -> u16{
+        // TODO: Since this method doesn't guard the resulting liquidity, is it possible to put it
+        //    into a front-run/end-run sandwich to capitalize on the transaction?
         self.internal_deposit();
         return self.internal_nslp_add_liquidity(env::attached_deposit());
     }
@@ -753,9 +758,14 @@ impl MetaPool {
         let nslp_account = self.internal_get_nslp_account();
         //realize and mint meta from LP rewards
         acc.nslp_realize_meta(&nslp_account, self);
-        
+
         //--SAVE ACCOUNT
         self.internal_update_account(&account_id, &acc);
+
+        // TODO: This seems to be vulnerable to the multi-call attack. While `mint` is still pending,
+        //    the attacker may call `harvest_meta` again and get `realized_meta` transferred multiple
+        //    times. You should make `acc.realized_meta = 0` here and increase it back in
+        //    `Self::after_minting_meta` in case the transfer has failed.
 
         //schedule async to mint the $META-tokens for the user
         meta_token_mint::mint(
@@ -791,7 +801,7 @@ impl MetaPool {
   //---------------------------------------------------------------------------
   /// Sputnik DAO remote-upgrade receiver
   /// can be called by a remote-upgrade proposal
-  /// 
+  ///
   #[cfg(target_arch = "wasm32")]
   pub fn upgrade(self) {
       assert!(env::predecessor_account_id() == self.owner_account_id);
@@ -824,7 +834,7 @@ impl MetaPool {
                   .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                   .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
 
-              //2nd action, schedule a call to "migrate()". 
+              //2nd action, schedule a call to "migrate()".
               //Will execute on the **new code**
               b.borrow()
                   .as_ref()
@@ -846,7 +856,7 @@ impl MetaPool {
 }
 
 //---------------
-//TODO Unit tests. 
+//TODO Unit tests.
 //Note: Most tests are in /tests and are simulation-testing
 //---------------
 #[cfg(not(target_arch = "wasm32"))]
@@ -917,9 +927,9 @@ mod tests {
         let (_context, contract) = contract_only_setup();
         let lp_balance_y: u128 = ntoy(500_000);
         let sell_stnear_y: u128 = ntoy(120);
-        
+
         let discount_bp: u16 = contract.internal_get_discount_basis_points(lp_balance_y, sell_stnear_y);
-        
+
         let near_amount_received_y =contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
 
         let st_near_price = contract.amount_from_stake_shares(ONE_NEAR);
@@ -960,5 +970,5 @@ mod tests {
       rm.stake(10);
       assert_eq!(rm.compute_rewards(11),6);
     }
-  
+
 }

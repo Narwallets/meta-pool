@@ -89,6 +89,11 @@ impl MetaPool {
                 ));
             } else {
                 //here the sp has no sizable unstaked balance, we must deposit_and_stake on the sp from our balance
+
+                // TODO: This may be too optimistic, why not compute the storage explicitly and add
+                //    a safety margin on top of that. That's because the account state may
+                //    potentially exceed the 35N (or 3.5M right now). But I guess it can happen
+                //    only at the beginning of metapool before the liquidity is provided.
                 assert!(
                     env::account_balance() - MIN_BALANCE_FOR_STORAGE >= amount_to_stake,
                     "env::account_balance()-MIN_BALANCE_FOR_STORAGE < amount_to_stake"
@@ -211,6 +216,9 @@ impl MetaPool {
             self.total_actually_staked - self.total_for_staking,
         );
         //check if the amount justifies tx-fee / can be unstaked really
+        // TODO: It's better to move `10 * TGAS as u128` since it's incorrect to compare GAS to NEAR.
+        //    GAS has a gas_price, and if gas price goes higher, then the comparison might be out of
+        //    date. Since the operator is paying for all gas, it's probably fine to execute anyway.
         if total_to_unstake <= 10 * TGAS as u128 {
             return false;
         }
@@ -336,6 +344,11 @@ impl MetaPool {
     /// the same amount requested (a minor, few yoctoNEARS difference)
     /// this fn syncs sp.unstaked with the real, current unstaked amount informed by the sp
     pub fn sync_unstaked_balance(&mut self, sp_inx: u16) -> Promise {
+        // TODO: This method locks the contract, so someone may spam it to prevent operator from
+        //    issuing a command. Assuming there will be a way to front-run a transaction, it can
+        //    block the contract. Should this be limited to be called once per epoch per pool?
+        //    Another option is to not lock the pool and the contract at all, but if the callback
+        //    is called at the moment when the pool or the contract is locked, ignore the result.
         let inx = sp_inx as usize;
         assert!(inx < self.staking_pools.len());
 
@@ -345,6 +358,11 @@ impl MetaPool {
         let sp = &mut self.staking_pools[inx];
         assert!(!sp.busy_lock, "sp is busy");
         sp.busy_lock = true;
+
+        // SUGGESTION: Maybe better to call `get_account` to get information about `staked` and
+        //    `unstaked` balance at the same time. Sometimes the staking pool may throw yoctoNEAR
+        //    for rounding errors. So in case this pool may accidentally get 1 yocto and then
+        //    overflow when subtracting staked from unstaked or vise-versa.
 
         //query our current unstaked amount
         return ext_staking_pool::get_account_unstaked_balance(
@@ -370,6 +388,10 @@ impl MetaPool {
         sp_inx: usize,
         #[callback] unstaked_balance: U128String,
     ) {
+        // TODO: Relying on `#[callback]` here is not safe. If the pool view call fails for some
+        //    reason the entire contract will be locked until the owner calls make non-busy.
+        //    E.g. if owner makes a mistake adding a new pool and adds an invalid pool.
+
         //we enter here after asking the staking-pool how much do we have *unstaked*
         //unstaked_balance: U128String contains the answer from the staking-pool
 
@@ -708,11 +730,13 @@ impl MetaPool {
     //
     pub fn end_of_epoch_clearing(&mut self) {
         self.assert_not_busy();
+        // NOTE: Worth calling this method before any actual staking/unstaking.
 
         if self.epoch_stake_orders == 0 || self.epoch_unstake_orders == 0 {
             return;
         }
 
+        // NOTE: Is `to_keep` just `min(self.epoch_stake_orders, self.epoch_unstake_orders)`
         let delta: u128;
         let to_keep: u128;
         if self.epoch_stake_orders >= self.epoch_unstake_orders {
@@ -729,6 +753,7 @@ impl MetaPool {
         self.epoch_stake_orders -= to_keep;
         self.epoch_unstake_orders -= to_keep;
 
+        // TODO: What is this used for?
         self.epoch_last_clearing = env::epoch_height();
         event!(r#"{{"event":"clr.ord","keep":"{}"}}"#, to_keep);
     }

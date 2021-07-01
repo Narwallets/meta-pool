@@ -120,6 +120,7 @@ impl Contract {
     }
 }
 
+// Q: Is ignoring storage costs the only reason for the reimplementation?
 #[near_bindgen]
 impl FungibleTokenCore for Contract {
     #[payable]
