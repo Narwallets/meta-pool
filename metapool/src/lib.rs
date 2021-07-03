@@ -172,7 +172,8 @@ pub struct MetaPool {
     //list of pools to diversify in
     pub staking_pools: Vec<StakingPoolInfo>,
 
-    //validator loan request
+    // validator loan request
+    // action on audit suggestions, this field is not used. No need for this to be on the main contract
     pub loan_requests: LookupMap<AccountId, VLoanRequest>,
 
     //The next 3 values define the Liq.Provider fee curve

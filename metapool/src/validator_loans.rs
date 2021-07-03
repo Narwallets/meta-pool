@@ -1,3 +1,11 @@
+// action on audit suggestions, No need to handle VLoanRequest on the main contract
+// dummy structure
+pub struct VLoanRequest {
+    //total requested
+    pub amount_requested: u128,
+}
+
+/* 
 use crate::*;
 use near_sdk::serde::{Deserialize, Serialize};
 
@@ -259,3 +267,4 @@ impl MetaPool {
         self.internal_deposit_attached_near_into(self.treasury_account_id.clone());
     }
 }
+*/
