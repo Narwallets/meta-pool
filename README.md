@@ -10,7 +10,7 @@ What is Meta-Pool and other non-Technical Documentation
 
 ### Repositories 
 
-This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/webapp-meta-pool.git
+This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/metastaking-webapp
 
 ### Change Log
 #### `0.1.0`
