@@ -60,6 +60,10 @@ impl Contract {
     pub fn get_owner_id(&self) -> AccountId {
         return self.owner_id.clone();
     }
+    pub fn set_owner_id(&mut self, owner_id: AccountId) {
+        self.assert_owner_calling();
+        self.owner_id = owner_id.into();
+    }
 
     //owner can mint more into their account
     #[payable]

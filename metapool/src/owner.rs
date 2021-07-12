@@ -58,7 +58,7 @@ impl MetaPool {
 
     ///remove staking pool from list *if it's empty*
     pub fn remove_staking_pool(&mut self, inx: u16) {
-        self.assert_owner_calling();
+        self.assert_operator_or_owner();
 
         let sp = &self.staking_pools[inx as usize];
         if !sp.is_empty() {
@@ -69,7 +69,7 @@ impl MetaPool {
 
     ///update existing weight_basis_points
     pub fn set_staking_pool_weight(&mut self, inx: u16, weight_basis_points: u16) {
-        self.assert_owner_calling();
+        self.assert_operator_or_owner();
 
         let sp = &mut self.staking_pools[inx as usize];
         if sp.busy_lock {
@@ -88,7 +88,7 @@ impl MetaPool {
 
     ///add a new staking pool or update existing weight_basis_points
     pub fn set_staking_pool(&mut self, account_id: AccountId, weight_basis_points: u16) {
-        self.assert_owner_calling();
+        self.assert_operator_or_owner();
 
         //search the pools
         for sp_inx in 0..self.staking_pools.len() {
@@ -128,6 +128,11 @@ impl MetaPool {
         assert!(env::is_valid_account_id(account_id.as_bytes()));
         self.assert_owner_calling();
         self.operator_account_id = account_id;
+    }
+    pub fn set_owner_id(&mut self, owner_id: AccountId) {
+        assert!(env::is_valid_account_id(owner_id.as_bytes()));
+        self.assert_owner_calling();
+        self.owner_account_id = owner_id.into();
     }
 
     /// The amount of tokens that were deposited to the staking pool.
