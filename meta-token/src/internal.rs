@@ -20,7 +20,7 @@ pub fn default_ft_metadata() -> FungibleTokenMetadata {
     }
 }
 
-impl Contract {
+impl MetaToken {
     pub fn assert_owner_calling(&self) {
         assert!(
             env::predecessor_account_id() == self.owner_id,
@@ -57,6 +57,14 @@ impl Contract {
         self.total_supply += amount;
     }
 
+    pub fn internal_burn(&mut self, account_id: &AccountId, amount: u128) {
+        let balance = self.internal_unwrap_balance_of(account_id);
+        assert!(balance >= amount);
+        self.internal_update_account(&account_id, balance - amount);
+        assert!(self.total_supply >= amount);
+        self.total_supply -= amount;
+    }
+
     pub fn internal_transfer(
         &mut self,
         sender_id: &AccountId,
@@ -68,26 +76,53 @@ impl Contract {
             sender_id, receiver_id,
             "Sender and receiver should be different"
         );
+
+        if self.locked_until_nano > 0 && env::block_timestamp() < self.locked_until_nano {
+            panic!(
+                "transfers are locked until unix timestamp {}",
+                self.locked_until_nano / NANOSECONDS
+            );
+        }
+
         let sender_balance = self.internal_unwrap_balance_of(sender_id);
         assert!(
             amount == sender_balance || amount > ONE_NEAR / MIN_TRANSFER_UNIT,
             "The amount should be at least 1/{}",
             MIN_TRANSFER_UNIT
         );
+
         // remove from sender
-        {
-            assert!(
-                amount <= sender_balance,
-                "The account doesn't have enough balance {}",
-                sender_balance
-            );
-            self.internal_update_account(&sender_id, sender_balance - amount);
+        let sender_balance = self.internal_unwrap_balance_of(sender_id);
+        assert!(
+            amount <= sender_balance,
+            "The account doesn't have enough balance {}",
+            sender_balance
+        );
+        let balance_left = sender_balance - amount;
+        self.internal_update_account(&sender_id, balance_left);
+
+        // check vesting
+        if self.vested_count > 0 {
+            match self.vested.get(&sender_id) {
+                Some(vesting) => {
+                    //compute locked
+                    let locked = vesting.compute_amount_locked();
+                    if locked == 0 {
+                        //vesting is complete. remove vesting lock
+                        self.vested.remove(&sender_id);
+                        self.vested_count -= 1;
+                    } else if balance_left < locked {
+                        panic!("Vested account, balance can't go lower than {}", locked);
+                    }
+                }
+                None => {}
+            }
         }
+
         // add to receiver
-        {
-            let receiver_balance = self.internal_unwrap_balance_of(receiver_id);
-            self.internal_update_account(&receiver_id, receiver_balance + amount);
-        }
+        let receiver_balance = self.internal_unwrap_balance_of(receiver_id);
+        self.internal_update_account(&receiver_id, receiver_balance + amount);
+
         log!("Transfer {} from {} to {}", amount, sender_id, receiver_id);
         if let Some(memo) = memo {
             log!("Memo: {}", memo);

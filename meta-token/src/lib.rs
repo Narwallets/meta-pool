@@ -14,20 +14,33 @@ use near_sdk::{
     PanicOnDefault, PromiseOrValue,
 };
 
+//-- Sputnik DAO remote upgrade requires BLOCKCHAIN_INTERFACE low-level access
+#[cfg(target_arch = "wasm32")]
+use near_sdk::env::BLOCKCHAIN_INTERFACE;
+
 const TGAS: Gas = 1_000_000_000_000;
 const GAS_FOR_RESOLVE_TRANSFER: Gas = 5 * TGAS;
 const GAS_FOR_FT_TRANSFER_CALL: Gas = 25 * TGAS + GAS_FOR_RESOLVE_TRANSFER;
 const NO_DEPOSIT: Balance = 0;
+
+// nanoseconds in a second
+const NANOSECONDS: u64 = 1_000_000_000;
 
 type U128String = U128;
 
 near_sdk::setup_alloc!();
 
 mod internal;
+mod migrations;
+mod util;
+mod vesting;
+
+use util::*;
+use vesting::{VestingRecord, VestingRecordJSON};
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct Contract {
+pub struct MetaToken {
     metadata: LazyOption<FungibleTokenMetadata>,
 
     pub accounts: LookupMap<AccountId, Balance>,
@@ -37,10 +50,16 @@ pub struct Contract {
     pub minters: Vec<AccountId>,
 
     pub total_supply: Balance,
+
+    /// transfers are locked until this moment
+    pub locked_until_nano: TimestampNano,
+
+    pub vested: LookupMap<AccountId, VestingRecord>,
+    pub vested_count: u32,
 }
 
 #[near_bindgen]
-impl Contract {
+impl MetaToken {
     /// Initializes the contract with the given total supply owned by the given `owner_id`.
 
     #[init]
@@ -53,6 +72,9 @@ impl Contract {
             accounts: LookupMap::new(b"a".to_vec()),
             minters: vec![owner_id],
             total_supply: 0,
+            locked_until_nano: 0,
+            vested: LookupMap::new(b"v".to_vec()),
+            vested_count: 0,
         }
     }
 
@@ -64,8 +86,12 @@ impl Contract {
         self.assert_owner_calling();
         self.owner_id = owner_id.into();
     }
+    pub fn set_locked_until(&mut self, unix_timestamp: u32) {
+        self.assert_owner_calling();
+        self.locked_until_nano = unix_timestamp as u64 * NANOSECONDS;
+    }
 
-    //owner can mint more into their account
+    //owner can mint more into some account
     #[payable]
     pub fn mint(&mut self, account_id: &AccountId, amount: U128String) {
         assert_one_yocto();
@@ -101,7 +127,7 @@ impl Contract {
         self.minters
     }
 
-    /// Returns account ID of the staking pool owner.
+    /// Returns account ID of the owner.
     #[payable]
     pub fn set_metadata_icon(&mut self, svg_string: String) {
         assert_one_yocto();
@@ -111,7 +137,7 @@ impl Contract {
         self.metadata.set(&m);
     }
 
-    /// Returns account ID of the staking pool owner.
+    /// sets metadata_reference
     #[payable]
     pub fn set_metadata_reference(&mut self, reference: String, reference_hash: String) {
         assert_one_yocto();
@@ -122,13 +148,133 @@ impl Contract {
         m.assert_valid();
         self.metadata.set(&m);
     }
+
+    //-----------
+    //-- Vesting functions in the contract
+    //-----------
+    /// Get the amount of tokens that are locked in this account due to lockup or vesting.
+    pub fn get_locked_amount(&self, account: AccountId) -> U128String {
+        match self.vested.get(&account) {
+            Some(vesting) => vesting.compute_amount_locked().into(),
+            None => 0.into(),
+        }
+    }
+
+    /// Get vesting information
+    pub fn get_vesting_info(&self, account_id: AccountId) -> VestingRecordJSON {
+        log!("{}", &account_id);
+        let vesting = self.vested.get(&account_id).unwrap();
+        VestingRecordJSON {
+            amount: vesting.amount.into(),
+            cliff_timestamp: vesting.cliff_timestamp.into(),
+            end_timestamp: vesting.end_timestamp.into(),
+        }
+    }
+
+    //minters can mint with vesting/locked periods
+    #[payable]
+    pub fn mint_vested(
+        &mut self,
+        account_id: &AccountId,
+        amount: U128String,
+        cliff_timestamp: U64String,
+        end_timestamp: U64String,
+    ) {
+        self.mint(account_id, amount);
+        let record =
+            VestingRecord::new(amount.into(), cliff_timestamp.into(), end_timestamp.into());
+        match self.vested.insert(&account_id, &record) {
+            Some(_) => panic!("account already vested"),
+            None => self.vested_count += 1,
+        }
+    }
+
+    #[payable]
+    /// terminate vesting before the cliff
+    /// burn the tokens
+    pub fn terminate_vesting(&mut self, account_id: &AccountId) {
+        assert_one_yocto();
+        self.assert_owner_calling();
+        match self.vested.get(&account_id) {
+            Some(vesting) => {
+                if vesting.compute_amount_locked() == 0 {
+                    panic!("past the cliff, vesting can't be changed")
+                }
+                self.internal_burn(account_id, vesting.amount);
+                self.vested.remove(&account_id);
+                self.vested_count -= 1;
+            }
+            None => panic!("account not vested"),
+        }
+    }
+
+    /// return how many vested accounts are still active
+    pub fn vested_accounts_count(&self) -> u32 {
+        self.vested_count
+    }
+
+    //---------------------------------------------------------------------------
+    /// Sputnik DAO remote-upgrade receiver
+    /// can be called by a remote-upgrade proposal
+    ///
+    #[cfg(target_arch = "wasm32")]
+    pub fn upgrade(self) {
+        assert!(env::predecessor_account_id() == self.owner_id);
+        //input is code:<Vec<u8> on REGISTER 0
+        //log!("bytes.length {}", code.unwrap().len());
+        const GAS_FOR_UPGRADE: u64 = 10 * TGAS; //gas occupied by this fn
+        const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
+        //after upgrade we call *pub fn migrate()* on the NEW CODE
+        let current_id = env::current_account_id().into_bytes();
+        let migrate_method_name = "migrate".as_bytes().to_vec();
+        let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
+        unsafe {
+            BLOCKCHAIN_INTERFACE.with(|b| {
+                // Load input (new contract code) into register 0
+                b.borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .input(0);
+
+                //prepare self-call promise
+                let promise_id = b
+                    .borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .promise_batch_create(current_id.len() as _, current_id.as_ptr() as _);
+
+                //1st action, deploy/upgrade code (takes code from register 0)
+                b.borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
+
+                //2nd action, schedule a call to "migrate()".
+                //Will execute on the **new code**
+                b.borrow()
+                    .as_ref()
+                    .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
+                    .promise_batch_action_function_call(
+                        promise_id,
+                        migrate_method_name.len() as _,
+                        migrate_method_name.as_ptr() as _,
+                        0 as _,
+                        0 as _,
+                        0 as _,
+                        attached_gas,
+                    );
+            });
+        }
+    }
 }
 
+//----------------------------------------------
+// ft metadata standard
 // Q: Is ignoring storage costs the only reason for the re-implementation?
-// making the user manage storage costs adds too much friction to account creation
+// A: making the user manage storage costs adds too much friction to account creation
 // it's better to impede sybil attacks by other means
 #[near_bindgen]
-impl FungibleTokenCore for Contract {
+impl FungibleTokenCore for MetaToken {
     #[payable]
     fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: U128, memo: Option<String>) {
         assert_one_yocto();
@@ -180,7 +326,7 @@ impl FungibleTokenCore for Contract {
 }
 
 #[near_bindgen]
-impl FungibleTokenResolver for Contract {
+impl FungibleTokenResolver for MetaToken {
     /// Returns the amount of burned tokens in a corner case when the sender
     /// has deleted (unregistered) their account while the `ft_transfer_call` was still in flight.
     /// Returns (Used token amount, Burned token amount)
@@ -202,7 +348,7 @@ impl FungibleTokenResolver for Contract {
 }
 
 #[near_bindgen]
-impl FungibleTokenMetadataProvider for Contract {
+impl FungibleTokenMetadataProvider for MetaToken {
     fn ft_metadata(&self) -> FungibleTokenMetadata {
         self.internal_get_ft_metadata()
     }

@@ -1,7 +1,7 @@
 [package]
 name = "meta-token"
 version = "0.1.0"
-authors = []
+authors = ["luciotato@narwallets.com"]
 edition = "2018"
 publish = false
 

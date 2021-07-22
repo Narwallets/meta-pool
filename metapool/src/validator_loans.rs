@@ -5,7 +5,7 @@ pub struct VLoanRequest {
     pub amount_requested: u128,
 }
 
-/* 
+/*
 use crate::*;
 use near_sdk::serde::{Deserialize, Serialize};
 

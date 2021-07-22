@@ -426,6 +426,16 @@ impl MetaPool {
         };
     }
 
+    // idem previous function but in basis_points
+    #[payable]
+    pub fn set_reward_fee(&mut self, basis_points: u16) {
+        self.assert_owner_calling();
+        assert!(basis_points < 1000); // less than 10%
+                                      // DEVELOPERS_REWARDS_FEE_BASIS_POINTS is included
+        self.operator_rewards_fee_basis_points =
+            basis_points.saturating_sub(DEVELOPERS_REWARDS_FEE_BASIS_POINTS);
+    }
+
     /// Returns the staking public key
     pub fn get_staking_key(&self) -> Base58PublicKey {
         panic!("no specific staking key for the div-pool");
