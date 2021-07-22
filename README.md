@@ -46,9 +46,8 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
  - [ ] Emergency Staking (from the nslp) to whitelisted validators
 
 #### Test
- - [ ] Unit Tests
  - [x] Simulation tests
- - [ ] Full code coverage
+ - [x] Fuzzy Testing
 
 #### Staking pool list
  - [x] List selected staking pools, getting weight, staked & unstaked
