@@ -38,6 +38,7 @@ pub mod validator_loans;
 pub use validator_loans::*;
 
 pub mod fungible_token_standard;
+mod empty_nep_145;
 
 // setup_alloc adds a #[cfg(target_arch = "wasm32")] to the global allocator, which prevents the allocator 
 // from being used when the contract's main file is used in simulation testing.
