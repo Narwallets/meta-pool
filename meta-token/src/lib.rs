@@ -5,7 +5,6 @@ use near_contract_standards::fungible_token::{
     metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC},
     resolver::FungibleTokenResolver,
 };
-use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
@@ -35,6 +34,7 @@ mod internal;
 mod migrations;
 mod util;
 mod vesting;
+mod empty_nep_145;
 
 use util::*;
 use vesting::{VestingRecord, VestingRecordJSON};
@@ -375,54 +375,3 @@ trait FungibleTokenResolver {
     ) -> U128;
 }
 
-// --------------------------------------------------------------------------
-// Storage Management (we chose not to require storage backup for this token)
-// but ref.finance FE and the WEB wallet seems to be calling theses fns
-// --------------------------------------------------------------------------
-const EMPTY_STORAGE_BALANCE: StorageBalance = StorageBalance {
-    total: U128 { 0: 0 },
-    available: U128 { 0: 0 },
-};
-
-#[near_bindgen]
-impl MetaToken {
-    // `registration_only` doesn't affect the implementation for vanilla fungible token.
-    #[allow(unused_variables)]
-    pub fn storage_deposit(
-        &mut self,
-        account_id: Option<ValidAccountId>,
-        registration_only: Option<bool>,
-    ) -> StorageBalance {
-        EMPTY_STORAGE_BALANCE
-    }
-
-    /// * returns a `storage_balance` struct if `amount` is 0
-    pub fn storage_withdraw(&mut self, amount: Option<U128>) -> StorageBalance {
-        if let Some(amount) = amount {
-            if amount.0 > 0 {
-                env::panic(b"The amount is greater than the available storage balance");
-            }
-        }
-        StorageBalance {
-            total: 0.into(),
-            available: 0.into(),
-        }
-    }
-
-    #[allow(unused_variables)]
-    pub fn storage_unregister(&mut self, force: Option<bool>) -> bool {
-        true
-    }
-
-    pub fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        StorageBalanceBounds {
-            min: U128 { 0: 0 },
-            max: Some(U128 { 0: 0 }),
-        }
-    }
-
-    #[allow(unused_variables)]
-    pub fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
-        Some(EMPTY_STORAGE_BALANCE)
-    }
-}
