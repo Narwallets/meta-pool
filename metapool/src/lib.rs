@@ -44,6 +44,7 @@ pub mod validator_loans;
 pub use validator_loans::*;
 
 pub mod fungible_token_standard;
+pub mod empty_nep_145;
 
 //mod migrations;
 
