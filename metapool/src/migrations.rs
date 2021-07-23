@@ -3,10 +3,9 @@
 //contract main state migration
 //-----------------------------
 
-use near_sdk::{near_bindgen};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{UnorderedMap,LookupMap};
-
+use near_sdk::collections::{LookupMap, UnorderedMap};
+use near_sdk::near_bindgen;
 
 //---------------------------------------------------
 //  PREVIOUS Main Contract State for state migrations
@@ -26,7 +25,7 @@ use near_sdk::collections::{UnorderedMap,LookupMap};
     pub contract_account_balance: u128,
 
     // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    pub web_app_url: Option<String>, 
+    pub web_app_url: Option<String>,
     pub auditor_account_id: Option<String>,
 
     /// This value is equivalent to sum(accounts.available)
@@ -46,7 +45,7 @@ use near_sdk::collections::{UnorderedMap,LookupMap};
 
     /// how many "shares" were minted. Every time someone "stakes" he "buys pool shares" with the staked amount
     // the buy share price is computed so if she "sells" the shares on that moment she recovers the same near amount
-    // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards 
+    // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards
     // share_price = total_for_staking/total_shares
     // when someone "unstakes" she "burns" X shares at current price to recoup Y near
     pub total_stake_shares: u128,
@@ -114,7 +113,6 @@ use near_sdk::collections::{UnorderedMap,LookupMap};
 
 #[near_bindgen]
 impl MetaPool {
-
     //-----------------
     //-- migration called after code upgrade
     ///  For next version upgrades, change this function.
@@ -123,19 +121,19 @@ impl MetaPool {
     /// This fn WILL be called by this contract from `pub fn upgrade` (started from DAO)
     /// Originally a **NOOP implementation. KEEP IT if you haven't changed contract state.**
     /// If you have changed state, you need to implement migration from old state (keep the old struct with different name to deserialize it first).
-    /// 
+    ///
     #[init(ignore_state)] //do not auto-load state before this function
     pub fn migrate() -> Self {
-        // read state with OLD struct 
+        // read state with OLD struct
         // uncomment when state migration is required on upgrade
         //let old: migrations::MetaPoolPrevStateStruct = env::state_read().expect("Old state doesn't exist");
         let old: migrations::MetaPool = env::state_read().expect("Old state doesn't exist");
 
-        // can only be called by the owner (taken from old-struct)
+        // can only be called by this same contract (it's called from fn upgrade())
         assert_eq!(
             &env::predecessor_account_id(),
-            &old.owner_account_id,
-            "Can only be called by the owner"
+            &env::current_account_id(),
+            "Can only be called by this contract"
         );
 
         // uncomment when state migration is required on upgrade
@@ -146,7 +144,7 @@ impl MetaPool {
         /*
         // Create the new contract state using the data from the old contract state.
         // returns this struct that gets stored as contract state
-        return Self { 
+        return Self {
             owner_account_id: old.owner_account_id,
             contract_busy:false ,
             staking_paused: old.staking_paused,
@@ -174,8 +172,8 @@ impl MetaPool {
             staking_pools: old.staking_pools,
 
             loan_requests: old.loan_requests,
-            
-            nslp_liquidity_target: old.nslp_liquidity_target, 
+
+            nslp_liquidity_target: old.nslp_liquidity_target,
             nslp_max_discount_basis_points: old.nslp_max_discount_basis_points,
             nslp_min_discount_basis_points: old.nslp_min_discount_basis_points,
 

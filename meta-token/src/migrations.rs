@@ -45,11 +45,11 @@ impl MetaToken {
         //let old: migrations::MetaPoolPrevStateStruct = env::state_read().expect("Old state doesn't exist");
         let old: PrevContractStateStruct = env::state_read().expect("Old state doesn't exist");
 
-        // can only be called by the owner (taken from old-struct)
+        // can only be called by this same contract (it's called from fn upgrade())
         assert_eq!(
             &env::predecessor_account_id(),
-            &old.owner_id,
-            "Can only be called by the owner"
+            &env::current_account_id(),
+            "Can only be called by this contract"
         );
 
         // uncomment when state migration is required on upgrade

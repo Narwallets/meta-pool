@@ -2,7 +2,7 @@ set -e
 NETWORK=testnet
 OWNER=lucio.$NETWORK
 MASTER_ACC=meta.pool.$NETWORK
-CONTRACT_ACC=token.$MASTER_ACC
+CONTRACT_ACC=tokentest.$MASTER_ACC
 
 export NODE_ENV=$NETWORK
 
@@ -11,8 +11,8 @@ export NODE_ENV=$NETWORK
 #read input
 #near delete $CONTRACT_ACC $MASTER_ACC
 #near create-account $CONTRACT_ACC --masterAccount $MASTER_ACC
-#near deploy $CONTRACT_ACC ../res/meta_token.wasm --masterAccount $MASTER_ACC
-near call $CONTRACT_ACC new "{\"owner_id\":\"$OWNER\"}" --accountId $MASTER_ACC
+near deploy $CONTRACT_ACC ../res/meta_token.wasm --masterAccount $MASTER_ACC
+#near call $CONTRACT_ACC new "{\"owner_id\":\"$OWNER\"}" --accountId $MASTER_ACC
 ## set params@meta set_params
 #meta default_pools_testnet
 
