@@ -5,6 +5,7 @@ use near_contract_standards::fungible_token::{
     metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC},
     resolver::FungibleTokenResolver,
 };
+use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
@@ -374,76 +375,54 @@ trait FungibleTokenResolver {
     ) -> U128;
 }
 
-/*
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod tests {
-    use near_sdk::test_utils::{accounts, VMContextBuilder};
-    use near_sdk::MockedBlockchain;
-    use near_sdk::{testing_env, Balance};
+// --------------------------------------------------------------------------
+// Storage Management (we chose not to require storage backup for this token)
+// but ref.finance FE and the WEB wallet seems to be calling theses fns
+// --------------------------------------------------------------------------
+const EMPTY_STORAGE_BALANCE: StorageBalance = StorageBalance {
+    total: U128 { 0: 0 },
+    available: U128 { 0: 0 },
+};
 
-    use super::*;
-
-    const OWNER_SUPPLY: Balance = 1_000_000_000_000_000_000_000_000_000_000;
-
-    fn get_context(predecessor_account_id: ValidAccountId) -> VMContextBuilder {
-        let mut builder = VMContextBuilder::new();
-        builder
-            .current_account_id(accounts(0))
-            .signer_account_id(predecessor_account_id.clone())
-            .predecessor_account_id(predecessor_account_id);
-        builder
+#[near_bindgen]
+impl MetaToken {
+    // `registration_only` doesn't affect the implementation for vanilla fungible token.
+    #[allow(unused_variables)]
+    pub fn storage_deposit(
+        &mut self,
+        account_id: Option<ValidAccountId>,
+        registration_only: Option<bool>,
+    ) -> StorageBalance {
+        EMPTY_STORAGE_BALANCE
     }
 
-    #[test]
-    fn test_new() {
-        let mut context = get_context(accounts(1));
-        testing_env!(context.build());
-        let mut contract = Contract::new(accounts(1).into());
-        contract.mint(&accounts(1).to_string(), OWNER_SUPPLY.into());
-        testing_env!(context.is_view(true).build());
-        assert_eq!(contract.ft_total_supply().0, OWNER_SUPPLY);
-        assert_eq!(contract.ft_balance_of(accounts(1)).0, OWNER_SUPPLY);
+    /// * returns a `storage_balance` struct if `amount` is 0
+    pub fn storage_withdraw(&mut self, amount: Option<U128>) -> StorageBalance {
+        if let Some(amount) = amount {
+            if amount.0 > 0 {
+                env::panic(b"The amount is greater than the available storage balance");
+            }
+        }
+        StorageBalance {
+            total: 0.into(),
+            available: 0.into(),
+        }
     }
 
-    #[test]
-    #[should_panic(expected = "The contract is not initialized")]
-    fn test_default() {
-        let context = get_context(accounts(1));
-        testing_env!(context.build());
-        let _contract = Contract::default();
+    #[allow(unused_variables)]
+    pub fn storage_unregister(&mut self, force: Option<bool>) -> bool {
+        true
     }
 
-    #[test]
-    fn test_transfer() {
-        let mut context = get_context(accounts(2));
-        testing_env!(context.build());
-        let mut contract = Contract::new(accounts(2).into());
-        contract.mint(&accounts(2).to_string(), OWNER_SUPPLY.into());
-        testing_env!(context
-            .storage_usage(env::storage_usage())
-            .attached_deposit(1_000_000_000_000_000)
-            .predecessor_account_id(accounts(1))
-            .build());
+    pub fn storage_balance_bounds(&self) -> StorageBalanceBounds {
+        StorageBalanceBounds {
+            min: U128 { 0: 0 },
+            max: Some(U128 { 0: 0 }),
+        }
+    }
 
-        testing_env!(context
-            .storage_usage(env::storage_usage())
-            .attached_deposit(1)
-            .predecessor_account_id(accounts(2))
-            .build());
-        let transfer_amount = OWNER_SUPPLY / 3;
-        contract.ft_transfer(accounts(1), transfer_amount.into(), None);
-
-        testing_env!(context
-            .storage_usage(env::storage_usage())
-            .account_balance(env::account_balance())
-            .is_view(true)
-            .attached_deposit(0)
-            .build());
-        assert_eq!(
-            contract.ft_balance_of(accounts(2)).0,
-            (OWNER_SUPPLY - transfer_amount)
-        );
-        assert_eq!(contract.ft_balance_of(accounts(1)).0, transfer_amount);
+    #[allow(unused_variables)]
+    pub fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
+        Some(EMPTY_STORAGE_BALANCE)
     }
 }
-*/
