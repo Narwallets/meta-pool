@@ -1,5 +1,9 @@
 use crate::*;
-use near_sdk::{log, Balance, Promise};
+use near_sdk::{
+    log, Balance, Promise,
+    json_types::{ValidAccountId, U128},
+    AccountId, PromiseResult
+};
 
 pub use crate::types::*;
 pub use crate::utils::*;
@@ -604,5 +608,57 @@ impl MetaPool {
         }
         self.internal_update_account(&sender_id, &sender_acc);
         self.internal_update_account(&receiver_id, &receiver_acc);
+    }
+
+    // ft_token, executed after ft_transfer_call, 
+    // resolves (maybe refunds)
+    // TODO rename
+    pub fn int_ft_resolve_transfer(
+        &mut self,
+        sender_id: &AccountId,
+        receiver_id: ValidAccountId,
+        amount: U128,
+    ) -> (u128, u128) {
+        let sender_id: AccountId = sender_id.into();
+        let receiver_id: AccountId = receiver_id.into();
+        let amount: Balance = amount.into();
+
+        // Get the unused amount from the `ft_on_transfer` call result.
+        let unused_amount = match env::promise_result(0) {
+            PromiseResult::NotReady => unreachable!(),
+            PromiseResult::Successful(value) => {
+                if let Ok(unused_amount) = near_sdk::serde_json::from_slice::<U128>(&value) {
+                    std::cmp::min(amount, unused_amount.0)
+                } else {
+                    amount
+                }
+            }
+            PromiseResult::Failed => amount,
+        };
+
+        if unused_amount > 0 {
+            let mut receiver_acc = self.internal_get_account(&receiver_id);
+            let receiver_balance = receiver_acc.stake_shares;
+        
+            if receiver_balance > 0 {
+                let refund_amount = std::cmp::min(receiver_balance, unused_amount);
+                let near_amount = self.amount_from_stake_shares(refund_amount); //amount is in stNEAR(aka shares), let's compute how many nears that is
+                receiver_acc.sub_stake_shares(refund_amount, near_amount);
+                self.internal_update_account(&receiver_id, &receiver_acc);
+
+                let mut sender_acc = self.internal_get_account(&sender_id);
+                sender_acc.add_stake_shares(refund_amount, near_amount);
+                self.internal_update_account(&sender_id, &sender_acc);
+
+                log!(
+                    "Refund {} from {} to {}",
+                    refund_amount,
+                    receiver_id,
+                    sender_id
+                );
+                return (amount - refund_amount, 0);
+            }
+        }
+        (amount, 0)
     }
 }

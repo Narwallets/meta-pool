@@ -1,5 +1,6 @@
 use near_contract_standards::fungible_token::{
-    core::FungibleTokenCore,
+    core::{FungibleTokenCore},
+    resolver::FungibleTokenResolver,
     metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC},
 };
 
@@ -143,7 +144,31 @@ impl FungibleTokenCore for MetaPool {
         let acc = self.internal_get_account(&account_id.into());
         return acc.stake_shares.into();
     }
+
 }
+
+#[near_bindgen]
+impl FungibleTokenResolver for MetaPool {
+    /// Returns the amount of burned tokens in a corner case when the sender
+    /// has deleted (unregistered) their account while the `ft_transfer_call` was still in flight.
+    /// Returns (Used token amount, Burned token amount)
+    #[private]
+    fn ft_resolve_transfer(
+        &mut self,
+        sender_id: ValidAccountId,
+        receiver_id: ValidAccountId,
+        amount: U128,
+    ) -> U128 {
+        let sender_id: AccountId = sender_id.into();
+        let (used_amount, burned_amount) =
+            self.int_ft_resolve_transfer(&sender_id, receiver_id, amount);
+        if burned_amount > 0 {
+            log!("{} tokens burned", burned_amount);
+        }
+        return used_amount.into();
+    }
+}
+
 
 #[near_bindgen]
 impl FungibleTokenMetadataProvider for MetaPool {
