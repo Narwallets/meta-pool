@@ -12,17 +12,6 @@ use near_sdk::{
 
 use crate::*;
 
-/// Interface for callback after "on_multifuntok_transfer" to check if the receiving contract executed "on_multifuntok_transfer" ok
-#[ext_contract(ext_self_callback)]
-trait ExtMultiFunTokSelfCallback {
-    //NEP-141 single fun token, for the default token
-    fn after_ft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        contract_id: AccountId,
-        amount: U128String,
-    );
-}
 #[ext_contract(ext_ft_receiver)]
 pub trait FungibleTokenReceiver {
     fn ft_on_transfer(
@@ -31,6 +20,16 @@ pub trait FungibleTokenReceiver {
         amount: U128,
         msg: String,
     ) -> PromiseOrValue<U128>;
+}
+
+#[ext_contract(ext_self)]
+trait FungibleTokenResolver {
+    fn ft_resolve_transfer(
+        &mut self,
+        sender_id: AccountId,
+        receiver_id: AccountId,
+        amount: U128,
+    ) -> U128;
 }
 
 const GAS_FOR_RESOLVE_TRANSFER: Gas = 5_000_000_000_000;
@@ -123,7 +122,7 @@ impl FungibleTokenCore for MetaPool {
             NO_DEPOSIT, //attached native NEAR amount
             env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL,
         )
-        .then(ext_self_callback::after_ft_on_transfer(
+        .then(ext_self::ft_resolve_transfer(
             env::predecessor_account_id(),
             receiver,
             amount,
