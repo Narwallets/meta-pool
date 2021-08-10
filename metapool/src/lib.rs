@@ -793,8 +793,10 @@ impl MetaPool {
     // HARVEST META
     //------------------
 
+    #[payable]
     ///compute all $META rewards at this point and mint $META tokens in the meta-token NEP-141 contract for the user
     pub fn harvest_meta(&mut self) -> Promise {
+        assert_one_yocto();
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
@@ -822,7 +824,7 @@ impl MetaPool {
             to_mint.into(),     //how much meta
             // extra call args
             &self.meta_token_account_id,
-            NO_DEPOSIT,
+            1, // 1 yocto hack
             gas::BASE_GAS,
         )
         .then(ext_self_owner::after_minting_meta(
