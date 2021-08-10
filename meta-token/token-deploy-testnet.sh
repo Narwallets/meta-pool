@@ -2,7 +2,7 @@ set -e
 NETWORK=testnet
 OWNER=lucio.$NETWORK
 MASTER_ACC=meta.pool.$NETWORK
-CONTRACT_ACC=tokentest.$MASTER_ACC
+CONTRACT_ACC=token.$MASTER_ACC
 
 export NODE_ENV=$NETWORK
 
