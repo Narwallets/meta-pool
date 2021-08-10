@@ -26,12 +26,15 @@ near create-account $PNEAR_TOKEN --masterAccount $MASTER_ACC --initialBalance 5
 near deploy --wasmFile ./res/metapool.wasm --accountId $CONTRACT_ACC --initDeposit 1
 near deploy --wasmFile ./res/pnear_token.wasm --accountId $PNEAR_TOKEN --initDeposit 1
 #near deploy --wasmFile ./res/meta_token.wasm --accountId $GOV_TOKEN
+
+##Initialize
 near call $CONTRACT_ACC new '{ "owner_account_id":"'"$OWNER"'", "treasury_account_id":"'"$TREASURY_ACC"'", "operator_account_id":"'"$OPERATOR_ACC"'", "meta_token_account_id":"'"$GOV_TOKEN"'" }' --accountId $MASTER_ACC
+near call pnear.preprod-pool.testnet new '{"owner_id": "preprod-pool.testnet","token_contract": "contract4.preprod-pool.testnet","min_amount_near": "1", "min_amount_token": "1","sell_only": false}' --accountId alan1.testnet
 
 # set params@meta set_params
-meta set_params
+#meta set_params
 ## deafult 4 pools
-meta default_pools_testnet
+#meta default_pools_testnet
 
 
 ## redeploy code only
