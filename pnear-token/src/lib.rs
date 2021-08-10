@@ -58,7 +58,7 @@ pub struct Contract {
     pub token_contract: String,
 
     pub sell_only: bool,
-    pub min_amount_near: u128,
+    pub min_amount_stnear: u128,
     pub min_amount_token: u128,
     pub tokens_left: u128,
 
@@ -82,8 +82,6 @@ impl Contract {
     pub fn new(
         owner_id: AccountId,
         token_contract: String,
-        min_amount_near: U128String,
-        min_amount_token: U128String,
         sell_only: bool,
     ) -> Self {
 
@@ -91,14 +89,14 @@ impl Contract {
         Self {
             owner_id: owner_id.clone(),
             token_contract,
-            min_amount_near: min_amount_near.into(),
-            min_amount_token: min_amount_token.into(),
+            min_amount_stnear: 5,
+            min_amount_token: 0,
             sell_only,
             metadata: LazyOption::new(b"m".to_vec(), None),
             accounts: LookupMap::new(b"a".to_vec()),
             minters: vec![owner_id],
             total_supply: 0,
-            is_open: false,
+            is_open: true,
             tokens_left: 0,
             near_received: 0,
         }
@@ -196,14 +194,9 @@ impl Contract {
         let token_amount = amount.0;
 
         assert!(
-            token_amount >= self.min_amount_token,
+            token_amount >= self.min_amount_stnear,
             "min amount is {} tokens",
-            self.min_amount_token
-        );
-        assert!(
-            token_amount <= self.tokens_left,
-            "max amount is {} tokens",
-            self.tokens_left
+            self.min_amount_stnear
         );
         //compute near amount with price computed *after* we buy the tokens
         let near_amount = token_amount;
