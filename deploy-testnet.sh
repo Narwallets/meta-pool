@@ -27,6 +27,9 @@ export NODE_ENV=$NETWORK
 near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC
 #meta set_params
 
+#near deploy contract4.preprod-pool.testnet ./res/metapool.wasm  --accountId preprod-pool.testnet
+#near call contract4.preprod-pool.testnet set_busy "{\"value\":false}" --accountId preprod-pool.testnet --depositYocto 1
+
 #save this deployment  (to be able to recover state/tokens)
 cp ./res/metapool.wasm ./res/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
 date +%F.%T

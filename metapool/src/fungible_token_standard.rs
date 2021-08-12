@@ -1,7 +1,7 @@
 use near_contract_standards::fungible_token::{
-    core::{FungibleTokenCore},
-    resolver::FungibleTokenResolver,
+    core::FungibleTokenCore,
     metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC},
+    resolver::FungibleTokenResolver,
 };
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -33,7 +33,7 @@ trait FungibleTokenResolver {
     ) -> U128;
 }
 
-const GAS_FOR_RESOLVE_TRANSFER: Gas = 5_000_000_000_000;
+const GAS_FOR_RESOLVE_TRANSFER: Gas = 10_000_000_000_000;
 const GAS_FOR_FT_TRANSFER_CALL: Gas = 25_000_000_000_000 + GAS_FOR_RESOLVE_TRANSFER;
 const NO_DEPOSIT: Balance = 0;
 
@@ -119,8 +119,8 @@ impl FungibleTokenCore for MetaPool {
             amount,
             msg,
             //promise params:
-            &receiver_id,  //contract
-            NO_DEPOSIT, //attached native NEAR amount
+            &receiver_id, //contract
+            NO_DEPOSIT,   //attached native NEAR amount
             env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL,
         )
         .then(ext_self::ft_resolve_transfer(
@@ -144,7 +144,6 @@ impl FungibleTokenCore for MetaPool {
         let acc = self.internal_get_account(&account_id.into());
         return acc.stake_shares.into();
     }
-
 }
 
 #[near_bindgen]
@@ -159,6 +158,7 @@ impl FungibleTokenResolver for MetaPool {
         receiver_id: ValidAccountId,
         amount: U128,
     ) -> U128 {
+        self.contract_busy = false;
         let sender_id: AccountId = sender_id.into();
         let (used_amount, burned_amount) =
             self.int_ft_resolve_transfer(&sender_id, receiver_id, amount);
@@ -168,7 +168,6 @@ impl FungibleTokenResolver for MetaPool {
         return used_amount.into();
     }
 }
-
 
 #[near_bindgen]
 impl FungibleTokenMetadataProvider for MetaPool {
