@@ -102,10 +102,10 @@ impl FungibleTokenCore for MetaPool {
         self.assert_not_busy();
         self.contract_busy = true;
 
-        let receiver: String = receiver_id.into();
+        let receiver_id: String = receiver_id.into();
         self.internal_multifuntok_transfer(
             &env::predecessor_account_id(),
-            &receiver,
+            &receiver_id,
             STNEAR,
             amount.0,
         );
@@ -119,13 +119,13 @@ impl FungibleTokenCore for MetaPool {
             amount,
             msg,
             //promise params:
-            &receiver,  //contract
+            &receiver_id,  //contract
             NO_DEPOSIT, //attached native NEAR amount
             env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL,
         )
         .then(ext_self::ft_resolve_transfer(
             env::predecessor_account_id(),
-            receiver,
+            receiver_id,
             amount,
             //promise params:
             &env::current_account_id(), //contract

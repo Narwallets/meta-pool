@@ -24,7 +24,7 @@ export NODE_ENV=$NETWORK
 
 
 ## redeploy code only
-meta deploy ./res/metapool.wasm  --accountId $MASTER_ACC
+near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC
 #meta set_params
 
 #save this deployment  (to be able to recover state/tokens)
