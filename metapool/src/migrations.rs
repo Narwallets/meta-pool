@@ -5,18 +5,24 @@
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
-use near_sdk::near_bindgen;
+use near_sdk::{env,near_bindgen,AccountId,EpochHeight};
+
+use crate::*;
 
 //---------------------------------------------------
 //  PREVIOUS Main Contract State for state migrations
 //---------------------------------------------------
-// uncomment when state migration is required on upgrade
-/*
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
-    pub struct MetaPoolPrevStateStruct {
+pub struct OldMetaPool {
     /// Owner's account ID (it will be a DAO on phase II)
-    pub owner_account_id: String,
+    pub owner_account_id: AccountId,
+
+    /// Avoid re-entry when async-calls are in-flight
+    pub contract_busy: bool,
+
+    /// no auto-staking. true while changing staking pools
+    pub staking_paused: bool,
 
     /// What should be the contract_account_balance according to our internal accounting (if there's extra, it is 30% tx-fees)
     /// This amount increments with attachedNEAR calls (inflow) and decrements with deposit_and_stake calls (outflow)
@@ -24,14 +30,31 @@ use near_sdk::near_bindgen;
     /// It should match env::balance()
     pub contract_account_balance: u128,
 
-    // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
-    pub web_app_url: Option<String>,
-    pub auditor_account_id: Option<String>,
-
+    /// Every time a user performs a delayed-unstake, stNEAR tokens are burned and the user gets a unstaked_claim that will
+    /// be fulfilled 4 epochs from now. If there are someone else staking in the same epoch, both orders (stake & d-unstake) cancel each other
+    /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now.
+    /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
+    /// This amount also increments at retrieve_from_staking_pool
+    /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
+    /// This amount decrements at unstake-withdraw, sending the NEAR to the user
+    /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
+    pub reserve_for_unstake_claims: u128,
+    // control: reserve_for_unstake_claims must be == sum(acc.unstake)+sum(sp.unstaked)
     /// This value is equivalent to sum(accounts.available)
     /// This amount increments with user's deposits_into_available and decrements when users stake_from_available
-    /// increments with finish_unstake and decrements with withdraw_from_available
+    /// increments with unstake_to_available and decrements with withdraw_from_available
+    /// Note: in the current simplified UI user-flow of the meta-pool, only the NSLP & the treasury can have available balance
+    /// the rest of the users mov directly between their NEAR native accounts & the contract accounts, only briefly occupying acc.available
     pub total_available: u128,
+
+    //-- ORDERS
+    /// The total amount of "stake" orders in the current epoch
+    pub epoch_stake_orders: u128,
+    /// The total amount of "delayed-unstake" orders in the current epoch
+    pub epoch_unstake_orders: u128,
+    // this two amounts can cancel each other at end_of_epoch_clearing
+    /// The epoch when the last end_of_epoch_clearing was performed. To avoid calling it twice in the same epoch.
+    pub epoch_last_clearing: EpochHeight,
 
     /// The total amount of tokens selected for staking by the users
     /// not necessarily what's actually staked since staking can is done in batches
@@ -47,8 +70,8 @@ use near_sdk::near_bindgen;
     // the buy share price is computed so if she "sells" the shares on that moment she recovers the same near amount
     // staking produces rewards, rewards are added to total_for_staking so share_price will increase with rewards
     // share_price = total_for_staking/total_shares
-    // when someone "unstakes" she "burns" X shares at current price to recoup Y near
-    pub total_stake_shares: u128,
+    // when someone "unstakes" they "burns" X shares at current price to recoup Y near
+    pub total_stake_shares: u128, //total stNEAR minted
 
     /// META is the governance token. Total meta minted
     pub total_meta: u128,
@@ -56,29 +79,24 @@ use near_sdk::near_bindgen;
     /// The total amount of tokens actually unstaked and in the waiting-delay (the tokens are in the staking pools)
     pub total_unstaked_and_waiting: u128,
 
-    /// The total amount of tokens actually unstaked AND retrieved from the pools (the tokens are here)
-    /// It represents funds retrieved from the pools, but waiting for the users to execute withdraw_unstaked()
-    /// During distribute_unstake(), If sp.unstaked>0 && sp.epoch_for_withdraw == env::epoch_height then all unstaked funds are retrieved from the sp
-    /// When the funds are actually requested by the users, total_actually_unstaked_and_retrieved is decremented
-    /// and then total_available and acc.available are incremented
-    /// total_available + total_actually_unstaked_and_retrieved must be == to `near state meta.pool.near` + 30% burnt fee
-    pub total_actually_unstaked_and_retrieved: u128,
+    /// sum(accounts.unstake). Every time a user delayed-unstakes, this amount is incremented
+    /// when the funds are withdrawn the amount is decremented.
+    /// Control: total_unstaked_claims == reserve_for_unstaked_claims + total_unstaked_and_waiting
+    pub total_unstake_claims: u128,
 
     /// the staking pools will add rewards to the staked amount on each epoch
     /// here we store the accumulated amount only for stats purposes. This amount can only grow
     pub accumulated_staked_rewards: u128,
 
-    /// no auto-staking. true while changing staking pools
-    pub staking_paused: bool,
-
     //user's accounts
-    pub accounts: UnorderedMap<String, crate::Account>,
+    pub accounts: UnorderedMap<AccountId, crate::Account>,
 
     //list of pools to diversify in
     pub staking_pools: Vec<crate::StakingPoolInfo>,
 
-    //validator loan request
-    pub loan_requests: LookupMap<String, crate::VLoanRequest>,
+    // validator loan request
+    // action on audit suggestions, this field is not used. No need for this to be on the main contract
+    pub loan_requests: LookupMap<AccountId, crate::VLoanRequest>,
 
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
@@ -98,18 +116,31 @@ use near_sdk::near_bindgen;
     ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
     pub lp_provider_meta_mult_pct: u16,
 
+    /// min amount accepted as deposit or stake
+    pub min_deposit_amount: u128,
+
     /// Operator account ID (who's in charge to call distribute_xx() on a periodic basis)
-    pub operator_account_id: String,
+    pub operator_account_id: AccountId,
     /// operator_rewards_fee_basis_points. (0.2% default) 100 basis point => 1%. E.g.: owner_fee_basis_points=30 => 0.3% owner's fee
     pub operator_rewards_fee_basis_points: u16,
     /// owner's cut on Liquid Unstake fee (3% default)
     pub operator_swap_cut_basis_points: u16,
     /// Treasury account ID (it will be controlled by a DAO on phase II)
-    pub treasury_account_id: String,
+    pub treasury_account_id: AccountId,
     /// treasury cut on Liquid Unstake (25% from the fees by default)
     pub treasury_swap_cut_basis_points: u16,
+
+    // Configurable info for [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
+    pub web_app_url: Option<String>,
+    pub auditor_account_id: Option<AccountId>,
+
+    /// Where's the NEP-141 $META token contract
+    pub meta_token_account_id: AccountId,
 }
-*/
+
+use crate::MetaPool;
+use crate::MetaPoolContract;
+
 
 #[near_bindgen]
 impl MetaPool {
@@ -127,7 +158,7 @@ impl MetaPool {
         // read state with OLD struct
         // uncomment when state migration is required on upgrade
         //let old: migrations::MetaPoolPrevStateStruct = env::state_read().expect("Old state doesn't exist");
-        let old: migrations::MetaPool = env::state_read().expect("Old state doesn't exist");
+        let old: OldMetaPool = env::state_read().expect("Old state doesn't exist");
 
         // can only be called by this same contract (it's called from fn upgrade())
         assert_eq!(
@@ -136,26 +167,20 @@ impl MetaPool {
             "Can only be called by this contract"
         );
 
-        // uncomment when state migration is required on upgrade
-        // NOOP mode, returns this struct that gets stored as contract state
-        return old;
-
-        // uncomment when state migration is required on upgrade
-        /*
         // Create the new contract state using the data from the old contract state.
         // returns this struct that gets stored as contract state
         return Self {
             owner_account_id: old.owner_account_id,
-            contract_busy:false ,
+            contract_busy: false,
             staking_paused: old.staking_paused,
             contract_account_balance: old.contract_account_balance,
-            reserve_for_unstake_claims: 0,
+            reserve_for_unstake_claims: old.reserve_for_unstake_claims,
             total_available: old.total_available,
 
             //-- ORDERS
-            epoch_stake_orders: 0,
-            epoch_unstake_orders: 0,
-            epoch_last_clearing:0,
+            epoch_stake_orders: old.epoch_stake_orders,
+            epoch_unstake_orders: old.epoch_unstake_orders,
+            epoch_last_clearing: old.epoch_last_clearing,
 
             total_for_staking: old.total_for_staking,
             total_actually_staked: old.total_actually_staked,
@@ -163,7 +188,7 @@ impl MetaPool {
             total_meta: old.total_meta,
             total_unstaked_and_waiting: old.total_unstaked_and_waiting,
 
-            total_unstake_claims: 0,
+            total_unstake_claims: old.total_unstake_claims,
 
             accumulated_staked_rewards: old.accumulated_staked_rewards,
 
@@ -192,8 +217,15 @@ impl MetaPool {
             web_app_url: old.web_app_url,
             auditor_account_id: old.auditor_account_id,
 
-            meta_token_account_id: format!("token.{}", env::current_account_id())
-        }
-        */
+            meta_token_account_id: old.meta_token_account_id,
+            min_deposit_amount: old.min_deposit_amount,
+
+            est_meta_rewards_stakers:0,
+            est_meta_rewards_lu:0,
+            est_meta_rewards_lp:0,
+            max_meta_rewards_stakers: 10 * ONE_NEAR,
+            max_meta_rewards_lu: 5 * ONE_NEAR,
+            max_meta_rewards_lp: 5 * ONE_NEAR,
+        };
     }
 }

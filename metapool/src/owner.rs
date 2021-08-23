@@ -247,6 +247,13 @@ impl MetaPool {
             nslp_min_discount_basis_points: self.nslp_min_discount_basis_points,
             nslp_max_discount_basis_points: self.nslp_max_discount_basis_points,
             min_deposit_amount: self.min_deposit_amount.into(),
+            est_meta_rewards_stakers: self.est_meta_rewards_stakers.into(),
+            est_meta_rewards_lu: self.est_meta_rewards_lu.into(), //liquid-unstakers
+            est_meta_rewards_lp: self.est_meta_rewards_lp.into(), //liquidity-providers
+            max_meta_rewards_stakers: self.max_meta_rewards_stakers.into(),
+            max_meta_rewards_lu: self.max_meta_rewards_lu.into(), //liquid-unstakers
+            max_meta_rewards_lp: self.max_meta_rewards_lp.into(), //liquidity-providers
+        
         };
     }
 
@@ -286,6 +293,23 @@ impl MetaPool {
 
         self.min_deposit_amount = params.min_deposit_amount.0;
     }
+
+    /// Sets contract parameters
+    pub fn set_reward_multipliers(&mut self, stakers_pct:u16, lp_pct:u16, liquid_unstake_pct:u16) {
+        self.assert_operator_or_owner();
+        self.staker_meta_mult_pct = stakers_pct;
+        self.stnear_sell_meta_mult_pct = liquid_unstake_pct;
+        self.lp_provider_meta_mult_pct = lp_pct;
+    }
+
+    /// Sets contract parameters
+    pub fn set_max_meta_rewards(&mut self, stakers:u32, lu:u32, lp:u32) {
+        self.assert_operator_or_owner();
+        self.max_meta_rewards_stakers = stakers as u128 * ONE_NEAR; //stakers
+        self.max_meta_rewards_lu = lu as u128 * ONE_NEAR; //liquid-unstakers
+        self.max_meta_rewards_lp = lp as u128 * ONE_NEAR; //liquidity-providers
+    }
+
     /// get sp (staking-pool) info
     /// Returns JSON representation of sp recorded state
     pub fn get_sp_info(&self, inx: u16) -> StakingPoolJSONInfo {

@@ -586,6 +586,9 @@ impl MetaPool {
             // Now add the newly minted shares. The fee is taken by making share price increase slightly smaller
             &self.add_extra_minted_shares(self.operator_account_id.clone(), operator_fee_shares);
             &self.add_extra_minted_shares(DEVELOPERS_ACCOUNT_ID.into(), developers_fee_shares);
+
+            // estimate $META rewards to stakers
+            self.est_meta_rewards_stakers += damp_multiplier(rewards, self.staker_meta_mult_pct, self.est_meta_rewards_stakers, self.max_meta_rewards_stakers);
         }
     }
 

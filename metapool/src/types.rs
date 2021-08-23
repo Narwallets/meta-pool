@@ -247,6 +247,13 @@ pub struct GetContractStateResult {
     pub staking_pools_count: u16,
 
     pub min_deposit_amount: U128String,
+
+    pub est_meta_rewards_stakers: U128String, //stakers
+    pub est_meta_rewards_lu: U128String,      //liquid-unstakers
+    pub est_meta_rewards_lp: U128String,      //liquidity-providers
+    pub max_meta_rewards_stakers: U128String, //stakers
+    pub max_meta_rewards_lu: U128String,      //liquid-unstakers
+    pub max_meta_rewards_lp: U128String,      //liquidity-providers
 }
 
 /// Struct returned from get_contract_params

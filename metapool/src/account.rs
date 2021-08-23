@@ -108,8 +108,8 @@ impl Account {
         //debug!("self.realized_meta:{}, self.staking_meter.compute_rewards(valued_stake_shares):{} self.lp_meter.compute_rewards(valued_lp_shares):{}",
         //    self.realized_meta, self.staking_meter.compute_rewards(valued_stake_shares), self.lp_meter.compute_rewards(valued_lp_shares));
         return self.realized_meta
-            + self.staking_meter.compute_rewards(valued_stake_shares)
-            + self.lp_meter.compute_rewards(valued_lp_shares);
+            + self.staking_meter.compute_rewards(valued_stake_shares, main.est_meta_rewards_stakers, main.max_meta_rewards_stakers)
+            + self.lp_meter.compute_rewards(valued_lp_shares, main.est_meta_rewards_lp, main.max_meta_rewards_lp);
     }
 
     //---------------------------------
@@ -119,7 +119,7 @@ impl Account {
         let valued_actual_shares = main.amount_from_stake_shares(self.stake_shares);
         let pending_meta = self
             .staking_meter
-            .realize(valued_actual_shares, main.staker_meta_mult_pct);
+            .realize(valued_actual_shares, main.staker_meta_mult_pct, main.est_meta_rewards_stakers, main.max_meta_rewards_stakers);
         self.realized_meta += pending_meta;
         main.total_meta += pending_meta;
     }
@@ -130,7 +130,7 @@ impl Account {
         let valued_actual_shares = self.valued_nslp_shares(main, &nslp_account);
         let pending_meta = self
             .lp_meter
-            .realize(valued_actual_shares, main.lp_provider_meta_mult_pct);
+            .realize(valued_actual_shares, main.lp_provider_meta_mult_pct, main.est_meta_rewards_lp, main.max_meta_rewards_lp);
         self.realized_meta += pending_meta;
         main.total_meta += pending_meta;
     }

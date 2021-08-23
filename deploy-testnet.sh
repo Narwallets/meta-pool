@@ -22,14 +22,17 @@ export NODE_ENV=$NETWORK
 ## deafult 4 pools
 ##meta default_pools_testnet
 
+## test
+#near call $CONTRACT_ACC set_busy "{\"value\":false}" --accountId $CONTRACT_ACC --depositYocto 1
 
-## redeploy code only
+# ## redeploy code only
 near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC
-#meta set_params
+# ## MIGRATE
+#near call $CONTRACT_ACC migrate "{}" --accountId $CONTRACT_ACC
 
 #near deploy contract4.preprod-pool.testnet ./res/metapool.wasm  --accountId preprod-pool.testnet
 #near call contract4.preprod-pool.testnet set_busy "{\"value\":false}" --accountId preprod-pool.testnet --depositYocto 1
 
 #save this deployment  (to be able to recover state/tokens)
-cp ./res/metapool.wasm ./res/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
-date +%F.%T
+# cp ./res/metapool.wasm ./res/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
+# date +%F.%T

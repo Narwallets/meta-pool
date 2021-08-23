@@ -7,7 +7,7 @@
 // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
 // see also pub fn get_contract_info
 const CONTRACT_NAME: &str = "Meta Staking Pool";
-const CONTRACT_VERSION: &str = "0.1.0";
+const CONTRACT_VERSION: &str = "0.1.3";
 const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
@@ -35,6 +35,7 @@ pub use crate::internal::*;
 pub use crate::staking_pools::*;
 
 pub mod distribute;
+mod migrations;
 pub mod owner;
 
 pub mod reward_meter;
@@ -43,8 +44,8 @@ pub use reward_meter::*;
 pub mod validator_loans;
 pub use validator_loans::*;
 
-pub mod fungible_token_standard;
 pub mod empty_nep_145;
+pub mod fungible_token_standard;
 
 //mod migrations;
 
@@ -215,6 +216,16 @@ pub struct MetaPool {
 
     /// Where's the NEP-141 $META token contract
     pub meta_token_account_id: AccountId,
+
+    /// estimated & max meta rewards for each category
+    pub est_meta_rewards_stakers: u128,
+    pub est_meta_rewards_lu: u128, //liquid-unstakers
+    pub est_meta_rewards_lp: u128, //liquidity-providers
+    // max. when this amount is reached, corresponding multiplier goes to zero
+    pub max_meta_rewards_stakers: u128,
+    pub max_meta_rewards_lu: u128, //liquid-unstakers
+    pub max_meta_rewards_lp: u128, //liquidity-providers
+
 }
 
 #[near_bindgen]
@@ -294,6 +305,12 @@ impl MetaPool {
             lp_provider_meta_mult_pct: 5000, //50x
             staking_pools: Vec::new(),
             meta_token_account_id,
+            est_meta_rewards_stakers:0,
+            est_meta_rewards_lu:0,
+            est_meta_rewards_lp:0,
+            max_meta_rewards_stakers: 1_000_000 * ONE_NEAR,
+            max_meta_rewards_lu: 50_000 * ONE_NEAR,
+            max_meta_rewards_lp: 100_000 * ONE_NEAR,
         };
     }
 
@@ -593,6 +610,10 @@ impl MetaPool {
         nslp_account.available -= near_to_receive;
         user_account.available += near_to_receive;
 
+        // keep track of meta rewards for LPs 
+        self.est_meta_rewards_lp += 
+            damp_multiplier(fee, self.lp_provider_meta_mult_pct, self.est_meta_rewards_lp, self.max_meta_rewards_lp);
+
         // compute how many shares the swap fee represent
         let fee_in_st_near = self.stake_shares_from_amount(fee);
 
@@ -629,7 +650,7 @@ impl MetaPool {
         let st_near_non_lp_cut =
             treasury_st_near_cut + operator_st_near_cut + developers_st_near_cut;
         let meta_from_operation =
-            apply_multiplier(st_near_non_lp_cut, self.lp_provider_meta_mult_pct);
+            damp_multiplier(st_near_non_lp_cut, self.lp_provider_meta_mult_pct, self.est_meta_rewards_lp, self.max_meta_rewards_lp);
         self.total_meta += meta_from_operation;
         operator_account.realized_meta += meta_from_operation / 2;
         developers_account.realized_meta += meta_from_operation / 2;
@@ -653,8 +674,10 @@ impl MetaPool {
         //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
         user_account.sub_st_near(st_near_to_sell, &self);
         //mint $META for the selling user
-        let meta_to_seller = apply_multiplier(fee_in_st_near, self.stnear_sell_meta_mult_pct);
+        let meta_to_seller = damp_multiplier(fee_in_st_near, self.stnear_sell_meta_mult_pct, self.est_meta_rewards_lu, self.max_meta_rewards_lu);
         self.total_meta += meta_to_seller;
+        // keep track of meta rewards for lu's
+        self.est_meta_rewards_lu += meta_to_seller;
         user_account.realized_meta += meta_to_seller;
 
         //Save involved accounts
@@ -856,7 +879,7 @@ impl MetaPool {
         assert!(env::predecessor_account_id() == self.owner_account_id);
         //input is code:<Vec<u8> on REGISTER 0
         //log!("bytes.length {}", code.unwrap().len());
-        const GAS_FOR_UPGRADE: u64 = 10 * TGAS; //gas occupied by this fn
+        const GAS_FOR_UPGRADE: u64 = 20 * TGAS; //gas occupied by this fn
         const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
         //after upgrade we call *pub fn migrate()* on the NEW CODE
         let current_id = env::current_account_id().into_bytes();
