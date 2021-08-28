@@ -35,5 +35,5 @@ near deploy $CONTRACT_ACC ./res/metapool.wasm \
 #meta set_params
 
 #save this deployment  (to be able to recover state/tokens)
-# cp ./res/metapool.wasm ./res/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
-# date +%F.%T
+cp ./res/metapool.wasm ./res/mainnet/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
+date +%F.%T
