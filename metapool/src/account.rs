@@ -228,7 +228,8 @@ impl Account {
         let to_withdraw:u128 =
         // if the amount is close to user's total, remove user's total
         // to: a) do not leave less than ONE_MILLI_NEAR in the account, b) Allow some yoctos of rounding, e.g. remove(100) removes 99.999993 without panicking
-        if is_close(amount_requested, self.available) { // allow for rounding simplification
+        // Audit Note: Do not do this for .lockup accounts because the lockup contract relies on precise amounts
+        if !env::predecessor_account_id().ends_with(".lockup.near") && is_close(amount_requested, self.available) { // allow for rounding simplification
             self.available
         }
         else {
