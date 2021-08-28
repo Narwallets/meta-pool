@@ -130,6 +130,8 @@ pub struct GetAccountInfoResult {
 
     //META owned (including pending rewards)
     pub meta: U128,
+    //realized META (without pending rewards)
+    pub realized_meta: U128,
 
     /// The amount unstaked waiting for withdraw
     pub unstaked: U128,
