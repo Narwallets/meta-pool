@@ -6,9 +6,7 @@ OPERATOR_ACC_SUFFIX=.meta.pool.testnet
 CONTRACT_ACC=meta-v2.$MASTER_ACC
 GOV_TOKEN=token.meta.$MASTER_ACC
 
-meta --cliconf -c $CONTRACT_ACC -acc $OWNER
-
-export NODE_ENV=$NETWORK
+export NEAR_ENV=$NETWORK
 
 ## delete acc
 #echo "Delete $CONTRACT_ACC? are you sure? Ctrl-C to cancel"
@@ -26,7 +24,7 @@ export NODE_ENV=$NETWORK
 #near call $CONTRACT_ACC set_busy "{\"value\":false}" --accountId $CONTRACT_ACC --depositYocto 1
 
 # ## redeploy code only
-near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC
+near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC --networkId $NETWORK
 # ## MIGRATE
 #near call $CONTRACT_ACC migrate "{}" --accountId $CONTRACT_ACC
 
@@ -34,5 +32,6 @@ near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC
 #near call contract4.preprod-pool.testnet set_busy "{\"value\":false}" --accountId preprod-pool.testnet --depositYocto 1
 
 #save this deployment  (to be able to recover state/tokens)
+set -ex
 cp ./res/metapool.wasm ./res/testnet/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
 date +%F.%T

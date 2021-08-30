@@ -20,10 +20,11 @@ TREASURY_ACC=treasury.meta-pool.$SUFFIX
 #read input
 #near delete $CONTRACT_ACC $MASTER_ACC
 set -ex
-near deploy $CONTRACT_ACC ./res/metapool.wasm \
-  --initFunction "new" \
-  --initArgs "{\"owner_account_id\":\"$OWNER\",\"treasury_account_id\":\"$TREASURY_ACC\",\"operator_account_id\":\"$OPERATOR_ACC\",\"meta_token_account_id\":\"$GOV_TOKEN\"}" \
-  --accountId $OWNER
+near deploy $CONTRACT_ACC ./res/metapool.wasm
+# near deploy $CONTRACT_ACC ./res/metapool.wasm \
+#   --initFunction "new" \
+#   --initArgs "{\"owner_account_id\":\"$OWNER\",\"treasury_account_id\":\"$TREASURY_ACC\",\"operator_account_id\":\"$OPERATOR_ACC\",\"meta_token_account_id\":\"$GOV_TOKEN\"}" \
+#   --accountId $OWNER
 
 #meta set_params
 #near call $CONTRACT_ACC set_busy "{\"value\":false}" --accountId preprod-pool.testnet --depositYocto 1
@@ -35,5 +36,6 @@ near deploy $CONTRACT_ACC ./res/metapool.wasm \
 #meta set_params
 
 #save this deployment  (to be able to recover state/tokens)
+set -ex
 cp ./res/metapool.wasm ./res/mainnet/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
 date +%F.%T

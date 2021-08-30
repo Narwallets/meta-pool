@@ -57,23 +57,23 @@ pub fn apply_pct(basis_points: u16, amount: u128) -> u128 {
     return (U256::from(basis_points) * U256::from(amount) / U256::from(10_000)).as_u128();
 }
 pub fn apply_multiplier(amount: u128, percentage: u16) -> u128 {
-    return (U256::from(amount) * U256::from(percentage) / U256::from(100)).as_u128();
+    return (U256::from(amount) * U256::from(percentage as u64 * 10_u64) / U256::from(100)).as_u128();
 }
 
 
-pub fn damp_multiplier(amount: u128, percentage: u16, currently_distributed: u128, max_to_distribute:u128) -> u128 {
+pub fn damp_multiplier(amount: u128, multiplier: u16, currently_distributed: u128, max_to_distribute:u128) -> u128 {
     
     let half = max_to_distribute / 2;
     
     let dampened: u16=
-        if percentage <= 100 || currently_distributed < max_to_distribute {
-            percentage
+        if multiplier <= 10 || currently_distributed < max_to_distribute {
+            multiplier
         }
         else if currently_distributed > max_to_distribute + half {
-            100 // back to 1x
+            10 // back to 1x
         }
         else {
-            std::cmp::max(100, percentage - proportional(percentage as u128, currently_distributed - max_to_distribute, half) as u16)
+            std::cmp::max(10, multiplier - proportional(multiplier as u128, currently_distributed - max_to_distribute, half) as u16)
         }
     ;
     return apply_multiplier(amount, dampened);

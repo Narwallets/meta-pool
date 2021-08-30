@@ -7,7 +7,7 @@
 // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
 // see also pub fn get_contract_info
 const CONTRACT_NAME: &str = "Meta Staking Pool";
-const CONTRACT_VERSION: &str = "0.1.3";
+const CONTRACT_VERSION: &str = "0.1.4";
 const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
@@ -188,12 +188,12 @@ pub struct MetaPool {
     ///NEAR/stNEAR Liquidity pool min fee
     pub nslp_min_discount_basis_points: u16, //0.5% initially
 
-    //The next 3 values define meta rewards multipliers %. (100 => 1x, 200 => 2x, ...)
-    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
+    //The next 3 values define meta rewards multipliers. (10 => 1x, 20 => 2x, ...)
+    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * (mult_pct*10) / 100
     pub staker_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
+    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * (mult_pct*10) / 100
     pub stnear_sell_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
+    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * (mult_pct*10) / 100
     pub lp_provider_meta_mult_pct: u16,
 
     /// min amount accepted as deposit or stake
@@ -298,11 +298,11 @@ impl MetaPool {
             nslp_min_discount_basis_points: 25,  //0.25%
             min_deposit_amount: 10 * NEAR,
             ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. initial 5x, default:1x. reward META = discounted * mult_pct / 100
-            stnear_sell_meta_mult_pct: 500, //1x
+            stnear_sell_meta_mult_pct: 50, //5x
             ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. initial 10x, default:5x. reward META = rewards * mult_pct / 100
-            staker_meta_mult_pct: 1000, //10x
+            staker_meta_mult_pct: 5000, //500x
             ///for each stNEAR paid as discount, reward LPs with g-stNEAR. initial 50x, default:20x. reward META = fee * mult_pct / 100
-            lp_provider_meta_mult_pct: 5000, //50x
+            lp_provider_meta_mult_pct: 200, //20x
             staking_pools: Vec::new(),
             meta_token_account_id,
             est_meta_rewards_stakers:0,
@@ -813,9 +813,52 @@ impl MetaPool {
     }
 
     //------------------
+    // REALIZE META
+    //------------------
+    /// massive convert $META from virtual to secure. IF multipliers are changed, virtual met can decrease, this fn realizes current meta to not suffer loses
+    /// for all accounts from index to index+limit 
+    pub fn realize_meta_massive(&mut self, from_index: u64, limit: u64) {
+
+        for inx in from_index..std::cmp::min(from_index + limit, self.accounts.keys_as_vector().len()) {
+            let account_id = &self.accounts.keys_as_vector().get(inx).unwrap();
+            let mut acc = self.internal_get_account(&account_id);
+            
+            let prev_meta = acc.realized_meta;
+
+            acc.stake_realize_meta(self);
+    
+            //get NSLP account
+            let nslp_account = self.internal_get_nslp_account();
+            //realize and mint meta from LP rewards
+            acc.nslp_realize_meta(&nslp_account, self);
+    
+            if prev_meta != acc.realized_meta {
+                self.internal_update_account(&account_id, &acc);
+            }
+    
+        }
+            
+    }
+
+    pub fn realize_meta(&mut self) {
+
+        let account_id = env::predecessor_account_id();
+        let mut acc = self.internal_get_account(&account_id);
+
+        //realize and mint $META from staking rewards
+        acc.stake_realize_meta(self);
+
+        //get NSLP account
+        let nslp_account = self.internal_get_nslp_account();
+        //realize and mint meta from LP rewards
+        acc.nslp_realize_meta(&nslp_account, self);
+
+        self.internal_update_account(&account_id, &acc);
+    }
+
+    //------------------
     // HARVEST META
     //------------------
-
     #[payable]
     ///compute all $META rewards at this point and mint $META tokens in the meta-token NEP-141 contract for the user
     pub fn harvest_meta(&mut self) -> Promise {
@@ -1038,12 +1081,12 @@ mod tests {
     fn test_rewards_meter() {
         let mut rm = RewardMeter::default();
         rm.stake(100);
-        assert_eq!(rm.compute_rewards(105), 5);
+        assert_eq!(rm.compute_rewards(105,500,1000), 5);
 
         rm.unstake(105);
-        assert_eq!(rm.compute_rewards(0), 0);
+        assert_eq!(rm.compute_rewards(0,500,1000), 0);
 
         rm.stake(10);
-        assert_eq!(rm.compute_rewards(11), 6);
+        assert_eq!(rm.compute_rewards(11,500,1000), 6);
     }
 }
