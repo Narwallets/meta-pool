@@ -65,3 +65,11 @@ This is the Smart Contract repository. The Web App UI is at https://github.com/N
 #### Expansions
 
 - [x] USDNEAR MVP: Create a collateral-based stablecoin similar to Compound's DAI, using NEAR & stNEAR as collateral
+
+
+## Testing
+
+Besides We are doing a simple ad-hoc fuzzy test for metapool.
+The test generates random operations. We have a list of "invariants" the contract must satisfy to guarantee the internal accounting is consistent. We use a seeded random generator to create "operations" against the metapool (deposit, liquid-unstake, delayed-unstake, add-liquidity, remove-liquidity, end-of-epoch, compute-rewards, retrieve-funds-from-pools) in any order and amount. After each successful operation we check the contract invariants again. This is our way to tests unprepared operations combinations and make sure the internal accounting remains consistent
+
+This is he core .rs fuzzy source https://github.com/Narwallets/meta-pool/blob/master/metapool/tests/sim/simulation_fuzzy.rs, you can navigate up from there to see what it is doing.
