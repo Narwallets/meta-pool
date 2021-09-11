@@ -834,6 +834,9 @@ impl MetaPool {
             from_index..std::cmp::min(from_index + limit, self.accounts.keys_as_vector().len())
         {
             let account_id = &self.accounts.keys_as_vector().get(inx).unwrap();
+            if account_id == NSLP_INTERNAL_ACCOUNT {
+                continue;
+            }
             let mut acc = self.internal_get_account(&account_id);
             let prev_meta = acc.realized_meta;
 
