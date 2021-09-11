@@ -194,22 +194,60 @@ impl MetaPool {
     // used by operator if a validator goes offline, to not wait and unstake immediately
     pub fn manual_unstake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
-        self.direct_unstake(inx as usize, amount.0);
-    }
-    // to facilitate manual_unstake. epoch_unstake_orders should be >= to manual_unstake_amount
-    pub fn manual_add_to_unstake_orders(&mut self, amount: U128String) {
-        self.assert_operator_or_owner();
+        let sp_inx = inx as usize;
+        assert!(
+            sp_inx > 0 && sp_inx < self.staking_pools.len(),
+            "invalid index"
+        );
+        let sp = &self.staking_pools[sp_inx];
+        assert!(!sp.busy_lock, "sp busy");
+        assert!(
+            sp.weight_basis_points == 0,
+            "sp.weight_basis_points<>0, ={}",
+            sp.weight_basis_points,
+        );
+        assert!(
+            sp.staked == amount.0,
+            "invalid stake amount. sent:{} but sp.staked={}",
+            amount.0,
+            sp.staked,
+        );
+        assert!(
+            sp.unstaked == 0,
+            "can not manually unstake while unstake pending. sp.unstake={}",
+            sp.unstaked,
+        );
+        // epoch_unstake_orders should be >= to manual_unstake_amount
+        // for direct_unstake to work
         self.epoch_unstake_orders += amount.0;
+        self.direct_unstake(sp_inx, amount.0);
     }
     // this should be called by the operator
     // 4 EPOCHS AFTER MANUAL UNSTAKE, when all the funds have been recovered from the off-line validator
-    // meaning AFTER the funds are recovered and are in the reserve.
-    pub fn manual_remove_from_unstake_orders(&mut self, amount: U128String) {
+    // meaning AFTER the funds are moved into  the reserve.
+    pub fn manual_restake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
-        assert!(self.reserve_for_unstake_claims >= amount.0);
-        assert!(self.epoch_unstake_orders >= amount.0);
-        // Funds-recovery incremented "reserved_for_unstake_claims",
+        let sp_inx = inx as usize;
+        assert!(
+            sp_inx > 0 && sp_inx < self.staking_pools.len(),
+            "invalid index"
+        );
+        let sp = &self.staking_pools[sp_inx];
+        assert!(
+            sp.weight_basis_points == 0,
+            "sp.weight_basis_points<>0, ={}",
+            sp.weight_basis_points,
+        );
+        assert!(
+            sp.staked == 0 && sp.unstaked == 0,
+            "staked & unstaked must be 0. inx:{} staked:{} unstaked:{}",
+            inx,
+            sp.staked,
+            sp.unstaked
+        );
+        // retrieve-funds call incremented "reserved_for_unstake_claims",
         // but manually unstaked funds are "for re-staking", so we decrement reserve_for_unstake_claims
+        assert!(self.reserve_for_unstake_claims >= amount.0);
         self.reserve_for_unstake_claims -= amount.0;
         // and also we increment epoch_stake_orders so the funds are re-staked
         self.epoch_stake_orders += amount.0;
