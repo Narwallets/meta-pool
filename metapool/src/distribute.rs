@@ -120,15 +120,8 @@ impl MetaPool {
 
         //Here we did some staking (the promises are scheduled for exec after this fn completes)
         self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
-        assert!(
-            self.epoch_stake_orders >= amount_to_stake,
-            "ISO epoch_stake_orders:{} amount_to_stake:{}",
-            self.epoch_stake_orders,
-            amount_to_stake
-        );
         self.epoch_stake_orders -= amount_to_stake; //preventively reduce stake orders
-                                                    //did some staking (promises scheduled), call again
-        return true;
+        return true; //did some staking (promises scheduled), call again
     }
 
     //prev fn continues here
@@ -223,8 +216,8 @@ impl MetaPool {
         self.direct_unstake(sp_inx, amount.0);
     }
     // this should be called by the operator
-    // 4 EPOCHS AFTER MANUAL UNSTAKE, when all the funds have been recovered from the off-line validator
-    // meaning AFTER the funds are moved into  the reserve.
+    // 4 EPOCHS AFTER MANUAL_UNSTAKE,
+    // AFTER all the funds have been recovered from the off-line validator
     pub fn manual_restake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
