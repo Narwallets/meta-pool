@@ -6,9 +6,9 @@
 /********************************/
 // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
 // see also pub fn get_contract_info
-const CONTRACT_NAME: &str = "Meta Staking Pool";
-const CONTRACT_VERSION: &str = "0.1.4";
-const DEFAULT_WEB_APP_URL: &str = "https://www.narwallets.com/dapp/mainnet/meta/";
+const CONTRACT_NAME: &str = "Metapool";
+const CONTRACT_VERSION: &str = "0.1.5";
+const DEFAULT_WEB_APP_URL: &str = "https://metapool.app";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -221,11 +221,10 @@ pub struct MetaPool {
     pub est_meta_rewards_stakers: u128,
     pub est_meta_rewards_lu: u128, //liquid-unstakers
     pub est_meta_rewards_lp: u128, //liquidity-providers
-    // max. when this amount is reached, corresponding multiplier goes to zero
+    // max. when this amount is passed, corresponding multiplier is damped proportionally
     pub max_meta_rewards_stakers: u128,
     pub max_meta_rewards_lu: u128, //liquid-unstakers
     pub max_meta_rewards_lp: u128, //liquidity-providers
-
 }
 
 #[near_bindgen]
@@ -305,9 +304,9 @@ impl MetaPool {
             lp_provider_meta_mult_pct: 200, //20x
             staking_pools: Vec::new(),
             meta_token_account_id,
-            est_meta_rewards_stakers:0,
-            est_meta_rewards_lu:0,
-            est_meta_rewards_lp:0,
+            est_meta_rewards_stakers: 0,
+            est_meta_rewards_lu: 0,
+            est_meta_rewards_lp: 0,
             max_meta_rewards_stakers: 1_000_000 * ONE_NEAR,
             max_meta_rewards_lu: 50_000 * ONE_NEAR,
             max_meta_rewards_lp: 100_000 * ONE_NEAR,
@@ -610,9 +609,13 @@ impl MetaPool {
         nslp_account.available -= near_to_receive;
         user_account.available += near_to_receive;
 
-        // keep track of meta rewards for LPs 
-        self.est_meta_rewards_lp += 
-            damp_multiplier(fee, self.lp_provider_meta_mult_pct, self.est_meta_rewards_lp, self.max_meta_rewards_lp);
+        // keep track of meta rewards for LPs
+        self.est_meta_rewards_lp += damp_multiplier(
+            fee,
+            self.lp_provider_meta_mult_pct,
+            self.est_meta_rewards_lp,
+            self.max_meta_rewards_lp,
+        );
 
         // compute how many shares the swap fee represent
         let fee_in_st_near = self.stake_shares_from_amount(fee);
@@ -649,8 +652,12 @@ impl MetaPool {
         // all the realized meta from non-liq.provider cuts (30%), send to operator & developers
         let st_near_non_lp_cut =
             treasury_st_near_cut + operator_st_near_cut + developers_st_near_cut;
-        let meta_from_operation =
-            damp_multiplier(st_near_non_lp_cut, self.lp_provider_meta_mult_pct, self.est_meta_rewards_lp, self.max_meta_rewards_lp);
+        let meta_from_operation = damp_multiplier(
+            st_near_non_lp_cut,
+            self.lp_provider_meta_mult_pct,
+            self.est_meta_rewards_lp,
+            self.max_meta_rewards_lp,
+        );
         self.total_meta += meta_from_operation;
         operator_account.realized_meta += meta_from_operation / 2;
         developers_account.realized_meta += meta_from_operation / 2;
@@ -674,7 +681,12 @@ impl MetaPool {
         //complete the transfer, remove stnear from the user (stnear was transferred to the LP & others)
         user_account.sub_st_near(st_near_to_sell, &self);
         //mint $META for the selling user
-        let meta_to_seller = damp_multiplier(fee_in_st_near, self.stnear_sell_meta_mult_pct, self.est_meta_rewards_lu, self.max_meta_rewards_lu);
+        let meta_to_seller = damp_multiplier(
+            fee_in_st_near,
+            self.stnear_sell_meta_mult_pct,
+            self.est_meta_rewards_lu,
+            self.max_meta_rewards_lu,
+        );
         self.total_meta += meta_to_seller;
         // keep track of meta rewards for lu's
         self.est_meta_rewards_lu += meta_to_seller;
@@ -815,33 +827,28 @@ impl MetaPool {
     //------------------
     // REALIZE META
     //------------------
-    /// massive convert $META from virtual to secure. IF multipliers are changed, virtual met can decrease, this fn realizes current meta to not suffer loses
-    /// for all accounts from index to index+limit 
+    /// massive convert $META from virtual to secure. IF multipliers are changed, virtual meta can decrease, this fn realizes current meta to not suffer loses
+    /// for all accounts from index to index+limit
     pub fn realize_meta_massive(&mut self, from_index: u64, limit: u64) {
-
-        for inx in from_index..std::cmp::min(from_index + limit, self.accounts.keys_as_vector().len()) {
+        for inx in
+            from_index..std::cmp::min(from_index + limit, self.accounts.keys_as_vector().len())
+        {
             let account_id = &self.accounts.keys_as_vector().get(inx).unwrap();
             let mut acc = self.internal_get_account(&account_id);
-            
             let prev_meta = acc.realized_meta;
 
             acc.stake_realize_meta(self);
-    
             //get NSLP account
             let nslp_account = self.internal_get_nslp_account();
             //realize and mint meta from LP rewards
             acc.nslp_realize_meta(&nslp_account, self);
-    
             if prev_meta != acc.realized_meta {
                 self.internal_update_account(&account_id, &acc);
             }
-    
         }
-            
     }
 
     pub fn realize_meta(&mut self) {
-
         let account_id = env::predecessor_account_id();
         let mut acc = self.internal_get_account(&account_id);
 
@@ -1081,12 +1088,12 @@ mod tests {
     fn test_rewards_meter() {
         let mut rm = RewardMeter::default();
         rm.stake(100);
-        assert_eq!(rm.compute_rewards(105,500,1000), 5);
+        assert_eq!(rm.compute_rewards(105, 500, 1000), 5);
 
         rm.unstake(105);
-        assert_eq!(rm.compute_rewards(0,500,1000), 0);
+        assert_eq!(rm.compute_rewards(0, 500, 1000), 0);
 
         rm.stake(10);
-        assert_eq!(rm.compute_rewards(11,500,1000), 6);
+        assert_eq!(rm.compute_rewards(11, 500, 1000), 6);
     }
 }

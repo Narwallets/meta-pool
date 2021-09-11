@@ -35,7 +35,9 @@ impl MetaPool {
         //-------------------------------------
         //compute amount to stake
         //-------------------------------------
-        //there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
+        // there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
+        // also we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
+        // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserver for staking
         let total_amount_to_stake = std::cmp::min(
             self.epoch_stake_orders,
             self.total_for_staking - self.total_actually_staked,
@@ -188,6 +190,31 @@ impl MetaPool {
         return stake_succeeded;
     }
 
+    // execute unstake on sp[inx] by amount
+    // used by operator if a validator goes offline, to not wait and unstake immediately
+    pub fn manual_unstake(&mut self, inx: u16, amount: U128String) {
+        self.assert_operator_or_owner();
+        self.direct_unstake(inx as usize, amount.0);
+    }
+    // to facilitate manual_unstake. epoch_unstake_orders should be >= to manual_unstake_amount
+    pub fn manual_add_to_unstake_orders(&mut self, amount: U128String) {
+        self.assert_operator_or_owner();
+        self.epoch_unstake_orders += amount.0;
+    }
+    // this should be called by the operator
+    // 4 EPOCHS AFTER MANUAL UNSTAKE, when all the funds have been recovered from the off-line validator
+    // meaning AFTER the funds are recovered and are in the reserve.
+    pub fn manual_remove_from_unstake_orders(&mut self, amount: U128String) {
+        self.assert_operator_or_owner();
+        assert!(self.reserve_for_unstake_claims >= amount.0);
+        assert!(self.epoch_unstake_orders >= amount.0);
+        // Funds-recovery incremented "reserved_for_unstake_claims",
+        // but manually unstaked funds are "for re-staking", so we decrement reserve_for_unstake_claims
+        self.reserve_for_unstake_claims -= amount.0;
+        // and also we increment epoch_stake_orders so the funds are re-staked
+        self.epoch_stake_orders += amount.0;
+    }
+
     // Operator method, but open to anyone
     /// distribute_unstaking(). Do unstaking
     /// returns "true" if needs to be called again
@@ -228,42 +255,60 @@ impl MetaPool {
             //only if the amount justifies tx-fee
             //most unbalanced pool found & available
             //launch async to unstake
-
-            self.contract_busy = true;
-            let sp = &mut self.staking_pools[sp_inx];
-            sp.busy_lock = true;
-
-            //preventively consider the amount un-staked (undoes if promise fails)
-            assert!(
-                self.total_actually_staked >= amount_to_unstake
-                    && self.epoch_unstake_orders >= amount_to_unstake,
-                "IUN"
-            );
-            self.total_actually_staked -= amount_to_unstake;
-            self.epoch_unstake_orders -= amount_to_unstake;
-
-            //launch async to un-stake from the pool
-            ext_staking_pool::unstake(
-                amount_to_unstake.into(),
-                &sp.account_id,
-                NO_DEPOSIT,
-                gas::staking_pool::UNSTAKE,
-            )
-            .then(ext_self_owner::on_staking_pool_unstake(
-                sp_inx,
-                amount_to_unstake.into(),
-                //extra async call args
-                &env::current_account_id(),
-                NO_DEPOSIT,
-                gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
-            ));
-
+            self.direct_unstake(sp_inx, amount_to_unstake);
             return true; //needs to be called again
         } else {
             return false;
         }
     }
 
+    // execute unstake on sp[inx] by amount
+    fn direct_unstake(&mut self, sp_inx: usize, amount_to_unstake: u128) {
+        if amount_to_unstake == 0 {
+            return;
+        }
+        self.assert_not_busy();
+
+        assert!(self.total_actually_staked >= amount_to_unstake, "IUN");
+        assert!(
+            self.epoch_unstake_orders >= amount_to_unstake,
+            "epoch_unstake_orders<amount_to_unstake"
+        );
+        assert!(
+            sp_inx > 0 && sp_inx < self.staking_pools.len(),
+            "invalid index"
+        );
+        let sp = &mut self.staking_pools[sp_inx];
+        assert!(
+            sp.staked >= amount_to_unstake,
+            "only {} staked can not unstake {}",
+            sp.staked,
+            amount_to_unstake
+        );
+
+        self.contract_busy = true;
+        sp.busy_lock = true;
+
+        //preventively consider the amount un-staked (undoes if promise fails)
+        self.total_actually_staked -= amount_to_unstake;
+        self.epoch_unstake_orders -= amount_to_unstake;
+
+        //launch async to un-stake from the pool
+        ext_staking_pool::unstake(
+            amount_to_unstake.into(),
+            &sp.account_id,
+            NO_DEPOSIT,
+            gas::staking_pool::UNSTAKE,
+        )
+        .then(ext_self_owner::on_staking_pool_unstake(
+            sp_inx,
+            amount_to_unstake.into(),
+            //extra async call args
+            &env::current_account_id(),
+            NO_DEPOSIT,
+            gas::owner_callbacks::ON_STAKING_POOL_UNSTAKE,
+        ));
+    }
     /// The prev fn continues here
     /// Called after the given amount was unstaked at the staking pool contract.
     /// This method needs to update staking pool status.
@@ -299,6 +344,7 @@ impl MetaPool {
         sp.busy_lock = false;
         self.contract_busy = false;
     }
+
     //utility to set contract busy flag manually by operator.
     #[payable]
     pub fn set_busy(&mut self, value: bool) {
@@ -584,11 +630,16 @@ impl MetaPool {
             let developers_fee = apply_pct(DEVELOPERS_REWARDS_FEE_BASIS_POINTS, rewards);
             let developers_fee_shares = self.stake_shares_from_amount(developers_fee);
             // Now add the newly minted shares. The fee is taken by making share price increase slightly smaller
-            &self.add_extra_minted_shares(self.operator_account_id.clone(), operator_fee_shares);
-            &self.add_extra_minted_shares(DEVELOPERS_ACCOUNT_ID.into(), developers_fee_shares);
+            self.add_extra_minted_shares(self.operator_account_id.clone(), operator_fee_shares);
+            self.add_extra_minted_shares(DEVELOPERS_ACCOUNT_ID.into(), developers_fee_shares);
 
             // estimate $META rewards to stakers
-            self.est_meta_rewards_stakers += damp_multiplier(rewards, self.staker_meta_mult_pct, self.est_meta_rewards_stakers, self.max_meta_rewards_stakers);
+            self.est_meta_rewards_stakers += damp_multiplier(
+                rewards,
+                self.staker_meta_mult_pct,
+                self.est_meta_rewards_stakers,
+                self.max_meta_rewards_stakers,
+            );
         }
     }
 

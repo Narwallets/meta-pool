@@ -289,7 +289,7 @@ impl MetaPool {
         if num_shares > 0 {
             let account = &mut self.internal_get_account(&account_id);
             account.stake_shares += num_shares;
-            &self.internal_update_account(&account_id, &account);
+            self.internal_update_account(&account_id, &account);
             // Increasing the total amount of stake shares (reduces price)
             self.total_stake_shares += num_shares;
         }
