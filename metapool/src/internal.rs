@@ -231,7 +231,7 @@ impl MetaPool {
         //use this LP operation to realize meta pending rewards
         acc.nslp_realize_meta(&nslp_account, self);
 
-        // Calculate the number of "nslp" shares that the account will receive for adding the given amount of near liquidity
+        // Calculate the number of "nslp" shares the account will receive for adding the given amount of near liquidity
         let num_shares = self.nslp_shares_from_amount(amount, &nslp_account);
         assert!(num_shares > 0);
 

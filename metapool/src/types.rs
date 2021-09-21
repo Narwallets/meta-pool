@@ -237,6 +237,9 @@ pub struct GetContractStateResult {
     pub nslp_liquidity: U128String,
     pub nslp_target: U128String,
     pub nslp_stnear_balance: U128String,
+    pub nslp_share_price: U128String,
+    pub nslp_total_shares: U128String,
+
     /// Current discount for immediate unstake (sell stNEAR)
     pub nslp_current_discount_basis_points: u16,
     pub nslp_min_discount_basis_points: u16,
@@ -251,11 +254,11 @@ pub struct GetContractStateResult {
     pub min_deposit_amount: U128String,
 
     pub est_meta_rewards_stakers: U128String, //stakers
-    pub est_meta_rewards_lu: U128String,      //liquid-unstakers
     pub est_meta_rewards_lp: U128String,      //liquidity-providers
+    pub est_meta_rewards_lu: U128String,      //liquid-unstakers
     pub max_meta_rewards_stakers: U128String, //stakers
-    pub max_meta_rewards_lu: U128String,      //liquid-unstakers
     pub max_meta_rewards_lp: U128String,      //liquidity-providers
+    pub max_meta_rewards_lu: U128String,      //liquid-unstakers
 }
 
 /// Struct returned from get_contract_params
