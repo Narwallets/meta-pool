@@ -318,4 +318,5 @@ pub struct StakingPoolJSONInfo {
     pub unstaked_requested_epoch_height: U64String,
     //EpochHeight where we asked the sp what were our staking rewards
     pub last_asked_rewards_epoch_height: U64String,
+    pub busy_lock: bool
 }

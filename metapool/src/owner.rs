@@ -51,6 +51,7 @@ impl MetaPool {
                 unstaked: elem.unstaked.into(),
                 last_asked_rewards_epoch_height: elem.last_asked_rewards_epoch_height.into(),
                 unstaked_requested_epoch_height: elem.unstk_req_epoch_height.into(),
+                busy_lock: elem.busy_lock,
             })
         }
         return result;
@@ -243,7 +244,7 @@ impl MetaPool {
             nslp_liquidity: nslp_account.available.into(),
             nslp_stnear_balance: nslp_account.stake_shares.into(), //how much stnear does the nslp have?
             nslp_target: self.nslp_liquidity_target.into(),
-            nslp_share_price: self.amount_from_nslp_shares(ONE_NEAR,&nslp_account).into(), // price of one LP share (1e24 yocto_shares)
+            nslp_share_price: self.amount_from_nslp_shares(ONE_NEAR, &nslp_account).into(), // price of one LP share (1e24 yocto_shares)
             nslp_total_shares: nslp_account.nslp_shares.into(), // total nspl shares. price = value/total_shares
             nslp_current_discount_basis_points: self
                 .internal_get_discount_basis_points(nslp_account.available, TEN_NEAR),
@@ -256,7 +257,6 @@ impl MetaPool {
             max_meta_rewards_stakers: self.max_meta_rewards_stakers.into(),
             max_meta_rewards_lu: self.max_meta_rewards_lu.into(), //liquid-unstakers
             max_meta_rewards_lp: self.max_meta_rewards_lp.into(), //liquidity-providers
-        
         };
     }
 
@@ -298,7 +298,12 @@ impl MetaPool {
     }
 
     /// Sets contract parameters
-    pub fn set_reward_multipliers(&mut self, stakers_pct:u16, lp_pct:u16, liquid_unstake_pct:u16) {
+    pub fn set_reward_multipliers(
+        &mut self,
+        stakers_pct: u16,
+        lp_pct: u16,
+        liquid_unstake_pct: u16,
+    ) {
         self.assert_operator_or_owner();
         self.staker_meta_mult_pct = stakers_pct;
         self.stnear_sell_meta_mult_pct = liquid_unstake_pct;
@@ -306,7 +311,7 @@ impl MetaPool {
     }
 
     /// Sets contract parameters
-    pub fn set_max_meta_rewards(&mut self, stakers:u32, lu:u32, lp:u32) {
+    pub fn set_max_meta_rewards(&mut self, stakers: u32, lu: u32, lp: u32) {
         self.assert_operator_or_owner();
         self.max_meta_rewards_stakers = stakers as u128 * ONE_NEAR; //stakers
         self.max_meta_rewards_lu = lu as u128 * ONE_NEAR; //liquid-unstakers
@@ -327,6 +332,7 @@ impl MetaPool {
             unstaked: sp.unstaked.into(),
             unstaked_requested_epoch_height: sp.unstk_req_epoch_height.into(),
             last_asked_rewards_epoch_height: sp.last_asked_rewards_epoch_height.into(),
+            busy_lock: sp.busy_lock,
         };
     }
 }

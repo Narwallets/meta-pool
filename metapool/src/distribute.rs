@@ -189,7 +189,7 @@ impl MetaPool {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
         assert!(
-            sp_inx > 0 && sp_inx < self.staking_pools.len(),
+            sp_inx < self.staking_pools.len(),
             "invalid index"
         );
         let sp = &self.staking_pools[sp_inx];
@@ -222,7 +222,7 @@ impl MetaPool {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
         assert!(
-            sp_inx > 0 && sp_inx < self.staking_pools.len(),
+            sp_inx < self.staking_pools.len(),
             "invalid index"
         );
         let sp = &self.staking_pools[sp_inx];
@@ -244,6 +244,18 @@ impl MetaPool {
         self.reserve_for_unstake_claims -= amount.0;
         // and also we increment epoch_stake_orders so the funds are re-staked
         self.epoch_stake_orders += amount.0;
+    }
+
+    // used by operator to reset epoch_stake/unstake_orders and restart staking/unstaking
+    pub fn undo_end_of_epoch(&mut self) {
+        self.assert_operator_or_owner();
+        if self.total_for_staking < self.total_actually_staked {
+            self.epoch_stake_orders = 0;
+            self.epoch_unstake_orders = self.total_actually_staked - self.total_for_staking;
+        } else if self.total_for_staking > self.total_actually_staked {
+            self.epoch_unstake_orders = 0;
+            self.epoch_stake_orders = self.total_for_staking - self.total_actually_staked
+        }
     }
 
     // Operator method, but open to anyone
@@ -306,7 +318,7 @@ impl MetaPool {
             "epoch_unstake_orders<amount_to_unstake"
         );
         assert!(
-            sp_inx > 0 && sp_inx < self.staking_pools.len(),
+            sp_inx < self.staking_pools.len(),
             "invalid index"
         );
         let sp = &mut self.staking_pools[sp_inx];
