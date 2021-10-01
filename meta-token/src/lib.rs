@@ -32,9 +32,9 @@ near_sdk::setup_alloc!();
 
 mod internal;
 mod migrations;
+mod storage_nep_145;
 mod util;
 mod vesting;
-mod empty_nep_145;
 
 use util::*;
 use vesting::{VestingRecord, VestingRecordJSON};
@@ -128,7 +128,7 @@ impl MetaToken {
         self.minters
     }
 
-    /// Returns account ID of the owner.
+    /// sets metadata icon
     #[payable]
     pub fn set_metadata_icon(&mut self, svg_string: String) {
         assert_one_yocto();
@@ -374,4 +374,3 @@ trait FungibleTokenResolver {
         amount: U128,
     ) -> U128;
 }
-
