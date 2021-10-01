@@ -15,7 +15,7 @@ METAPOOL_CONTRACT=meta-pool.$SUFFIX
 #read input
 #near delete $CONTRACT_ACC $MASTER_ACC
 #near create-account $CONTRACT_ACC --masterAccount $MASTER_ACC
-#near deploy $CONTRACT_ACC ../res/meta_token.wasm --masterAccount $MASTER_ACC
+near deploy $CONTRACT_ACC ../res/meta_token.wasm --masterAccount $MASTER_ACC
 #near call $CONTRACT_ACC new "{\"owner_id\":\"$OWNER\"}" --accountId $MASTER_ACC
 #near call $CONTRACT_ACC add_minter "{\"account_id\":\"$METAPOOL_CONTRACT\"}" --accountId $OWNER --depositYocto 1
 

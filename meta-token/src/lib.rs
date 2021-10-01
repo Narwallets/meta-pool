@@ -20,7 +20,7 @@ use near_sdk::env::BLOCKCHAIN_INTERFACE;
 
 const TGAS: Gas = 1_000_000_000_000;
 const GAS_FOR_RESOLVE_TRANSFER: Gas = 5 * TGAS;
-const GAS_FOR_FT_TRANSFER_CALL: Gas = 25 * TGAS + GAS_FOR_RESOLVE_TRANSFER;
+const GAS_FOR_FT_TRANSFER_CALL: Gas = 25 * TGAS;
 const NO_DEPOSIT: Balance = 0;
 
 // nanoseconds in a second
@@ -30,6 +30,7 @@ type U128String = U128;
 
 near_sdk::setup_alloc!();
 
+mod empty_nep_145;
 mod internal;
 mod migrations;
 mod storage_nep_145;
@@ -304,7 +305,7 @@ impl FungibleTokenCore for MetaToken {
             msg,
             receiver_id.as_ref(),
             NO_DEPOSIT,
-            env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL,
+            env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL - GAS_FOR_RESOLVE_TRANSFER, // assign rest of gas to callback
         )
         .then(ext_self::ft_resolve_transfer(
             sender_id,

@@ -155,11 +155,18 @@ impl TestContract {
         assert!(env::predecessor_account_id() == self.owner_id);
         //input is code:<Vec<u8> on REGISTER 0
         //log!("bytes.length {}", code.unwrap().len());
-        const GAS_FOR_UPGRADE: u64 = 10 * TGAS; //gas occupied by this fn
+        const GAS_FOR_UPGRADE: u64 = 10 * crate::TGAS; //gas occupied by this fn
         const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
-        //after upgrade we call MIGRATE on the NEW CODE
+        assert!(env::predecessor_account_id() == crate::CONTROLLING_DAO);
+        //assert!(env::predecessor_account_id() == self.controlling_dao);
         let current_id = env::current_account_id().into_bytes();
         let method_name = "migrate".as_bytes().to_vec();
+        log!(
+            "env::prepaid_gas(){} - env::used_gas(){} - GAS_FOR_UPGRADE {}",
+            env::prepaid_gas(),
+            env::used_gas(),
+            GAS_FOR_UPGRADE
+        );
         let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
         unsafe {
             BLOCKCHAIN_INTERFACE.with(|b| {
@@ -168,7 +175,6 @@ impl TestContract {
                     .as_ref()
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                     .input(0);
-
                 //prepare self-call promise
                 let promise_id = b
                     .borrow()
@@ -176,13 +182,13 @@ impl TestContract {
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                     .promise_batch_create(current_id.len() as _, current_id.as_ptr() as _);
 
-                //1st action, deploy/upgrade code (takes code from register 0)
+                //1st item, upgrade code (takes data from register 0)
                 b.borrow()
                     .as_ref()
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                     .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
 
-                //2nd action, schedule a call to "migrate()". Will execute on the *new code*
+                //2nd item, schedule a call to "migrate".- (will execute on the *new code*)
                 b.borrow()
                     .as_ref()
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
