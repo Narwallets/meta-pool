@@ -1,6 +1,6 @@
-use near_sdk::{env, near_bindgen};
-use near_sdk::json_types::{ValidAccountId, U128};
 use near_contract_standards::storage_management::{StorageBalance, StorageBalanceBounds};
+use near_sdk::json_types::{ValidAccountId, U128};
+use near_sdk::{env, near_bindgen};
 
 use crate::*;
 
@@ -17,6 +17,7 @@ const EMPTY_STORAGE_BALANCE: StorageBalance = StorageBalance {
 impl MetaPool {
     // `registration_only` doesn't affect the implementation for vanilla fungible token.
     #[allow(unused_variables)]
+    #[payable]
     pub fn storage_deposit(
         &mut self,
         account_id: Option<ValidAccountId>,
