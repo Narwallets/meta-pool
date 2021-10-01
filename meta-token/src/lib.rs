@@ -30,7 +30,6 @@ type U128String = U128;
 
 near_sdk::setup_alloc!();
 
-mod empty_nep_145;
 mod internal;
 mod migrations;
 mod storage_nep_145;
@@ -59,6 +58,7 @@ pub struct MetaToken {
     pub vested: LookupMap<AccountId, VestingRecord>,
     pub vested_count: u32,
 }
+
 
 #[near_bindgen]
 impl MetaToken {

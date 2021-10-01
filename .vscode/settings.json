@@ -1,12 +1,11 @@
 {
     "cSpell.words": [
-        "ITUC",
-        "TGAS",
-        "WITHD",
         "accum",
         "cliconfig",
+        "Csvg",
         "ftmd",
         "funtok",
+        "ITUC",
         "metapool",
         "metas",
         "mult",
@@ -19,8 +18,10 @@
         "stak",
         "staker",
         "stnear",
+        "TGAS",
         "unregister",
         "unstk",
-        "vloan"
+        "vloan",
+        "WITHD"
     ]
 }

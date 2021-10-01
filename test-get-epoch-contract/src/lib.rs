@@ -157,7 +157,6 @@ impl TestContract {
         //log!("bytes.length {}", code.unwrap().len());
         const GAS_FOR_UPGRADE: u64 = 10 * crate::TGAS; //gas occupied by this fn
         const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
-        assert!(env::predecessor_account_id() == crate::CONTROLLING_DAO);
         //assert!(env::predecessor_account_id() == self.controlling_dao);
         let current_id = env::current_account_id().into_bytes();
         let method_name = "migrate".as_bytes().to_vec();

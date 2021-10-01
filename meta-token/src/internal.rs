@@ -38,17 +38,7 @@ impl MetaToken {
     }
 
     pub fn internal_unwrap_balance_of(&self, account_id: &AccountId) -> Balance {
-        match self.accounts.get(&account_id) {
-            Some(balance) => balance,
-            // Q: This makes the contract vulnerable to the sybil attack on storage.
-            // Since `ft_transfer` is cheaper than storage for 1 account, you can send
-            // 1 token to a ton randomly generated accounts and it will require 125 bytes per
-            // such account. So it would require 800 transactions to block 1 NEAR of the account.
-            // R: making the user manage storage costs adds too much friction to account creation
-            // it's better to impede sybil attacks by other means
-            // there's a MIN_TRANSFER of 1/1000 to make sibyl attacks more expensive in terms of tokens
-            None => 0,
-        }
+        self.accounts.get(&account_id).unwrap_or(0)
     }
 
     pub fn mint_into(&mut self, account_id: &AccountId, amount: Balance) {
@@ -130,13 +120,8 @@ impl MetaToken {
     }
 
     /// Inner method to save the given account for a given account ID.
-    /// If the account balance is 0, the account is deleted instead to release storage.
     pub fn internal_update_account(&mut self, account_id: &AccountId, balance: u128) {
-        if balance == 0 {
-            self.accounts.remove(account_id);
-        } else {
-            self.accounts.insert(account_id, &balance); //insert_or_update
-        }
+        self.accounts.insert(account_id, &balance); //insert_or_update
     }
 
     // TODO rename
