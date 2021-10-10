@@ -5,9 +5,14 @@ use near_contract_standards::storage_management::{
 use near_sdk::json_types::{ValidAccountId, U128};
 use near_sdk::{assert_one_yocto, env, log, near_bindgen, AccountId, Balance, Promise};
 
-// The storage size in bytes for one account, just in order to compute required account storage-rent in yoctoNEARS 
-// 64 (acc id) + 2*16 (two u128) 
-pub const ACCOUNT_STORAGE_BYTES: u128 = 64 + 2 * 16;
+// The storage size in bytes for one account + some room, just in order to compute required account storage-rent in yoctoNEARS 
+// 3 [1-letter-prefix]+2colons + 64 (acc id) + 16 bytes of u128 (balance) 
+pub const ACCOUNT_STORAGE_BYTES: u128 = 3 + 64 + 16;
+/// 1e19 yoctos per byte, 0.00001 NEAR per byte, so 100 bytes => 0.001 NEAR, 100Kib => 1 NEAR
+/// kept STORAGE_PRICE_PER_BYTE as constant, so people deposit & can retrieve the same amount of NEAR. We cannot depend on env::storage_byte_cost(), we need a constant.
+/// if we use env::storage_byte_cost() instead and the result changes in the future, people will be withdrawing a different amount than they deposited
+pub const STORAGE_PRICE_PER_BYTE: Balance = 10_000_000_000_000_000_000;
+pub const STORAGE_COST : u128 = ACCOUNT_STORAGE_BYTES * STORAGE_PRICE_PER_BYTE;
 
 // We implement the NEP-145 standard. However user can't make additional deposits.
 // User registers an account by attaching `storage_deposit()` of NEAR. Deposits above
@@ -37,7 +42,7 @@ impl StorageManagement for MetaToken {
                 Promise::new(env::predecessor_account_id()).transfer(amount);
             }
         } else {
-            let cost = storage_cost();
+            let cost = STORAGE_COST;
             assert!(
                 amount >= cost,
                 "attached deposit: {},  required: {}",
@@ -92,7 +97,7 @@ impl StorageManagement for MetaToken {
                 if balance != 0 {
                     self.total_supply -= balance;
                     // we add 1 because the function requires 1 yocto payment
-                    Promise::new(account_id.clone()).transfer(storage_cost() + 1);
+                    Promise::new(account_id.clone()).transfer(STORAGE_COST + 1);
                 }
                 return true;
             } else {
@@ -108,7 +113,7 @@ impl StorageManagement for MetaToken {
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        let d = U128::from(storage_cost());
+        let d = U128::from(STORAGE_COST);
         StorageBalanceBounds {
             min: d,
             max: Some(d),
@@ -127,11 +132,8 @@ impl StorageManagement for MetaToken {
 // all accounts have the same cost
 fn storage_balance() -> StorageBalance {
     StorageBalance {
-        total: U128::from(storage_cost()),
+        total: U128::from(STORAGE_COST),
         available: 0.into(),
     }
 }
 
-fn storage_cost() -> u128 {
-    ACCOUNT_STORAGE_BYTES * env::storage_byte_cost()
-}
