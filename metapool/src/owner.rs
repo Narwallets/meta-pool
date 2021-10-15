@@ -196,7 +196,7 @@ impl MetaPool {
             name: CONTRACT_NAME.into(),
             version: CONTRACT_VERSION.into(),
             source: "https://github.com/Narwallets/meta-pool".into(),
-            standards: vec!["NEP-141".into()],
+            standards: vec!["NEP-141".into(), "NEP-145".into(), "SP".into()], //SP=>core-contracts/Staking-pool
             webAppUrl: self.web_app_url.clone(),
             developersAccountId: DEVELOPERS_ACCOUNT_ID.into(),
             auditorAccountId: self.auditor_account_id.clone(),
@@ -280,7 +280,7 @@ impl MetaPool {
 
     /// Sets contract parameters
     pub fn set_contract_params(&mut self, params: ContractParamsJSON) {
-        self.assert_owner_calling();
+        self.assert_operator_or_owner();
         assert!(params.nslp_max_discount_basis_points > params.nslp_min_discount_basis_points);
 
         self.nslp_liquidity_target = params.nslp_liquidity_target.0;

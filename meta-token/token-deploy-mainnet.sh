@@ -24,5 +24,5 @@ near deploy $CONTRACT_ACC ../res/meta_token.wasm --masterAccount $MASTER_ACC
 #near deploy $CONTRACT_ACC ./res/meta_token.wasm --masterAccount $MASTER_ACC
 
 #save last deployment  (to be able to recover state/tokens)
-cp ../res/meta_token.wasm ../res/meta_token.`date +%F.%T`.wasm
+cp ../res/meta_token.wasm ../res/mainnet/meta_token.`date +%F.%T`.wasm
 date +%F.%T

@@ -188,10 +188,7 @@ impl MetaPool {
     pub fn manual_unstake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
-        assert!(
-            sp_inx < self.staking_pools.len(),
-            "invalid index"
-        );
+        assert!(sp_inx < self.staking_pools.len(), "invalid index");
         let sp = &self.staking_pools[sp_inx];
         assert!(!sp.busy_lock, "sp busy");
         assert!(
@@ -221,10 +218,7 @@ impl MetaPool {
     pub fn manual_restake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
-        assert!(
-            sp_inx < self.staking_pools.len(),
-            "invalid index"
-        );
+        assert!(sp_inx < self.staking_pools.len(), "invalid index");
         let sp = &self.staking_pools[sp_inx];
         assert!(
             sp.weight_basis_points == 0,
@@ -238,11 +232,11 @@ impl MetaPool {
             sp.staked,
             sp.unstaked
         );
-        // retrieve-funds call incremented "reserved_for_unstake_claims",
+        // retrieve-funds call incremented "reserved_for_unstake_claims" (default behavior)
         // but manually unstaked funds are "for re-staking", so we decrement reserve_for_unstake_claims
         assert!(self.reserve_for_unstake_claims >= amount.0);
         self.reserve_for_unstake_claims -= amount.0;
-        // and also we increment epoch_stake_orders so the funds are re-staked
+        // and also we increment epoch_stake_orders so the funds are re-staked in the next bot run
         self.epoch_stake_orders += amount.0;
     }
 
@@ -317,10 +311,7 @@ impl MetaPool {
             self.epoch_unstake_orders >= amount_to_unstake,
             "epoch_unstake_orders<amount_to_unstake"
         );
-        assert!(
-            sp_inx < self.staking_pools.len(),
-            "invalid index"
-        );
+        assert!(sp_inx < self.staking_pools.len(), "invalid index");
         let sp = &mut self.staking_pools[sp_inx];
         assert!(
             sp.staked >= amount_to_unstake,
@@ -392,7 +383,7 @@ impl MetaPool {
     #[payable]
     pub fn set_busy(&mut self, value: bool) {
         assert_one_yocto();
-        self.assert_owner_calling();
+        self.assert_operator_or_owner();
         self.contract_busy = value;
     }
     //operator manual set sp.busy_lock
@@ -529,7 +520,7 @@ impl MetaPool {
     pub fn distribute_rewards(&mut self, sp_inx: u16) {
         //Note: In order to make this contract independent from the operator
         //this fn is open to be called by anyone
-        //self.assert_owner_calling();
+        //self.assert_operator_or_owner();
 
         self.assert_not_busy();
 

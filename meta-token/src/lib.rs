@@ -59,7 +59,6 @@ pub struct MetaToken {
     pub vested_count: u32,
 }
 
-
 #[near_bindgen]
 impl MetaToken {
     /// Initializes the contract with the given total supply owned by the given `owner_id`.
@@ -86,6 +85,7 @@ impl MetaToken {
     }
     pub fn set_owner_id(&mut self, owner_id: AccountId) {
         self.assert_owner_calling();
+        assert!(env::is_valid_account_id(owner_id.as_bytes()));
         self.owner_id = owner_id.into();
     }
     pub fn set_locked_until(&mut self, unix_timestamp: u32) {

@@ -5,7 +5,7 @@
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
-use near_sdk::{env,near_bindgen,AccountId,EpochHeight};
+use near_sdk::{env, near_bindgen, AccountId, EpochHeight};
 
 use crate::*;
 
@@ -89,14 +89,14 @@ pub struct OldMetaPool {
     pub accumulated_staked_rewards: u128,
 
     //user's accounts
-    pub accounts: UnorderedMap<AccountId, crate::Account>,
+    pub accounts: UnorderedMap<AccountId, Account>,
 
     //list of pools to diversify in
-    pub staking_pools: Vec<crate::StakingPoolInfo>,
+    pub staking_pools: Vec<StakingPoolInfo>,
 
     // validator loan request
     // action on audit suggestions, this field is not used. No need for this to be on the main contract
-    pub loan_requests: LookupMap<AccountId, crate::VLoanRequest>,
+    pub loan_requests: LookupMap<AccountId, VLoanRequest>,
 
     //The next 3 values define the Liq.Provider fee curve
     // NEAR/stNEAR Liquidity pool fee curve params
@@ -108,12 +108,12 @@ pub struct OldMetaPool {
     ///NEAR/stNEAR Liquidity pool min fee
     pub nslp_min_discount_basis_points: u16, //0.5% initially
 
-    //The next 3 values define meta rewards multipliers %. (100 => 1x, 200 => 2x, ...)
-    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * mult_pct / 100
+    //The next 3 values define meta rewards multipliers. (10 => 1x, 20 => 2x, ...)
+    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * (mult_pct*10) / 100
     pub staker_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * mult_pct / 100
+    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * (mult_pct*10) / 100
     pub stnear_sell_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * mult_pct / 100
+    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * (mult_pct*10) / 100
     pub lp_provider_meta_mult_pct: u16,
 
     /// min amount accepted as deposit or stake
@@ -136,11 +136,19 @@ pub struct OldMetaPool {
 
     /// Where's the NEP-141 $META token contract
     pub meta_token_account_id: AccountId,
+
+    /// estimated & max meta rewards for each category
+    pub est_meta_rewards_stakers: u128,
+    pub est_meta_rewards_lu: u128, //liquid-unstakers
+    pub est_meta_rewards_lp: u128, //liquidity-providers
+    // max. when this amount is passed, corresponding multiplier is damped proportionally
+    pub max_meta_rewards_stakers: u128,
+    pub max_meta_rewards_lu: u128, //liquid-unstakers
+    pub max_meta_rewards_lp: u128, //liquidity-providers
 }
 
 use crate::MetaPool;
 use crate::MetaPoolContract;
-
 
 #[near_bindgen]
 impl MetaPool {
@@ -157,7 +165,6 @@ impl MetaPool {
     pub fn migrate() -> Self {
         // read state with OLD struct
         // uncomment when state migration is required on upgrade
-        //let old: migrations::MetaPoolPrevStateStruct = env::state_read().expect("Old state doesn't exist");
         let old: OldMetaPool = env::state_read().expect("Old state doesn't exist");
 
         // can only be called by this same contract (it's called from fn upgrade())
@@ -220,12 +227,12 @@ impl MetaPool {
             meta_token_account_id: old.meta_token_account_id,
             min_deposit_amount: old.min_deposit_amount,
 
-            est_meta_rewards_stakers:0,
-            est_meta_rewards_lu:0,
-            est_meta_rewards_lp:0,
-            max_meta_rewards_stakers: 10 * ONE_NEAR,
-            max_meta_rewards_lu: 5 * ONE_NEAR,
-            max_meta_rewards_lp: 5 * ONE_NEAR,
+            est_meta_rewards_stakers: old.est_meta_rewards_stakers,
+            est_meta_rewards_lu: old.max_meta_rewards_lp,
+            est_meta_rewards_lp: old.max_meta_rewards_lp,
+            max_meta_rewards_stakers: old.max_meta_rewards_lp,
+            max_meta_rewards_lu: old.max_meta_rewards_lp,
+            max_meta_rewards_lp: old.max_meta_rewards_lp,
         };
     }
 }
