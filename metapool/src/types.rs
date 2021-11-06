@@ -49,7 +49,7 @@ pub const DEFAULT_OPERATOR_SWAP_CUT_BASIS_POINTS: u16 = 300; // 3% swap fees go 
                                                              //Fee on staking rewards
 pub const DEFAULT_OPERATOR_REWARDS_FEE_BASIS_POINTS: u16 = 50; // 0.5% -- CANT BE HIGHER THAN 1000 / 10%
 
-//Note: Licence forbids you to change the following 3 constants and/or the developer's distribution mechanism
+//Note: License forbids you to change the following 3 constants and/or the developer's distribution mechanism
 pub const DEVELOPERS_ACCOUNT_ID: &str = "developers.near";
 pub const DEVELOPERS_REWARDS_FEE_BASIS_POINTS: u16 = 20; // 0.2% from rewards
 pub const DEVELOPERS_SWAP_CUT_BASIS_POINTS: u16 = 200; // 2% swap fees go to authors

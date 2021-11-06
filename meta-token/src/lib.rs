@@ -93,7 +93,7 @@ impl MetaToken {
         self.locked_until_nano = unix_timestamp as u64 * NANOSECONDS;
     }
 
-    //owner can mint more into some account
+    // whitelisted minters can mint more into some account
     #[payable]
     pub fn mint(&mut self, account_id: &AccountId, amount: U128String) {
         assert_one_yocto();
@@ -168,6 +168,7 @@ impl MetaToken {
         let vesting = self.vested.get(&account_id).unwrap();
         VestingRecordJSON {
             amount: vesting.amount.into(),
+            locked_until_timestamp: vesting.locked_until_timestamp.into(),
             linear_start_timestamp: vesting.linear_start_timestamp.into(),
             linear_end_timestamp: vesting.linear_end_timestamp.into(),
         }

@@ -29,6 +29,7 @@ pub struct VestingRecord {
 #[derive(Deserialize, Serialize)]
 pub struct VestingRecordJSON {
     pub amount: U128String,
+    pub locked_until_timestamp: U64String,
     pub linear_start_timestamp: U64String,
     pub linear_end_timestamp: U64String,
 }
