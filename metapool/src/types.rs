@@ -70,9 +70,6 @@ pub type U64String = U64;
 
 pub type EpochHeight = u64;
 
-/// Hash of Vesting schedule.
-pub type Hash = Vec<u8>;
-
 /// NEP-129 get information about this contract
 /// returns JSON string according to [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
 /// Rewards fee fraction structure for the staking pool contract.

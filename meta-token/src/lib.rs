@@ -168,8 +168,8 @@ impl MetaToken {
         let vesting = self.vested.get(&account_id).unwrap();
         VestingRecordJSON {
             amount: vesting.amount.into(),
-            cliff_timestamp: vesting.cliff_timestamp.into(),
-            end_timestamp: vesting.end_timestamp.into(),
+            linear_start_timestamp: vesting.linear_start_timestamp.into(),
+            linear_end_timestamp: vesting.linear_end_timestamp.into(),
         }
     }
 
@@ -179,12 +179,17 @@ impl MetaToken {
         &mut self,
         account_id: &AccountId,
         amount: U128String,
-        cliff_timestamp: U64String,
-        end_timestamp: U64String,
+        locked_until_timestamp: U64String,
+        linear_start_timestamp: U64String,
+        linear_end_timestamp: U64String,
     ) {
         self.mint(account_id, amount);
-        let record =
-            VestingRecord::new(amount.into(), cliff_timestamp.into(), end_timestamp.into());
+        let record = VestingRecord::new(
+            amount.into(),
+            locked_until_timestamp.into(),
+            linear_start_timestamp.into(),
+            linear_end_timestamp.into(),
+        );
         match self.vested.insert(&account_id, &record) {
             Some(_) => panic!("account already vested"),
             None => self.vested_count += 1,
@@ -192,19 +197,25 @@ impl MetaToken {
     }
 
     #[payable]
-    /// terminate vesting before the cliff
+    /// terminate vesting before is over
     /// burn the tokens
     pub fn terminate_vesting(&mut self, account_id: &AccountId) {
         assert_one_yocto();
         self.assert_owner_calling();
         match self.vested.get(&account_id) {
             Some(vesting) => {
-                if vesting.compute_amount_locked() == 0 {
-                    panic!("past the cliff, vesting can't be changed")
+                let locked_amount = vesting.compute_amount_locked();
+                if locked_amount == 0 {
+                    panic!("locked_amount is zero")
                 }
-                self.internal_burn(account_id, vesting.amount);
+                self.internal_burn(account_id, locked_amount);
                 self.vested.remove(&account_id);
                 self.vested_count -= 1;
+                log!(
+                    "{} vesting terminated, {} burned",
+                    account_id,
+                    locked_amount
+                );
             }
             None => panic!("account not vested"),
         }
