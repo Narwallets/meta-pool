@@ -168,9 +168,9 @@ impl MetaToken {
         let vesting = self.vested.get(&account_id).unwrap();
         VestingRecordJSON {
             amount: vesting.amount.into(),
-            locked_until_timestamp: vesting.locked_until_timestamp.into(),
-            linear_start_timestamp: vesting.linear_start_timestamp.into(),
-            linear_end_timestamp: vesting.linear_end_timestamp.into(),
+            locked_until_timestamp: (vesting.locked_until_timestamp_nano / NANOSECONDS) as u32,
+            linear_start_timestamp: (vesting.linear_start_timestamp_nano / NANOSECONDS) as u32,
+            linear_end_timestamp: (vesting.linear_end_timestamp_nano / NANOSECONDS) as u32,
         }
     }
 
@@ -180,16 +180,16 @@ impl MetaToken {
         &mut self,
         account_id: &AccountId,
         amount: U128String,
-        locked_until_timestamp: U64String,
-        linear_start_timestamp: U64String,
-        linear_end_timestamp: U64String,
+        locked_until_timestamp: u32,
+        linear_start_timestamp: u32,
+        linear_end_timestamp: u32,
     ) {
         self.mint(account_id, amount);
         let record = VestingRecord::new(
             amount.into(),
-            locked_until_timestamp.into(),
-            linear_start_timestamp.into(),
-            linear_end_timestamp.into(),
+            locked_until_timestamp as u64 * NANOSECONDS,
+            linear_start_timestamp as u64 * NANOSECONDS,
+            linear_end_timestamp as u64 * NANOSECONDS,
         );
         match self.vested.insert(&account_id, &record) {
             Some(_) => panic!("account already vested"),

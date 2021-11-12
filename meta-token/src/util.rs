@@ -1,8 +1,7 @@
-use near_sdk::json_types::{U128, U64};
+use near_sdk::json_types::{U128};
 use uint::construct_uint;
 
 pub type U128String = U128;
-pub type U64String = U64;
 
 /// Raw type for timestamp in nanoseconds
 pub type TimestampNano = u64;
