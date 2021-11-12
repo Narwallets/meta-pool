@@ -102,7 +102,7 @@ impl MetaToken {
                         self.vested.remove(&sender_id);
                         self.vested_count -= 1;
                     } else if balance_left < locked {
-                        panic!("Vested account, balance can't go lower than {}", locked);
+                        panic!("Vested account, balance can not go lower than {}", locked);
                     }
                 }
                 None => {}

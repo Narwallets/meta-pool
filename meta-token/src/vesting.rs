@@ -29,6 +29,7 @@ pub struct VestingRecord {
 #[derive(Deserialize, Serialize)]
 pub struct VestingRecordJSON {
     pub amount: U128String,
+    pub locked: U128String,
     pub locked_until_timestamp: u32,
     pub linear_start_timestamp: u32,
     pub linear_end_timestamp: u32,
@@ -48,7 +49,7 @@ impl VestingRecord {
         );
         assert!(
             locked_until_timestamp_nano < linear_end_timestamp_nano,
-            "vesting: locked_until_timestamp >= end"
+            "vesting: locked_until_timestamp {} >= end {}",locked_until_timestamp_nano , linear_end_timestamp_nano
         );
         Self {
             amount,

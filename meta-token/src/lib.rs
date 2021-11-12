@@ -164,14 +164,21 @@ impl MetaToken {
 
     /// Get vesting information
     pub fn get_vesting_info(&self, account_id: AccountId) -> VestingRecordJSON {
-        log!("{}", &account_id);
-        let vesting = self.vested.get(&account_id).unwrap();
-        VestingRecordJSON {
-            amount: vesting.amount.into(),
-            locked_until_timestamp: (vesting.locked_until_timestamp_nano / NANOSECONDS) as u32,
-            linear_start_timestamp: (vesting.linear_start_timestamp_nano / NANOSECONDS) as u32,
-            linear_end_timestamp: (vesting.linear_end_timestamp_nano / NANOSECONDS) as u32,
-        }
+        match self.vested.get(&account_id) {
+            Some(vesting) => {
+                log!("{}", &account_id);
+                return VestingRecordJSON {
+                    amount: vesting.amount.into(),
+                    locked: vesting.compute_amount_locked().into(),
+                    locked_until_timestamp: (vesting.locked_until_timestamp_nano / NANOSECONDS)
+                        as u32,
+                    linear_start_timestamp: (vesting.linear_start_timestamp_nano / NANOSECONDS)
+                        as u32,
+                    linear_end_timestamp: (vesting.linear_end_timestamp_nano / NANOSECONDS) as u32,
+                }
+            }
+            _ => panic!("no vesting for account {}", account_id),
+        };
     }
 
     //minters can mint with vesting/locked periods
@@ -180,9 +187,9 @@ impl MetaToken {
         &mut self,
         account_id: &AccountId,
         amount: U128String,
-        locked_until_timestamp: u32,
-        linear_start_timestamp: u32,
-        linear_end_timestamp: u32,
+        locked_until_timestamp: u64,
+        linear_start_timestamp: u64,
+        linear_end_timestamp: u64,
     ) {
         self.mint(account_id, amount);
         let record = VestingRecord::new(
@@ -192,7 +199,11 @@ impl MetaToken {
             linear_end_timestamp as u64 * NANOSECONDS,
         );
         match self.vested.insert(&account_id, &record) {
-            Some(_) => panic!("account already vested"),
+            Some(previous) => {
+                if previous.compute_amount_locked()>0 {
+                    panic!("account already vested with locked amount")
+                }
+            },
             None => self.vested_count += 1,
         }
     }
