@@ -34,7 +34,7 @@ trait FungibleTokenResolver {
 }
 
 const GAS_FOR_FT_TRANSFER_CALL: Gas = 30_000_000_000_000;
-const GAS_FOR_RESOLVE_TRANSFER: Gas = 8_000_000_000_000;
+const GAS_FOR_RESOLVE_TRANSFER: Gas = 11_000_000_000_000;
 const FIVE_TGAS: Gas = 5_000_000_000_000;
 const ONE_TGAS: Gas = 1_000_000_000_000;
 
@@ -79,18 +79,16 @@ impl FungibleTokenCore for MetaPool {
     #[payable]
     fn ft_transfer(
         &mut self,
-        receiver_id: ValidAccountId,
+        receiver_id: ValidAccountId, // ValidAccountId does not adds gas consumption
         amount: U128,
         #[allow(unused)] memo: Option<String>,
     ) {
         assert_one_yocto();
-        //log!("prepaid gas {}, used gas:{}",env::prepaid_gas(),env::used_gas());
         self.internal_st_near_transfer(
             &env::predecessor_account_id(),
             &receiver_id.into(),
             amount.0,
         );
-        //log!("used gas:{}",env::used_gas());
     }
 
     #[payable]
@@ -102,19 +100,17 @@ impl FungibleTokenCore for MetaPool {
         msg: String,
     ) -> PromiseOrValue<U128> {
         assert_one_yocto();
-        assert!(env::prepaid_gas() > GAS_FOR_FT_TRANSFER_CALL + GAS_FOR_RESOLVE_TRANSFER + FIVE_TGAS,
-            "gas required {}",GAS_FOR_FT_TRANSFER_CALL + GAS_FOR_RESOLVE_TRANSFER + FIVE_TGAS
+        assert!(
+            env::prepaid_gas() > GAS_FOR_FT_TRANSFER_CALL + GAS_FOR_RESOLVE_TRANSFER + FIVE_TGAS,
+            "gas required {}",
+            GAS_FOR_FT_TRANSFER_CALL + GAS_FOR_RESOLVE_TRANSFER + FIVE_TGAS
         );
 
         self.assert_not_busy();
         self.contract_busy = true;
 
         let receiver_id: String = receiver_id.into();
-        self.internal_st_near_transfer(
-            &env::predecessor_account_id(),
-            &receiver_id,
-            amount.0,
-        );
+        self.internal_st_near_transfer(&env::predecessor_account_id(), &receiver_id, amount.0);
 
         //TODO add a busy lock to avoid the sender-acc to be deleted
         //while this txn is executing
@@ -127,7 +123,7 @@ impl FungibleTokenCore for MetaPool {
             //promise params:
             &receiver_id, //contract
             NO_DEPOSIT,   //attached native NEAR amount
-            env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL - GAS_FOR_RESOLVE_TRANSFER - ONE_TGAS, // set almost all remaining gas for the callback
+            env::prepaid_gas() - GAS_FOR_FT_TRANSFER_CALL - GAS_FOR_RESOLVE_TRANSFER - ONE_TGAS, // set almost all remaining gas for ft_on_transfer
         )
         .then(ext_self::ft_resolve_transfer(
             env::predecessor_account_id(),
