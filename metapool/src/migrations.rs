@@ -109,11 +109,11 @@ pub struct OldMetaPool {
     pub nslp_min_discount_basis_points: u16, //0.5% initially
 
     //The next 3 values define meta rewards multipliers. (10 => 1x, 20 => 2x, ...)
-    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * (mult_pct*10) / 100
+    ///for each stNEAR paid staking reward, reward stNEAR holders with META. default:5x. reward META = rewards * (mult_pct*10) / 100
     pub staker_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * (mult_pct*10) / 100
+    ///for each stNEAR paid as discount, reward stNEAR sellers with META. default:1x. reward META = discounted * (mult_pct*10) / 100
     pub stnear_sell_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * (mult_pct*10) / 100
+    ///for each stNEAR paid as discount, reward LP providers  with META. default:20x. reward META = fee * (mult_pct*10) / 100
     pub lp_provider_meta_mult_pct: u16,
 
     /// min amount accepted as deposit or stake

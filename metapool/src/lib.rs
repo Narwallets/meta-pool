@@ -189,11 +189,11 @@ pub struct MetaPool {
     pub nslp_min_discount_basis_points: u16, //0.5% initially
 
     //The next 3 values define meta rewards multipliers. (10 => 1x, 20 => 2x, ...)
-    ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. default:5x. reward META = rewards * (mult_pct*10) / 100
+    ///for each stNEAR paid staking reward, reward stNEAR holders with META. default:5x. reward META = rewards * (mult_pct*10) / 100
     pub staker_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. default:1x. reward META = discounted * (mult_pct*10) / 100
+    ///for each stNEAR paid as discount, reward stNEAR sellers with META. default:1x. reward META = discounted * (mult_pct*10) / 100
     pub stnear_sell_meta_mult_pct: u16,
-    ///for each stNEAR paid as discount, reward LP providers  with g-stNEAR. default:20x. reward META = fee * (mult_pct*10) / 100
+    ///for each stNEAR paid as discount, reward LP providers  with META. default:20x. reward META = fee * (mult_pct*10) / 100
     pub lp_provider_meta_mult_pct: u16,
 
     /// min amount accepted as deposit or stake
@@ -296,11 +296,11 @@ impl MetaPool {
             nslp_max_discount_basis_points: 180, //1.8%
             nslp_min_discount_basis_points: 25,  //0.25%
             min_deposit_amount: 10 * NEAR,
-            ///for each stNEAR paid as discount, reward stNEAR sellers with g-stNEAR. initial 5x, default:1x. reward META = discounted * mult_pct / 100
+            ///for each stNEAR paid as discount, reward stNEAR sellers with META. initial 5x, default:1x. reward META = discounted * mult_pct / 100
             stnear_sell_meta_mult_pct: 50, //5x
-            ///for each stNEAR paid staking reward, reward stNEAR holders with g-stNEAR. initial 10x, default:5x. reward META = rewards * mult_pct / 100
+            ///for each stNEAR paid staking reward, reward stNEAR holders with META. initial 10x, default:5x. reward META = rewards * mult_pct / 100
             staker_meta_mult_pct: 5000, //500x
-            ///for each stNEAR paid as discount, reward LPs with g-stNEAR. initial 50x, default:20x. reward META = fee * mult_pct / 100
+            ///for each stNEAR paid as discount, reward LPs with META. initial 50x, default:20x. reward META = fee * mult_pct / 100
             lp_provider_meta_mult_pct: 200, //20x
             staking_pools: Vec::new(),
             meta_token_account_id,
