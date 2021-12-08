@@ -1,8 +1,7 @@
 use crate::*;
 use near_sdk::{
-    log, Balance, Promise,
     json_types::{ValidAccountId, U128},
-    AccountId, PromiseResult
+    log, AccountId, Balance, Promise, PromiseResult,
 };
 
 pub use crate::types::*;
@@ -552,6 +551,35 @@ impl MetaPool {
         return (selected_sp_inx, selected_to_unstake_amount);
     }
 
+    pub fn internal_st_near_transfer(
+        &mut self,
+        sender_id: &AccountId,
+        receiver_id: &AccountId,
+        amount: u128,
+    ) {
+        assert_ne!(
+            sender_id, receiver_id,
+            "Sender and receiver should be different"
+        );
+        assert!(amount > 0, "The amount should be a positive number");
+        let mut sender_acc = self.internal_get_account(&sender_id);
+        let mut receiver_acc = self.internal_get_account(&receiver_id);
+        assert!(
+            amount <= sender_acc.stake_shares,
+            "@{} not enough stNEAR balance {}",
+            sender_id,
+            sender_acc.stake_shares
+        );
+        sender_acc.stake_shares -= amount;
+        receiver_acc.stake_shares += amount;
+        // note: no trip-meter accounting to keep this under 5TGAS (skyward contract is hardcoded to 5 tgas for ft_transfer)
+        // let near_amount = self.amount_from_stake_shares(amount); //amount is in stNEAR(aka shares), let's compute how many nears that is - for the trip-meter
+        // sender_acc.sub_stake_shares(amount, near_amount);
+        // receiver_acc.add_stake_shares(amount, near_amount);
+        self.internal_update_account(&sender_id, &sender_acc);
+        self.internal_update_account(&receiver_id, &receiver_acc);
+    }
+
     // MULTI FUN TOKEN [NEP-138](https://github.com/near/NEPs/pull/138)
     /// Transfer `amount` of tok tokens from the caller of the contract (`predecessor_id`) to `receiver_id`.
     /// Requirements:
@@ -610,7 +638,7 @@ impl MetaPool {
         self.internal_update_account(&receiver_id, &receiver_acc);
     }
 
-    // ft_token, executed after ft_transfer_call, 
+    // ft_token, executed after ft_transfer_call,
     // resolves (maybe refunds)
     // TODO rename
     pub fn int_ft_resolve_transfer(
@@ -639,7 +667,6 @@ impl MetaPool {
         if unused_amount > 0 {
             let mut receiver_acc = self.internal_get_account(&receiver_id);
             let receiver_balance = receiver_acc.stake_shares;
-        
             if receiver_balance > 0 {
                 let refund_amount = std::cmp::min(receiver_balance, unused_amount);
                 let near_amount = self.amount_from_stake_shares(refund_amount); //amount is in stNEAR(aka shares), let's compute how many nears that is

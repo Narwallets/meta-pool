@@ -84,12 +84,13 @@ impl FungibleTokenCore for MetaPool {
         #[allow(unused)] memo: Option<String>,
     ) {
         assert_one_yocto();
-        self.internal_multifuntok_transfer(
+        //log!("prepaid gas {}, used gas:{}",env::prepaid_gas(),env::used_gas());
+        self.internal_st_near_transfer(
             &env::predecessor_account_id(),
             &receiver_id.into(),
-            STNEAR,
             amount.0,
         );
+        //log!("used gas:{}",env::used_gas());
     }
 
     #[payable]
@@ -109,10 +110,9 @@ impl FungibleTokenCore for MetaPool {
         self.contract_busy = true;
 
         let receiver_id: String = receiver_id.into();
-        self.internal_multifuntok_transfer(
+        self.internal_st_near_transfer(
             &env::predecessor_account_id(),
             &receiver_id,
-            STNEAR,
             amount.0,
         );
 
