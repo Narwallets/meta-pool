@@ -148,7 +148,7 @@ pub struct GetAccountInfoResult {
     /// trip_start: (unix timestamp) this field is set at account creation, so it will start metering rewards
     pub trip_start: U64,
     /// How many stnear the user had at "trip_start".
-    pub trip_start_stnear: U128,
+    pub trip_start_stnear: U128, // OBSOLETE
     /// how much the user staked since trip start. always incremented
     pub trip_accum_stakes: U128,
     /// how much the user unstaked since trip start. always incremented
@@ -315,5 +315,5 @@ pub struct StakingPoolJSONInfo {
     pub unstaked_requested_epoch_height: U64String,
     //EpochHeight where we asked the sp what were our staking rewards
     pub last_asked_rewards_epoch_height: U64String,
-    pub busy_lock: bool
+    pub busy_lock: bool,
 }

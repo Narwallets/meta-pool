@@ -52,7 +52,7 @@ pub struct Account {
     /// trip_start: (timestamp in milliseconds) this field is set at account creation, so it will start metering rewards
     pub trip_start: Timestamp,
 
-    /// How much stnear the user had at "trip_start".
+    /// OBSOLETE - How much stnear the user had at "trip_start".
     pub trip_start_stnear: u128,
     // how much stnear the staked since trip start (minus unstaked)
     pub trip_accum_stakes: u128,
@@ -92,7 +92,8 @@ impl Account {
             && self.unstaked == 0
             && self.stake_shares == 0
             && self.nslp_shares == 0
-            && self.realized_meta == 0;
+            && self.realized_meta == 0
+            && self.trip_start_stnear == 0; // repurposed field;
     }
 
     #[inline]
@@ -145,8 +146,10 @@ impl Account {
     }
     pub fn add_stake_shares(&mut self, num_shares: u128, near_amount: u128) {
         self.stake_shares += num_shares;
-        //to buy stnear is stake
+
+        // to buy stnear is to stake
         self.trip_accum_stakes += near_amount;
+
         self.staking_meter.stake(near_amount);
     }
 
@@ -165,13 +168,15 @@ impl Account {
             num_shares
         );
         self.stake_shares -= num_shares;
-        //to sell stnear is to unstake
+
+        // to sell stnear is to unstake
         self.trip_accum_unstakes += near_amount;
         if self.trip_accum_unstakes < self.trip_accum_stakes {
             //keep just the delta
             self.trip_accum_stakes -= self.trip_accum_unstakes;
             self.trip_accum_unstakes = 0;
         }
+
         self.staking_meter.unstake(near_amount);
     }
 

@@ -851,8 +851,7 @@ impl MetaPool {
         }
     }
 
-    pub fn realize_meta(&mut self) {
-        let account_id = env::predecessor_account_id();
+    pub fn realize_meta(&mut self, account_id: String) {
         let mut acc = self.internal_get_account(&account_id);
 
         //realize and mint $META from staking rewards

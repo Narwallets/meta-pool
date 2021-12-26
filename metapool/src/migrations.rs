@@ -228,10 +228,10 @@ impl MetaPool {
             min_deposit_amount: old.min_deposit_amount,
 
             est_meta_rewards_stakers: old.est_meta_rewards_stakers,
-            est_meta_rewards_lu: old.max_meta_rewards_lp,
-            est_meta_rewards_lp: old.max_meta_rewards_lp,
-            max_meta_rewards_stakers: old.max_meta_rewards_lp,
-            max_meta_rewards_lu: old.max_meta_rewards_lp,
+            est_meta_rewards_lu: old.est_meta_rewards_lu,
+            est_meta_rewards_lp: old.est_meta_rewards_lp,
+            max_meta_rewards_stakers: old.max_meta_rewards_stakers,
+            max_meta_rewards_lu: old.max_meta_rewards_lu,
             max_meta_rewards_lp: old.max_meta_rewards_lp,
         };
     }

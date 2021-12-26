@@ -150,8 +150,9 @@ impl MetaPool {
         let acc = self.internal_get_account(&account_id);
         let staked_near = self.amount_from_stake_shares(acc.stake_shares);
         // trip_rewards = current_stnear + trip_accum_unstakes - trip_accum_stakes - trip_start_stnear;
-        let trip_rewards = (staked_near + acc.trip_accum_unstakes)
-            .saturating_sub(acc.trip_accum_stakes + acc.trip_start_stnear);
+        // note: trip_start_stnear is OBSOLETE
+        // let trip_rewards = (staked_near + acc.trip_accum_unstakes)
+        //     .saturating_sub(acc.trip_accum_stakes + acc.trip_start_stnear);
         //Liquidity Pool share value
         let mut nslp_share_value: u128 = 0;
         let mut nslp_share_bp: u16 = 0;
@@ -175,12 +176,24 @@ impl MetaPool {
                 as u16,
             can_withdraw: (env::epoch_height() >= acc.unstaked_requested_unlock_epoch),
             total: (acc.available + staked_near + acc.unstaked).into(),
-            //trip-meter
+            // trip-meter
             trip_start: acc.trip_start.into(),
-            trip_start_stnear: acc.trip_start_stnear.into(),
-            trip_accum_stakes: acc.trip_accum_stakes.into(),
-            trip_accum_unstakes: acc.trip_accum_unstakes.into(),
-            trip_rewards: trip_rewards.into(),
+            trip_start_stnear: acc.trip_start_stnear.into(), // note: OBSOLETE/REPURPOSED
+            trip_accum_stakes: (if acc.staking_meter.delta_staked >= 0 {
+                acc.staking_meter.delta_staked as u128
+            } else {
+                0 as u128
+            })
+            .into(),
+            trip_accum_unstakes: (if acc.staking_meter.delta_staked < 0 {
+                -acc.staking_meter.delta_staked as u128
+            } else {
+                0 as u128
+            })
+            .into(),
+            trip_rewards: (staked_near + acc.trip_accum_unstakes)
+                .saturating_sub(acc.trip_accum_stakes)
+                .into(), // extra-nears not related to stake/unstake or transfers
 
             nslp_shares: acc.nslp_shares.into(),
             nslp_share_value: nslp_share_value.into(),

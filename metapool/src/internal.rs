@@ -570,12 +570,11 @@ impl MetaPool {
             sender_id,
             sender_acc.stake_shares
         );
-        sender_acc.stake_shares -= amount;
-        receiver_acc.stake_shares += amount;
-        // note: no trip-meter accounting to keep this under 5TGAS (skyward contract is hardcoded to 5 tgas for ft_transfer)
-        // let near_amount = self.amount_from_stake_shares(amount); //amount is in stNEAR(aka shares), let's compute how many nears that is - for the trip-meter
-        // sender_acc.sub_stake_shares(amount, near_amount);
-        // receiver_acc.add_stake_shares(amount, near_amount);
+
+        let near_amount = self.amount_from_stake_shares(amount); //amount is in stNEAR(aka shares), let's compute how many nears that is - for acc.staking_meter
+        sender_acc.sub_stake_shares(amount, near_amount);
+        receiver_acc.add_stake_shares(amount, near_amount);
+
         self.internal_update_account(&sender_id, &sender_acc);
         self.internal_update_account(&receiver_id, &receiver_acc);
     }
