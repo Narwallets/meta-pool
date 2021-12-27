@@ -583,6 +583,8 @@ impl MetaPool {
     /// Transfer `amount` of tok tokens from the caller of the contract (`predecessor_id`) to `receiver_id`.
     /// Requirements:
     /// * receiver_id must pre-exist
+    /// LMT - commented, no longer used
+    /*
     pub fn internal_multifuntok_transfer(
         &mut self,
         sender_id: &AccountId,
@@ -636,6 +638,7 @@ impl MetaPool {
         self.internal_update_account(&sender_id, &sender_acc);
         self.internal_update_account(&receiver_id, &receiver_acc);
     }
+    */
 
     // ft_token, executed after ft_transfer_call,
     // resolves (maybe refunds)

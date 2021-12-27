@@ -23,6 +23,9 @@ impl MetaPool {
         account_id: Option<ValidAccountId>,
         registration_only: Option<bool>,
     ) -> StorageBalance {
+        if env::attached_deposit()>0 {
+            Promise::new(env::predecessor_account_id()).transfer(env::attached_deposit());
+        }
         EMPTY_STORAGE_BALANCE
     }
 
