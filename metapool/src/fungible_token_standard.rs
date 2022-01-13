@@ -106,9 +106,6 @@ impl FungibleTokenCore for MetaPool {
             GAS_FOR_FT_TRANSFER_CALL + GAS_FOR_RESOLVE_TRANSFER + FIVE_TGAS
         );
 
-        self.assert_not_busy();
-        self.contract_busy = true;
-
         let receiver_id: String = receiver_id.into();
         self.internal_st_near_transfer(&env::predecessor_account_id(), &receiver_id, amount.0);
 
@@ -160,7 +157,6 @@ impl FungibleTokenResolver for MetaPool {
         receiver_id: ValidAccountId,
         amount: U128,
     ) -> U128 {
-        self.contract_busy = false;
         let sender_id: AccountId = sender_id.into();
         let (used_amount, burned_amount) =
             self.int_ft_resolve_transfer(&sender_id, receiver_id, amount);
