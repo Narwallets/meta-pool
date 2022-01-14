@@ -38,6 +38,8 @@ impl MetaPool {
     // staking-pools-list (SPL) management
     //---------------------------------
 
+    // Note: this fn may run out of gas when there are more than 3800 pools registered (current amount is 57)
+    // The limit is high, but in case it is needed, recommendation is to add from_index and end_index as parameters in this function
     /// get the current list of pools
     pub fn get_staking_pool_list(&self) -> Vec<StakingPoolJSONInfo> {
         let mut result = Vec::with_capacity(self.staking_pools.len());
