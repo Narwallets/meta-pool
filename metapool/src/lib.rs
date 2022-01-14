@@ -115,7 +115,7 @@ pub struct MetaPool {
     /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now.
     /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
     /// This amount also increments at retrieve_from_staking_pool
-    /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
+    /// The funds here are *reserved* for the unstake-claims and can only be used to fulfill those claims
     /// This amount decrements at unstake-withdraw, sending the NEAR to the user
     /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
     pub reserve_for_unstake_claims: u128,
@@ -257,16 +257,7 @@ impl MetaPool {
     ) -> Self {
         assert!(!env::state_exists(), "The contract is already initialized");
 
-        //all accounts must be different
-        // not all combinations tested, we assume the owner deploying the contract knows that accounts must be different
-        // it does not make sense to burn fees checking all possible combinations
-        assert!(&owner_account_id != &treasury_account_id);
-        assert!(&owner_account_id != &DEVELOPERS_ACCOUNT_ID);
-        assert!(&operator_account_id != &owner_account_id);
-        assert!(&operator_account_id != &DEVELOPERS_ACCOUNT_ID);
-        assert!(&treasury_account_id != &operator_account_id);
-
-        return Self {
+        let result = Self {
             owner_account_id,
             contract_busy: false,
             operator_account_id,
@@ -311,6 +302,19 @@ impl MetaPool {
             max_meta_rewards_lu: 50_000 * ONE_NEAR,
             max_meta_rewards_lp: 100_000 * ONE_NEAR,
         };
+        //all key accounts must be different
+        result.assert_key_accounts_are_different();
+        return result;
+    }
+
+    fn assert_key_accounts_are_different(&self) {
+        //all accounts must be different
+        assert!(self.owner_account_id != self.operator_account_id);
+        assert!(self.owner_account_id != DEVELOPERS_ACCOUNT_ID);
+        assert!(self.owner_account_id != self.treasury_account_id);
+        assert!(self.operator_account_id != DEVELOPERS_ACCOUNT_ID);
+        assert!(self.operator_account_id != self.treasury_account_id);
+        assert!(self.treasury_account_id != DEVELOPERS_ACCOUNT_ID);
     }
 
     //------------------------------------

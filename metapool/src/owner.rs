@@ -129,11 +129,23 @@ impl MetaPool {
         assert!(env::is_valid_account_id(account_id.as_bytes()));
         self.assert_owner_calling();
         self.operator_account_id = account_id;
+        //all key accounts must be different
+        self.assert_key_accounts_are_different();
+    }
+    pub fn get_treasury_account_id(&self) -> AccountId {
+        return self.treasury_account_id.clone();
+    }
+    pub fn set_treasury_account_id(&mut self, account_id: AccountId) {
+        assert!(env::is_valid_account_id(account_id.as_bytes()));
+        self.assert_owner_calling();
+        self.treasury_account_id = account_id;
+        self.assert_key_accounts_are_different();
     }
     pub fn set_owner_id(&mut self, owner_id: AccountId) {
         assert!(env::is_valid_account_id(owner_id.as_bytes()));
         self.assert_owner_calling();
         self.owner_account_id = owner_id.into();
+        self.assert_key_accounts_are_different();
     }
 
     /// The amount of tokens that were deposited to the staking pool.

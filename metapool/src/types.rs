@@ -218,7 +218,7 @@ pub struct GetContractStateResult {
     /// (no need to go to the staking-pools) but the NEAR received for staking must be now reserved for the unstake-withdraw 4 epochs form now.
     /// This amount increments *after* end_of_epoch_clearing, *if* there are staking & unstaking orders that cancel each-other.
     /// This amount also increments at retrieve_from_staking_pool
-    /// The funds here are *reserved* fro the unstake-claims and can only be user to fulfill those claims
+    /// The funds here are *reserved* for the unstake-claims and can only be used to fulfill those claims
     /// This amount decrements at unstake-withdraw, sending the NEAR to the user
     /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
     pub reserve_for_unstake_claims: U128String,
