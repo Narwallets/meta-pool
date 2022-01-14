@@ -118,11 +118,6 @@ pub fn amount_from_shares(num_shares: u128, total_amount: u128, total_shares: u1
     return proportional(num_shares, total_amount, total_shares);
 }
 
-#[inline]
-pub fn between(value: u128, from: u128, to: u128) -> bool {
-    value > from && value < to
-}
-
 /// is_close returns true if total-0.001N < requested < total+0.001N
 /// it is used to avoid leaving "dust" in the accounts and to manage rounding simplification for the users
 /// e.g.: The user has 999999952342335499220000001 yN => 99.9999952342335499220000001 N
