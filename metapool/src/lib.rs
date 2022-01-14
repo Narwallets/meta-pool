@@ -916,8 +916,8 @@ impl MetaPool {
         ))
     }
     //prev fn continues here
-    #[private]
     pub fn after_minting_meta(&mut self, account_id: AccountId, to_mint: U128String) {
+        assert_callback_calling();
         if !is_promise_success() {
             //minting $META failed, rollback
             let mut acc = self.internal_get_account(&account_id);
