@@ -39,7 +39,7 @@ pub struct OldMetaPool {
     /// This amount decrements at unstake-withdraw, sending the NEAR to the user
     /// Note: There's a extra functionality (quick-exit) that can speed-up unstaking claims if there's funds in this amount.
     pub reserve_for_unstake_claims: u128,
-    // control: reserve_for_unstake_claims must be == sum(acc.unstake)+sum(sp.unstaked)
+
     /// This value is equivalent to sum(accounts.available)
     /// This amount increments with user's deposits_into_available and decrements when users stake_from_available
     /// increments with unstake_to_available and decrements with withdraw_from_available
