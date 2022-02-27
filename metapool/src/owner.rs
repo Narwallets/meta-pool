@@ -70,6 +70,7 @@ impl MetaPool {
         self.staking_pools.remove(inx as usize);
     }
 
+/*
     ///update existing weight_basis_points
     pub fn set_staking_pool_weight(&mut self, inx: u16, weight_basis_points: u16) {
         self.assert_operator_or_owner();
@@ -105,7 +106,46 @@ impl MetaPool {
         self.staking_pools
             .push(StakingPoolInfo::new(account_id, weight_basis_points));
     }
+*/
 
+    /// add a new staking pool, checking that it is not already in the list
+    /// added with weight_basis_points = 0, to preserve sum(weights)=100%
+    pub fn add_staking_pool(&mut self, account_id: AccountId) {
+        //search the pools
+        for sp_inx in 0..self.staking_pools.len() {
+            if self.staking_pools[sp_inx].account_id == account_id {
+                // found
+                panic!("already in list");
+            }
+        }
+        // not in list, add
+        self.staking_pools
+            .push(StakingPoolInfo::new(account_id, 0));
+    }
+
+    /// update existing staking pools list, field weight_basis_points
+    /// sum(weight_basis_points) must be eq 100%
+    /// can not add, remove or change order of staking pools
+    #[payable]
+    pub fn set_staking_pools(&mut self, list: Vec<StakingPoolArgItem>) {
+        assert_one_yocto();
+        self.assert_operator_or_owner();
+        // make sure no additions or removals
+        assert_eq!(list.len(),self.staking_pools.len());
+        // process the list
+        let mut total_weight = 0;
+        for sp_inx in 0..list.len() {
+            // assert same order
+            assert_eq!(self.staking_pools[sp_inx].account_id, list[sp_inx].account_id);
+            // set weight_basis_points
+            self.staking_pools[sp_inx].weight_basis_points = list[sp_inx].weight_basis_points;
+            // keep totals
+            total_weight += list[sp_inx].weight_basis_points;
+        }
+        assert_eq!(total_weight,10000);
+    }
+
+    /*
     pub fn sum_staking_pool_list_weight_basis_points(&self) -> u16 {
         let mut total_weight: u16 = 0;
         for sp in self.staking_pools.iter() {
@@ -113,6 +153,7 @@ impl MetaPool {
         }
         return total_weight;
     }
+    */
 
     //--------------------------------------------------
     /// computes unstaking delay on current situation

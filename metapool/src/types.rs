@@ -317,3 +317,11 @@ pub struct StakingPoolJSONInfo {
     pub last_asked_rewards_epoch_height: U64String,
     pub busy_lock: bool,
 }
+
+/// struct used as parameter for set_staking_pools
+#[derive(Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StakingPoolArgItem {
+    pub account_id: AccountId, 
+    pub weight_basis_points: u16
+} 
