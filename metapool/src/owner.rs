@@ -70,44 +70,6 @@ impl MetaPool {
         self.staking_pools.remove(inx as usize);
     }
 
-/*
-    ///update existing weight_basis_points
-    pub fn set_staking_pool_weight(&mut self, inx: u16, weight_basis_points: u16) {
-        self.assert_operator_or_owner();
-
-        let sp = &mut self.staking_pools[inx as usize];
-        if sp.busy_lock {
-            panic!("sp is busy")
-        }
-        // max is 50% for a single pool
-        assert!(weight_basis_points < 5_000);
-        // TODO: If `weight_basis_points` is invalid, the owner can break the contract.
-        //    Ideally, the owner shouldn't have any power to break the contract and instead
-        //    should only manipulate the pools with verification that it's a real pool, but it's
-        //    difficult to enforce.
-        // option: store "score" for each validator & compute weight_basis_points as score*10_000/total_score
-        // by doing that there's no "invalid" score. Note: In order to do that, we should keep total_score on contract state
-        sp.weight_basis_points = weight_basis_points;
-    }
-
-    ///add a new staking pool or update existing weight_basis_points
-    pub fn set_staking_pool(&mut self, account_id: AccountId, weight_basis_points: u16) {
-        self.assert_operator_or_owner();
-
-        //search the pools
-        for sp_inx in 0..self.staking_pools.len() {
-            if self.staking_pools[sp_inx].account_id == account_id {
-                //found, set weight_basis_points
-                self.set_staking_pool_weight(sp_inx as u16, weight_basis_points);
-                return;
-            }
-        }
-        //not found, it's a new pool
-        self.staking_pools
-            .push(StakingPoolInfo::new(account_id, weight_basis_points));
-    }
-*/
-
     /// add a new staking pool, checking that it is not already in the list
     /// added with weight_basis_points = 0, to preserve sum(weights)=100%
     pub fn add_staking_pool(&mut self, account_id: AccountId) {
@@ -144,16 +106,6 @@ impl MetaPool {
         }
         assert_eq!(total_weight,10000);
     }
-
-    /*
-    pub fn sum_staking_pool_list_weight_basis_points(&self) -> u16 {
-        let mut total_weight: u16 = 0;
-        for sp in self.staking_pools.iter() {
-            total_weight += sp.weight_basis_points;
-        }
-        return total_weight;
-    }
-    */
 
     //--------------------------------------------------
     /// computes unstaking delay on current situation
