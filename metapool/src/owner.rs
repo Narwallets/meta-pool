@@ -99,10 +99,19 @@ impl MetaPool {
         for sp_inx in 0..list.len() {
             // assert same order
             assert_eq!(self.staking_pools[sp_inx].account_id, list[sp_inx].account_id);
-            // set weight_basis_points
-            self.staking_pools[sp_inx].weight_basis_points = list[sp_inx].weight_basis_points;
+            // get weight_basis_points to set
+            let bp = list[sp_inx].weight_basis_points;
+            // no staking pool can have 50% or more
+            assert!(bp<5000);
+            // if there's a change
+            if self.staking_pools[sp_inx].weight_basis_points != bp {
+                // check pool is not busy
+                assert!(!self.staking_pools[sp_inx].busy_lock,"sp {} is busy",sp_inx);
+                // set new value
+                self.staking_pools[sp_inx].weight_basis_points = bp;
+            }
             // keep totals
-            total_weight += list[sp_inx].weight_basis_points;
+            total_weight += bp;
         }
         assert_eq!(total_weight,10000);
     }
