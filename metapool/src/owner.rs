@@ -73,6 +73,7 @@ impl MetaPool {
     /// add a new staking pool, checking that it is not already in the list
     /// added with weight_basis_points = 0, to preserve sum(weights)=100%
     pub fn add_staking_pool(&mut self, account_id: AccountId) {
+        self.assert_operator_or_owner();
         //search the pools
         for sp_inx in 0..self.staking_pools.len() {
             if self.staking_pools[sp_inx].account_id == account_id {
