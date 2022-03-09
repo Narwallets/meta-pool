@@ -37,5 +37,6 @@ near deploy $CONTRACT_ACC ./res/metapool.wasm
 
 #save this deployment  (to be able to recover state/tokens)
 set -ex
-cp ./res/metapool.wasm ./res/mainnet/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
+mkdir -p res/mainnet/metapool
+cp res/metapool.wasm res/mainnet/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
 date +%F.%T
