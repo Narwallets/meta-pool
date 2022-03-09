@@ -249,6 +249,12 @@ impl MetaPool {
         };
     }
 
+    // simple fn to get st_near_price for use by cross-contract calls 
+    pub fn get_st_near_price(&self) -> U128String {
+        // get how many near one stNEAR is worth
+        self.amount_from_stake_shares(ONE_E24).into()
+    }
+
     /// get contract totals
     /// Returns JSON representation of the contract state
     pub fn get_contract_state(&self) -> GetContractStateResult {
@@ -267,14 +273,14 @@ impl MetaPool {
             total_unstake_claims: self.total_unstake_claims.into(),
             reserve_for_unstake_claims: self.reserve_for_unstake_claims.into(),
             total_stake_shares: self.total_stake_shares.into(), // stNEAR total supply
-            st_near_price: self.amount_from_stake_shares(ONE_NEAR).into(), //how much nears are 1 stNEAR
+            st_near_price: self.amount_from_stake_shares(ONE_E24).into(), //how much nears are 1 stNEAR
             total_meta: self.total_meta.into(),
             accounts_count: self.accounts.len().into(),
             staking_pools_count: self.staking_pools.len() as u16,
             nslp_liquidity: nslp_account.available.into(),
             nslp_stnear_balance: nslp_account.stake_shares.into(), //how much stnear does the nslp have?
             nslp_target: self.nslp_liquidity_target.into(),
-            nslp_share_price: self.amount_from_nslp_shares(ONE_NEAR, &nslp_account).into(), // price of one LP share (1e24 yocto_shares)
+            nslp_share_price: self.amount_from_nslp_shares(ONE_E24, &nslp_account).into(), // price of one LP share (1e24 yocto_shares)
             nslp_total_shares: nslp_account.nslp_shares.into(), // total nspl shares. price = value/total_shares
             nslp_current_discount_basis_points: self
                 .internal_get_discount_basis_points(nslp_account.available, TEN_NEAR),
