@@ -15,7 +15,8 @@ pub const NSLP_INTERNAL_ACCOUNT: &str = "..NSLP..";
 
 /// useful constants
 pub const NO_DEPOSIT: u128 = 0;
-pub const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+pub const ONE_E24: u128 = 1_000_000_000_000_000_000_000_000;
+pub const NEAR: u128 = ONE_E24;
 pub const ONE_NEAR: u128 = NEAR;
 pub const NEAR_CENT: u128 = NEAR / 100;
 pub const ONE_MILLI_NEAR: u128 = NEAR / 1_000;

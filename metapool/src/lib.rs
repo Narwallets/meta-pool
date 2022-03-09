@@ -1063,7 +1063,7 @@ mod tests {
         let near_amount_received_y =
             contract.internal_get_near_amount_sell_stnear(lp_balance_y, sell_stnear_y);
 
-        let st_near_price = contract.amount_from_stake_shares(ONE_NEAR);
+        let st_near_price = contract.amount_from_stake_shares(ONE_E24);
         let sold_value_near = st_near_price * sell_stnear_y;
 
         assert!(near_amount_received_y <= sold_value_near); //we were charged a fee
