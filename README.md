@@ -5,27 +5,42 @@ What is Meta-Pool and other non-Technical Documentation
 
 [CLICK HERE](https://narwallets.github.io/meta-pool/)
 
-## Technical Documentation
-[Technical Notes](https://narwallets.github.io/meta-pool/technical-notes)
+## Audits
+* [Blocksec Audit v1.1, March 2022](https://www.metapool.app/MetaPool_BlockSec_Audit_signed_v1.1.pdf)
 
+## Technical Documentation
+* [Technical Notes](https://narwallets.github.io/meta-pool/technical-notes)
+
+* [NEAR Live Contract Review (video)](https://www.youtube.com/watch?v=4gB-6yoas74)
 ### Repositories 
 
 This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/metastaking-webapp
 
 ### Change Log
-#### `0.1.0`
+
+#### `1.2.0` - March 2022
+
+- All audit recommendations implemented
+- set all staking pools weights in a single call
+
+
+#### `1.1.0` - Dec 2021
+- new fn Realize_meta_massive to auto farm $META
+
+
+#### `1.0.0` - Apr 2021
+
+- Full functionality
+- Simplified user flow 
+- Desk check testing https://github.com/Narwallets/sc-desk-check-parser
+
+#### `0.1.0` - Nov 2020
 
 - Initial version based on core-contracts/lockup and core-contracts/staking-pool
 - Deposit, withdraw
 - Distributed stake/unstake
 - NEAR/stNEAR liquidity pool, Add/Remove liquidity
 - META Minting with rewards
-
-#### `1.0.0`
-
-- Full functionality
-- Simplified user flow 
-- Desk check testing https://github.com/Narwallets/sc-desk-check-parser
 
 ### TO DO & Help needed
 
