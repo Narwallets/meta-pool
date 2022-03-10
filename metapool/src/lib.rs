@@ -854,6 +854,9 @@ impl MetaPool {
     }
 
     pub fn realize_meta(&mut self, account_id: String) {
+        // this fn shoudl not be called for the NSLP_INTERNAL_ACCOUNT
+        assert!(account_id!=NSLP_INTERNAL_ACCOUNT);
+
         let mut acc = self.internal_get_account(&account_id);
 
         //realize and mint $META from staking rewards
