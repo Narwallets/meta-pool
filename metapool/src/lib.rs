@@ -936,7 +936,7 @@ impl MetaPool {
         assert!(env::predecessor_account_id() == self.owner_account_id);
         //input is code:<Vec<u8> on REGISTER 0
         //log!("bytes.length {}", code.unwrap().len());
-        const GAS_FOR_UPGRADE: u64 = 20 * TGAS; //gas occupied by this fn
+        assert!(env::prepaid_gas()>150*TGAS,"set 200TGAS or more for this transaction");
         const BLOCKCHAIN_INTERFACE_NOT_SET_ERR: &str = "Blockchain interface not set.";
         //after upgrade we call *pub fn migrate()* on the NEW CODE
         let current_id = env::current_account_id().into_bytes();
@@ -956,15 +956,21 @@ impl MetaPool {
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                     .promise_batch_create(current_id.len() as _, current_id.as_ptr() as _);
 
-                //1st action, deploy/upgrade code (takes code from register 0)
+                // 1st action, deploy/upgrade code (takes code from register 0)
+                // Note: this "promise preparation" CONSUMES an important amount of gas
+                // because at this point the WASM code is checked and "compiled"
+                // total gas cost formula is: (2 * 184765750000 + contract_size_in_bytes * (6812999 + 64572944) + 2 * 108059500000)
+                // https://github.com/Narwallets/meta-pool/issues/21
                 b.borrow()
                     .as_ref()
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                     .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
 
-                //2nd action, schedule a call to "migrate()".
-                //Will execute on the **new code**
-                let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
+                // 2nd action, schedule a call to "migrate()".
+                // Will execute on the **new code**
+                const GAS_FOR_THE_REST_OF_THIS_FUNCTION:u64 = 10*TGAS;
+                // at this point the gas for sending the code and "compiling" is already spent. Let's compute what's left for migration
+                let gas_for_migration = env::prepaid_gas() - env::used_gas() - GAS_FOR_THE_REST_OF_THIS_FUNCTION;
                 b.borrow()
                     .as_ref()
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
@@ -975,7 +981,7 @@ impl MetaPool {
                         0 as _,
                         0 as _,
                         0 as _,
-                        attached_gas,
+                        gas_for_migration,
                     );
             });
         }
