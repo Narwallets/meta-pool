@@ -74,6 +74,7 @@ impl MetaPool {
     /// added with weight_basis_points = 0, to preserve sum(weights)=100%
     pub fn add_staking_pool(&mut self, account_id: AccountId) {
         self.assert_operator_or_owner();
+        assert!(account_id.ends_with(".poolv1.near"),"invalid staking-pool contract account, expected *.poolv1.near");
         //search the pools
         for sp_inx in 0..self.staking_pools.len() {
             if self.staking_pools[sp_inx].account_id == account_id {
