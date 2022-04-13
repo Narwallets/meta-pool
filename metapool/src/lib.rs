@@ -941,7 +941,6 @@ impl MetaPool {
         //after upgrade we call *pub fn migrate()* on the NEW CODE
         let current_id = env::current_account_id().into_bytes();
         let migrate_method_name = "migrate".as_bytes().to_vec();
-        let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
         unsafe {
             BLOCKCHAIN_INTERFACE.with(|b| {
                 // Load input (new contract code) into register 0
@@ -965,6 +964,7 @@ impl MetaPool {
 
                 //2nd action, schedule a call to "migrate()".
                 //Will execute on the **new code**
+                let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
                 b.borrow()
                     .as_ref()
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)

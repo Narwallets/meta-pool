@@ -165,13 +165,6 @@ impl TestContract {
         //assert!(env::predecessor_account_id() == self.controlling_dao);
         let current_id = env::current_account_id().into_bytes();
         let method_name = "migrate".as_bytes().to_vec();
-        log!(
-            "env::prepaid_gas(){} - env::used_gas(){} - GAS_FOR_UPGRADE {}",
-            env::prepaid_gas(),
-            env::used_gas(),
-            GAS_FOR_UPGRADE
-        );
-        let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
         unsafe {
             BLOCKCHAIN_INTERFACE.with(|b| {
                 // Load input (new contract code) into register 0
@@ -192,6 +185,13 @@ impl TestContract {
                     .expect(BLOCKCHAIN_INTERFACE_NOT_SET_ERR)
                     .promise_batch_action_deploy_contract(promise_id, u64::MAX as _, 0);
 
+                log!(
+                    "env::prepaid_gas(){} - env::used_gas(){} - GAS_FOR_UPGRADE {}",
+                    env::prepaid_gas(),
+                    env::used_gas(),
+                    GAS_FOR_UPGRADE
+                );
+                let attached_gas = env::prepaid_gas() - env::used_gas() - GAS_FOR_UPGRADE;
                 //2nd item, schedule a call to "migrate".- (will execute on the *new code*)
                 b.borrow()
                     .as_ref()
