@@ -12,7 +12,7 @@ You are granted a non-exclusive, non-transferable, non-sublicensable license to 
 “Non-Commercial Use” means each use as described in clauses (1)-(3) below, as reasonably determined by Narwallets.com in its sole discretion: 
  1. personal use for research, personal study, private entertainment, hobby projects or amateur pursuits, in each case without any anticipated commercial application;
  2. use by any charitable organization, educational institution, public research organization, public safety or health organization, environmental protection organization or government institution; or
- 3. the number of monthly active users of the Resulting Program across all versions thereof and platforms globally do not exceed 10,000 at any time.
+ 3. the number of monthly active users of the Resulting Program across all versions thereof and platforms globally do not exceed 500 at any time.
  
 You will not use any trade mark, service mark, trade name, logo of Narwallets or any other company or organization in a way that is likely or intended to cause confusion about the owner or authorized user of such marks, names or logos.
  
