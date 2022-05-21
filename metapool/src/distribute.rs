@@ -25,6 +25,11 @@ impl MetaPool {
             log!("no staking needed");
             return false;
         }
+        // here self.total_for_staking > self.total_actually_staked
+        // fix situation where the end_of_epoch was called prematurely
+        if self.epoch_stake_orders == 0  { // if self.total_for_staking > self.total_actually_staked, self.epoch_stake_orders shouldn't be zero
+            self.internal_undo_end_of_epoch();
+        }
 
         //----------
         //check if the liquidity pool needs liquidity, and then use this opportunity to sell stnear in the LP by internal-clearing
@@ -37,7 +42,7 @@ impl MetaPool {
         //-------------------------------------
         // there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
         // also we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
-        // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserver for staking
+        // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserve for staking
         let total_amount_to_stake = std::cmp::min(
             self.epoch_stake_orders,
             self.total_for_staking - self.total_actually_staked,
@@ -243,14 +248,9 @@ impl MetaPool {
     // used by operator to reset epoch_stake/unstake_orders and restart staking/unstaking
     pub fn undo_end_of_epoch(&mut self) {
         self.assert_operator_or_owner();
-        if self.total_for_staking < self.total_actually_staked {
-            self.epoch_stake_orders = 0;
-            self.epoch_unstake_orders = self.total_actually_staked - self.total_for_staking;
-        } else if self.total_for_staking > self.total_actually_staked {
-            self.epoch_unstake_orders = 0;
-            self.epoch_stake_orders = self.total_for_staking - self.total_actually_staked
-        }
+        self.internal_undo_end_of_epoch();
     }
+   
 
     // Operator method, but open to anyone
     /// distribute_unstaking(). Do unstaking

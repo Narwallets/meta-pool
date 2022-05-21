@@ -7,7 +7,6 @@ What is Meta-Pool and other non-Technical Documentation
 * [Meta Pool GitBook](https://metapool.gitbook.io/master/)
 
 ## Audits
-* [BlockSec Audit, Jan 17th, 2022](https://370551154-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-MkhZe3MGAhTcvTLTzJF-887967055%2Fuploads%2FBnkI1s1NHp6rjw4vBsZo%2FBlocksec_Audit_2.pdf?alt=media&token=30a76ad3-a5ad-4454-87c0-0e0815b4170b)
 * [BlockSec Audit v1.1, March 1th, 2022](https://www.metapool.app/MetaPool_BlockSec_Audit_signed_v1.1.pdf)
 * [BlockSec Audit, staking wNEAR with Meta Pool on Aurora, March 20th, 2022](https://370551154-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F-MkhZe3MGAhTcvTLTzJF-887967055%2Fuploads%2FXE1zBF4pyaWCoR1zlKwW%2Fmain_signed.pdf?alt=media&token=5068e60d-2905-4d4f-a1cb-9d5fa4c607a3)
 
@@ -20,6 +19,10 @@ What is Meta-Pool and other non-Technical Documentation
 This is the Smart Contract repository. The Web App UI is at https://github.com/Narwallets/metastaking-webapp
 
 ### Change Log
+
+#### `1.2.1` - May 2022
+
+- NEAR gas computation will change, fix gas computation on dao upgrade instruction
 
 #### `1.2.0` - March 2022
 

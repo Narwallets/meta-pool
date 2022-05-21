@@ -7,7 +7,7 @@
 // [NEP-129](https://github.com/nearprotocol/NEPs/pull/129)
 // see also pub fn get_contract_info
 const CONTRACT_NAME: &str = "Metapool";
-const CONTRACT_VERSION: &str = "0.1.6";
+const CONTRACT_VERSION: &str = "1.2.1";
 const DEFAULT_WEB_APP_URL: &str = "https://metapool.app";
 const DEFAULT_AUDITOR_ACCOUNT_ID: &str = "auditors.near";
 

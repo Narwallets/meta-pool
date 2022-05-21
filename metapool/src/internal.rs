@@ -324,6 +324,17 @@ impl MetaPool {
     }
 
     //----------------------------------
+    pub(crate) fn internal_undo_end_of_epoch(&mut self) {
+        if self.total_for_staking < self.total_actually_staked {
+            self.epoch_stake_orders = 0;
+            self.epoch_unstake_orders = self.total_actually_staked - self.total_for_staking;
+        } else if self.total_for_staking > self.total_actually_staked {
+            self.epoch_unstake_orders = 0;
+            self.epoch_stake_orders = self.total_for_staking - self.total_actually_staked
+        }
+    }
+
+    //----------------------------------
     // The LP acquires stNEAR providing the liquid-unstake service
     // The LP needs to remove stNEAR automatically, to recover liquidity and to keep a low fee
     // The LP can recover near by internal clearing.

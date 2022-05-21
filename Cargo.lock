@@ -1688,7 +1688,7 @@ dependencies = [
 
 [[package]]
 name = "metapool"
-version = "0.1.6"
+version = "1.2.1"
 dependencies = [
  "env_logger",
  "lazy_static",
