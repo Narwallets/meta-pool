@@ -26,9 +26,10 @@ impl MetaPool {
             return false;
         }
         // here self.total_for_staking > self.total_actually_staked
-        // fix situation where the end_of_epoch was called prematurely
-        if self.epoch_stake_orders == 0  { // if self.total_for_staking > self.total_actually_staked, self.epoch_stake_orders shouldn't be zero
-            self.internal_undo_end_of_epoch();
+        if self.epoch_stake_orders == 0  { 
+            // that delta is from some manual-unstake
+            log!("self.epoch_stake_orders == 0");
+            return false;
         }
 
         //----------
@@ -40,8 +41,8 @@ impl MetaPool {
         //-------------------------------------
         //compute amount to stake
         //-------------------------------------
-        // there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
-        // also we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
+        // we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
+        // also there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
         // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserve for staking
         let total_amount_to_stake = std::cmp::min(
             self.epoch_stake_orders,
@@ -206,8 +207,8 @@ impl MetaPool {
         //-------------------------------------
         //compute max amount to stake
         //-------------------------------------
-        // there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
-        // also we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
+        // we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
+        // also there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
         // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserve for staking
         let total_amount_to_stake = std::cmp::min(
             self.epoch_stake_orders,
@@ -315,7 +316,7 @@ impl MetaPool {
             //no unstaking needed
             return false;
         }
-        //there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
+        // there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
         let total_to_unstake = std::cmp::min(
             self.epoch_unstake_orders,
             self.total_actually_staked - self.total_for_staking,

@@ -345,6 +345,7 @@ impl MetaPool {
             //nothing ordered to be actually staked
             return false;
         }
+        // we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
         let amount_to_stake: u128 = std::cmp::min(
             self.epoch_stake_orders,
             self.total_for_staking - self.total_actually_staked,
