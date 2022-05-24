@@ -52,7 +52,7 @@ impl MetaPool {
             return false;
         }
         // find pool
-        let (sp_inx, mut amount_to_stake) =
+        let (sp_inx, amount_to_stake) =
             self.get_staking_pool_requiring_stake(total_amount_to_stake);
         log!(
             "total_amount_to_stake:{} get_staking_pool_requiring_stake=>{},{}",
@@ -60,6 +60,16 @@ impl MetaPool {
             sp_inx,
             amount_to_stake
         );
+        // schedule stake or re-stake promises
+        self.direct_stake(sp_inx, amount_to_stake);
+        return true; //did some staking (promises scheduled), call again
+    }
+
+    // internal direct stake on a pool
+    // prev fn continues here
+    // schedules promises to stake or re-stake
+    fn direct_stake(&mut self, sp_inx:usize, mut amount_to_stake:u128) {
+
         if amount_to_stake > 0 {
             //most unbalanced pool found & available
 
@@ -126,7 +136,6 @@ impl MetaPool {
         //Here we did some staking (the promises are scheduled for exec after this fn completes)
         self.total_actually_staked += amount_to_stake; //preventively consider the amount staked (undoes if async fails)
         self.epoch_stake_orders -= amount_to_stake; //preventively reduce stake orders
-        return true; //did some staking (promises scheduled), call again
     }
 
     //prev fn continues here
@@ -188,9 +197,41 @@ impl MetaPool {
         return stake_succeeded;
     }
 
+    // execute stake on sp[inx] by amount
+    // used by operator if a validator requires emergency stake to keep a seat
+    // Note: this fn *schedules some amount to be staked* (can be lower than the requested one, call again to stake more)
+    // and also consider that the scheduled promise-to-stake/restake can fail
+    pub fn manual_stake(&mut self, inx: u16, amount: U128String) {
+        self.assert_operator_or_owner();
+        //-------------------------------------
+        //compute max amount to stake
+        //-------------------------------------
+        // there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
+        // also we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
+        // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserve for staking
+        let total_amount_to_stake = std::cmp::min(
+            self.epoch_stake_orders,
+            self.total_for_staking - self.total_actually_staked,
+        );
+        assert!(total_amount_to_stake > MIN_STAKE_AMOUNT,
+            "total_amount_to_stake too low {}", total_amount_to_stake);
+        assert!(amount.0 <= total_amount_to_stake,
+            "total_amount_to_stake is {} you cant manual stake {}", total_amount_to_stake, amount.0);
+
+        let sp_inx = inx as usize;
+        assert!(sp_inx < self.staking_pools.len(), "invalid index");
+        let sp = &self.staking_pools[sp_inx];
+        assert!(!sp.busy_lock, "sp busy");
+        // perform direct stake
+        self.direct_stake(sp_inx, amount.0);
+        // Note: if the pool has some sizable unstake pending, the fn will re-stake the unstaked-and-waiting-amount
+        // that amount can be lower than the amount requested to stake
+    }
+
     // execute unstake on sp[inx] by amount
     // used by operator if a validator goes offline, to not wait and unstake immediately
-    pub fn manual_unstake(&mut self, inx: u16, amount: U128String) {
+    // PART 1 - it requires a call to complete_manual_unstake 4 epochs later, once the funds have been retrieved
+    pub fn start_manual_unstake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
         assert!(sp_inx < self.staking_pools.len(), "invalid index");
@@ -220,7 +261,7 @@ impl MetaPool {
     // this should be called by the operator
     // 4 EPOCHS AFTER MANUAL_UNSTAKE,
     // AFTER all the funds have been recovered from the off-line validator
-    pub fn manual_restake(&mut self, inx: u16, amount: U128String) {
+    pub fn complete_manual_unstake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
         let sp_inx = inx as usize;
         assert!(sp_inx < self.staking_pools.len(), "invalid index");
