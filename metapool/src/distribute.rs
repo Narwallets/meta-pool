@@ -204,20 +204,11 @@ impl MetaPool {
     // and also consider that the scheduled promise-to-stake/restake can fail
     pub fn manual_stake(&mut self, inx: u16, amount: U128String) {
         self.assert_operator_or_owner();
-        //-------------------------------------
-        //compute max amount to stake
-        //-------------------------------------
-        // we could have operator-manual-unstakes, so cap to unstake is self.epoch_stake_orders
-        // also there could be minor yocto corrections after sync_unstake, altering total_actually_staked, consider that
-        // self.epoch_stake_orders are NEAR that were sent to this contract by users and are available in reserve for staking
-        let total_amount_to_stake = std::cmp::min(
-            self.epoch_stake_orders,
-            self.total_for_staking - self.total_actually_staked,
-        );
-        assert!(total_amount_to_stake > MIN_STAKE_AMOUNT,
-            "total_amount_to_stake too low {}", total_amount_to_stake);
-        assert!(amount.0 <= total_amount_to_stake,
-            "total_amount_to_stake is {} you cant manual stake {}", total_amount_to_stake, amount.0);
+
+        assert!(self.epoch_stake_orders > MIN_STAKE_AMOUNT,
+            "self.epoch_stake_orders too low {}", self.epoch_stake_orders);
+        assert!(amount.0 <= self.epoch_stake_orders,
+            "self.epoch_stake_orders is {} you cant manual stake {}", self.epoch_stake_orders, amount.0);
 
         let sp_inx = inx as usize;
         assert!(sp_inx < self.staking_pools.len(), "invalid index");
