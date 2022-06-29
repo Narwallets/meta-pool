@@ -34,5 +34,5 @@ near deploy $CONTRACT_ACC ./res/metapool.wasm  --accountId $MASTER_ACC --network
 #save this deployment  (to be able to recover state/tokens)
 set -ex
 mkdir -p res/testnet/metapool
-cp res/metapool.wasm res/testnet/metapool.$CONTRACT_ACC.`date +%F.%T`.wasm
+cp res/metapool.wasm res/testnet/metapool/$CONTRACT_ACC.`date +%F.%T`.wasm
 date +%F.%T
