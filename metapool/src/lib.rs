@@ -447,12 +447,18 @@ impl MetaPool {
         };
     }
 
+    #[payable]
     pub fn set_reward_fee(&mut self, basis_points: u16) {
         self.assert_owner_calling();
+        assert!(env::attached_deposit() > 0);
         assert!(basis_points < 1000); // less than 10%
                                       // DEVELOPERS_REWARDS_FEE_BASIS_POINTS is included
         self.operator_rewards_fee_basis_points =
             basis_points.saturating_sub(DEVELOPERS_REWARDS_FEE_BASIS_POINTS);
+        // return the deposit (except 1 yocto)
+        if env::attached_deposit() > 1 {
+            Promise::new(env::predecessor_account_id()).transfer(env::attached_deposit());
+        }
     }
 
     /// Returns the staking public key
