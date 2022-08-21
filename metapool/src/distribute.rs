@@ -240,6 +240,7 @@ impl MetaPool {
             amount.0,
             sp.staked,
         );
+        // can not unstake while unstake pending because it will extend the waiting period
         assert!(
             sp.unstaked == 0,
             "can not manually unstake while unstake pending. sp.unstake={}",

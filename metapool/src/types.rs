@@ -320,7 +320,7 @@ pub struct StakingPoolJSONInfo {
 }
 
 /// struct used as parameter for set_staking_pools
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolArgItem {
     pub account_id: AccountId, 

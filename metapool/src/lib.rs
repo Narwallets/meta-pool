@@ -1107,12 +1107,12 @@ mod tests {
     fn test_rewards_meter() {
         let mut rm = RewardMeter::default();
         rm.stake(100);
-        assert_eq!(rm.compute_rewards(105, 500, 1000), 5);
+        assert_eq!(rm.compute_rewards(105, 500, 1000), 50);
 
         rm.unstake(105);
         assert_eq!(rm.compute_rewards(0, 500, 1000), 0);
 
         rm.stake(10);
-        assert_eq!(rm.compute_rewards(11, 500, 1000), 6);
+        assert_eq!(rm.compute_rewards(11, 500, 1000), 60);
     }
 }

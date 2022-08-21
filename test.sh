@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cargo +nightly build
+bash build.sh
 export RUST_BACKTRACE=1 
 cargo +nightly test -- --nocapture
 

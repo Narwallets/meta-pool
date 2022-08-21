@@ -184,23 +184,35 @@ impl Simulation {
         let mut sp = Vec::with_capacity(4);
         //---- and register staking pools in the metapool contract
         let weight_basis_points_vec = vec![15, 40, 25, 20];
+        let mut pools:Vec<StakingPoolArgItem> = Vec::with_capacity(4);
         //----
         for n in 0..=3 {
-            let acc_id = &format!("sp{}", n);
+            let acc_id = &format!("sp{}.testnet", n);
             let sp_contract =
-                deploy_simulated_staking_pool(&master_account, acc_id, &owner.account_id());
+                deploy_simulated_staking_pool(&testnet, acc_id, &owner.account_id());
             //call(&owner,&sp_contract,"pause_staking","{}",0,10*TGAS);
             sp.push(sp_contract);
-            //-- register in the staking pool
-            call!(
+            //-- register the staking pool in metapool
+            let res = call!(
                 owner,
-                metapool.set_staking_pool(acc_id.clone(), weight_basis_points_vec[n] * 100),
+                metapool.add_staking_pool(acc_id.clone()),
                 gas = 25 * TGAS
             );
+            check_exec_result(&res);
+            // prepare weight
+                pools.push ( StakingPoolArgItem {
+                account_id: acc_id.clone(),
+                weight_basis_points: weight_basis_points_vec[n] * 100
+            });
         }
-
-        let total_w_bp = view!(metapool.sum_staking_pool_list_weight_basis_points());
-        assert!(total_w_bp.unwrap_json_value() == 10000);
+        let res=call!(
+            owner,
+            metapool.set_staking_pools(pools),
+            1,
+            125 * TGAS
+        );
+        print_exec_result(&res);
+        check_exec_result(&res);
 
         //deploy a contract to get the current epoch
         let get_epoch_acc = master_account.deploy(
