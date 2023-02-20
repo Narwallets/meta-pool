@@ -1,3 +1,5 @@
+# Note: last source version moved to https://github.com/Meta-Pool/liquid-staking-contract
+
 # Meta Staking Pool
 
 ## Overview
